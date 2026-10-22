@@ -1,0 +1,17 @@
+{
+  "disableClaudeAiConnectors": true,
+  "enableArtifact": false,
+  "permissions": {
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(gh api *merge*)",
+      "Bash(gh api *Merge*)"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_UPDATES": "1",
+    "CLAUDE_CODE_DISABLE_ARTIFACT": "1",
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude"
+  }
+}

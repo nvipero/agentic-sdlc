@@ -1,0 +1,13 @@
+# Factory configuration for this project. Owned by the human; read-only for agents.
+roles:
+  researcher:    { model: opus }
+  spec-writer:   { model: opus }
+  spec-reviewer: { model: sonnet }
+  test-writer:   { model: sonnet }
+  implementer:   { model: opus }
+  code-reviewer: { model: opus }
+disputes:
+  max_rounds: 4
+  escalate_when_no_progress_for: 2   # consecutive rounds repeating the same findings
+light_path:
+  allowed_for_labels: [trivial]      # skip spec review and acceptance tests

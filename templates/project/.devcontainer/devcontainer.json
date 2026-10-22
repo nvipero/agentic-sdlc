@@ -1,0 +1,36 @@
+{
+  // Start only with scripts/up.sh. It runs the protection preflight, passes the
+  // token and verifies the image and firewall before giving you a shell.
+  "name": "${localWorkspaceFolderBasename}",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "DEVCONTAINER_TREE": "${localEnv:FACTORY_DEVCONTAINER_TREE}"
+    }
+  },
+  // The workspace is a clone inside a named volume, not the host clone.
+  "workspaceMount": "source=${localWorkspaceFolderBasename}-workspace,target=/workspace,type=volume",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    // Factory definitions, read-only from the host clone (always equal to origin/main).
+    "source=${localWorkspaceFolder}/.factory,target=/workspace/.factory,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.claude,target=/workspace/.claude,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.github,target=/workspace/.github,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.devcontainer,target=/workspace/.devcontainer,type=bind,readonly",
+    "source=${localWorkspaceFolder}/CLAUDE.md,target=/workspace/CLAUDE.md,type=bind,readonly",
+    // Claude Code login and state.
+    "source=${localWorkspaceFolderBasename}-claude,target=/home/node/.claude,type=volume"
+  ],
+  "capAdd": ["NET_ADMIN", "NET_RAW"],
+  "containerUser": "node",
+  "remoteUser": "node",
+  "updateRemoteUserUID": false,
+  "userEnvProbe": "none",
+  "remoteEnv": {
+    "GH_TOKEN": "${localEnv:FACTORY_GH_TOKEN}",
+    "FACTORY_REPO_URL": "${localEnv:FACTORY_REPO_URL}"
+  },
+  // Firewall first, then the workspace clone. Nothing runs earlier with the network open.
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh && /usr/local/bin/init-workspace.sh",
+  "waitFor": "postStartCommand"
+}
