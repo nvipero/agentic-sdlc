@@ -22,15 +22,19 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 - **Not visible in the container:** your host `.git` and `scripts/up.sh`.
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands.
-- **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, and secret scanning with push protection.
-- **Preflight:** on every start, `up.sh` checks five things and refuses to start if any check fails:
+- **Token:** `up.sh` passes the token to the container by name (`docker exec -e GH_TOKEN`), so it never appears in a process's argument list on your Mac.
+- **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, secret scanning with push protection, and GitHub Actions disabled until step 4.
+- **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
   - an active ruleset without bypass actors
   - the interaction limit
   - secret scanning
   - push protection
+  - GitHub Actions is disabled
+  - the host clone is clean, on `main` and equal to `origin/main`
+- **The host clone is never updated automatically.** If it is behind `origin/main`, `up.sh` refuses to start. Review the new commits with `git log -p HEAD..origin/main`, then pull with `git pull --ff-only`.
 
-**Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it.
+**Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it. A merged change is never executed on your Mac until you review and pull it yourself.
 
 ## Starting a new project
 
@@ -42,7 +46,7 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 - `git` and `jq`
 
 1. **Create the repository:** create an empty public repository on GitHub and clone it next to this one.
-2. **Create the token:** a fine-grained token for that repository only, with Contents, Issues and Pull requests set to read and write. No other permissions, and an expiry of 90 days or less. Store it in 1Password at `op://Agent Factory/<repo-name>-github/credential`.
+2. **Create the token:** a fine-grained token for that repository only, with Contents, Issues and Pull requests set to read and write. No other permissions, and an expiry of 30 to 90 days. Store it in 1Password at `op://Agent Factory/<repo-name>-github/credential`.
 3. **Copy the template and push the first commit:**
    ```sh
    rsync -a templates/project/ ../<repo-name>/
@@ -53,6 +57,7 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
    scripts/setup-github.sh ruleset <owner>/<repo-name>
    scripts/setup-github.sh interaction-limit <owner>/<repo-name>
    scripts/setup-github.sh secret-scanning <owner>/<repo-name>
+   scripts/setup-github.sh actions <owner>/<repo-name>
    scripts/setup-github.sh labels <owner>/<repo-name>
    scripts/setup-github.sh board <owner>/<repo-name>
    ```

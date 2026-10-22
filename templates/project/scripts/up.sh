@@ -12,9 +12,6 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Bash has already read this file, so a version pulled in by sync_clone would
-# only take effect on the next run. main re-executes itself when that happens.
-SELF_HASH="$(git hash-object "$REPO_DIR/scripts/up.sh")"
 PROJECT="$(basename "$REPO_DIR")"
 TOKEN_REF="${FACTORY_TOKEN_REF:-op://Agent Factory/${PROJECT}-github/credential}"
 EXPECTED_VISIBILITY="${FACTORY_EXPECTED_VISIBILITY:-PUBLIC}"
@@ -32,6 +29,16 @@ stop_container() {
   local cid
   cid="$(container_id)"
   if [ -n "$cid" ]; then docker stop "$cid" >/dev/null; fi
+}
+
+# Runs a command in the container ($CID) as the agent user. The token is passed
+# by name only (-e GH_TOKEN): the docker client reads the value from its own
+# environment, so it never appears in any process's argument list.
+box_exec() {
+  local tty=
+  if [ -t 0 ] && [ -t 1 ]; then tty=1; fi
+  GH_TOKEN="$FACTORY_GH_TOKEN" FACTORY_REPO_URL="$FACTORY_REPO_URL" \
+    docker exec -i ${tty:+-t} -u node -w /workspace -e GH_TOKEN -e FACTORY_REPO_URL "$CID" "$@"
 }
 
 # Removes the project's containers, running or stopped (they are recreated on every start).
@@ -82,26 +89,30 @@ preflight() {
   if [ "$days" -lt "$WARN_DAYS" ]; then
     say "WARNING: interaction limit expires in $days days; renew it with scripts/setup-github.sh in the factory repo"
   fi
-  say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, interaction limit $days days left"
+  # Actions stays off until step 4: a workflow run would execute outside the sandbox.
+  [ "$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" = "false" ] \
+    || die "GitHub Actions is not disabled; run scripts/setup-github.sh actions in the factory repo"
+  say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, Actions disabled, interaction limit $days days left"
 }
 
-# --- 2. Host clone: clean main, fast-forwarded to origin/main ----------------
-sync_clone() {
+# --- 2. Host clone: clean main, equal to origin/main -------------------------
+# Never updated automatically: whatever reaches main (an agent can merge until
+# step 4) runs on this machine only after the owner has reviewed and pulled it.
+check_clone() {
   local branch
   branch="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
   [ "$branch" = "main" ] || die "host clone is on '$branch', expected main"
   [ -z "$(git -C "$REPO_DIR" status --porcelain)" ] || die "host clone has local changes"
   git -C "$REPO_DIR" fetch -q origin main || die "git fetch failed"
-  git -C "$REPO_DIR" merge -q --ff-only origin/main || die "cannot fast-forward main"
   [ "$(git -C "$REPO_DIR" rev-parse HEAD)" = "$(git -C "$REPO_DIR" rev-parse origin/main)" ] \
-    || die "host clone is not at origin/main"
+    || die "host clone main is not at origin/main. Review the new commits (git log -p HEAD..origin/main), then pull manually (git pull --ff-only)"
 }
 
 # --- 3. Token: the only secret source step ----------------------------------
 read_token() {
+  # Not exported: only box_exec hands it to the docker client, by name.
   FACTORY_GH_TOKEN="$(op read "$TOKEN_REF")" || die "cannot read token from 1Password"
   [ -n "$FACTORY_GH_TOKEN" ] || die "empty token"
-  export FACTORY_GH_TOKEN
 }
 
 # --- 4. Image: always built from the current .devcontainer/ tree -------------
@@ -126,22 +137,25 @@ check_image_label() {
 
 # --- 5. Container, recreated on every start ---------------------------------
 start_container() {
-  export FACTORY_REPO_URL="https://github.com/$NWO.git"
+  FACTORY_REPO_URL="https://github.com/$NWO.git"
   devcontainer up --workspace-folder "$REPO_DIR" --remove-existing-container >&2 \
-    || { stop_container; die "devcontainer up failed (firewall or workspace init)"; }
+    || { stop_container; die "devcontainer up failed"; }
   CID="$(container_id)"
   [ -n "$CID" ] || die "container not found after start"
   local mismatch
   mismatch="$(check_image_label "$CID")" || { stop_container; die "$mismatch"; }
   [ "$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$CID")" = "no" ] \
     || { stop_container; die "container restart policy is not 'no'"; }
+  # Waits for the firewall marker, then clones or checks the workspace.
+  box_exec /usr/local/bin/init-workspace.sh >&2 \
+    || { stop_container; die "workspace init failed"; }
 }
 
 # --- 6. Probe before handing over -------------------------------------------
 # factory-exec (in the image) checks the tmpfs firewall marker, managed
 # settings and the network before running anything; every exec goes through it.
 probe_network() {
-  devcontainer exec --workspace-folder "$REPO_DIR" /usr/local/bin/factory-exec true >&2 \
+  box_exec /usr/local/bin/factory-exec true >&2 \
     || { stop_container; die "container probe failed"; }
   say "container probe OK (firewall, network, managed settings)"
 }
@@ -254,12 +268,7 @@ main() {
     command -v "$c" >/dev/null || die "'$c' is not installed"
   done
   preflight
-  sync_clone
-  if [ "$(git hash-object "$REPO_DIR/scripts/up.sh")" != "$SELF_HASH" ]; then
-    [ -z "${FACTORY_UP_REEXEC:-}" ] || die "up.sh changed again after re-exec"
-    say "up.sh changed on main; restarting with the new version"
-    FACTORY_UP_REEXEC=1 exec "$REPO_DIR/scripts/up.sh" "$@"
-  fi
+  check_clone
   read_token
   build_image "$REPO_DIR"
   if [ "${1:-}" = "reset-workspace" ]; then
@@ -268,7 +277,7 @@ main() {
   fi
   start_container
   probe_network
-  exec devcontainer exec --workspace-folder "$REPO_DIR" /usr/local/bin/factory-exec "$@"
+  box_exec /usr/local/bin/factory-exec "$@"
 }
 
 # Allow the exit check to source the functions without running main.

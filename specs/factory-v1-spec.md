@@ -2,7 +2,8 @@
 
 Status: approved by owner, 2026-10-21  
 Owner: Niko (human decision maker)  
-Author: Claude (claude.ai planning session, 2026-10-13, revision 5)
+Author: Claude (claude.ai planning session, 2026-10-13, revision 5)  
+Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)
 
 ## TL;DR
 
@@ -88,8 +89,9 @@ Applied to both `agentic-sdlc` and `sdlc-pilot`:
 - **Ruleset on `main`:** pull request required, force pushes and deletion blocked, **no bypass actors** (agents and Claude Code on the host act with the owner's credentials, and the owner is admin). No required approvals, because there is a single maintainer. Required status checks are added in step 4.
 - **Interaction limit "repository collaborators only":** outsiders cannot open issues or PRs, comment, react or edit. This keeps outside text out of agent input. The limit expires after at most six months.
 - **Secret scanning and push protection** enabled.
+- **GitHub Actions disabled** until step 4. A workflow pushed by an agent would otherwise run outside the sandbox.
 
-`scripts/up.sh` verifies on the host, before starting the container, that the ruleset is active with no bypass actors, the interaction limit is active, and the repository visibility is as expected. If any check fails, it refuses to start agents. Protections that can lapse silently (expiring limits, plan changes) are checked on every run instead of trusted.
+`scripts/up.sh` verifies on the host, before starting the container, that the repository visibility is as expected, the ruleset is active with no bypass actors, the interaction limit is active, secret scanning and push protection are on, and GitHub Actions is disabled. It also checks that the host clone is clean, on `main` and equal to `origin/main`; it never updates the host clone itself. If any check fails, it refuses to start agents. Protections that can lapse silently (expiring limits, plan changes) are checked on every run instead of trusted.
 
 A future private project needs a paid plan (a GitHub organization on Team) for enforced rulesets. The same exit check is then repeated in that environment.
 
@@ -97,8 +99,9 @@ A future private project needs a paid plan (a GitHub organization on Team) for e
 
 - One dev container per project. The human starts it with the project's start script (`scripts/up.sh`) when working on the project and stops it afterwards.
 - Each story gets its own git worktree inside the container.
+- The workspace is a clone of the project repo in a Docker volume, not the host clone. The container is recreated on every start, and the volumes persist. The workspace is never deleted automatically: `scripts/up.sh reset-workspace` archives it before replacing it.
 - Agents cannot start, stop or control containers. The container has no access to the Docker socket.
-- Inside the container, Claude Code runs without per-command permission prompts. Limits come from the container boundary, the network allowlist, read-only mounts and role tool restrictions.
+- Inside the container, Claude Code runs without per-command permission prompts. Limits come from the container boundary, the network allowlist, read-only mounts, managed settings in the image and role tool restrictions.
 
 ### Factory repository
 
@@ -112,6 +115,7 @@ templates/project/   everything copied into a new project repo
 specs/
   factory-v1-spec.md this document
 docs/                background and reference material for the factory
+scripts/             GitHub setup, step exit checks and helpers (run on the host)
 README.md            how to start a new project with the factory
 ```
 
@@ -123,7 +127,7 @@ README.md            how to start a new project with the factory
 .github/             workflows, issue templates, PR template           (read-only for agents)
 .devcontainer/       container definition and network allowlist        (read-only for agents)
 CLAUDE.md            entry point for agent sessions                    (read-only for agents)
-scripts/up.sh        container start script                            (read-only for agents)
+scripts/up.sh        container start script                            (not in the container)
 docs/
   product-context.md goal, users, constraints, non-goals               (researcher)
   glossary.md        domain terms                                      (researcher)
@@ -132,7 +136,7 @@ tests/acceptance/    acceptance tests                                  (test wri
 src/, tests/unit/    production code and unit tests                    (implementer)
 ```
 
-Read-only paths are mounted read-only into the container, so no command inside it can change them. The exact mount setup is verified in step 1.
+`.factory/`, `.claude/`, `.github/`, `.devcontainer/` and `CLAUDE.md` are mounted read-only from the owner's host clone of `main`, so no command inside the container can change them. `scripts/up.sh` is not in the container at all. Agents can still create commits that change these paths; the factory definitions guard in step 4 rejects them.
 
 ### Configuration (`.factory/config.yaml`)
 
@@ -159,11 +163,11 @@ Model choices are initial guesses and will be tuned after the first stories. The
 - **Storage:** tokens live in a dedicated 1Password vault ("Agent Factory"), separate from personal and client credentials. A token is never stored as a file in a repository or on the container's disk.
 - **Delivery, with clear separation of responsibilities:**
   - 1Password only stores and returns secrets.
-  - The devcontainer CLI only starts the container.
-  - The project's start script `scripts/up.sh` connects them: it reads the token with `op read`, sets it as an environment variable for its own run, and starts the container with the devcontainer CLI. `devcontainer.json` passes the variable into the container (`${localEnv:...}`).
+  - The devcontainer CLI only builds and starts the container. Sessions are opened by the start script with `docker exec`.
+  - The project's start script `scripts/up.sh` connects them: it reads the token with `op read` into a shell variable that it does not export, and starts the container without the token. It passes the token only to its own `docker exec` calls, by name (`-e GH_TOKEN`), so the value never appears in a process's argument list. `devcontainer.json` does not reference the token.
   - The secret source is a replaceable step in the script. Switching to Keychain or another manager changes only that step.
 - **The 1Password CLI is never installed in the container.** Access to the vault would expose all other credentials.
-- Starting the container from the VS Code UI does not pass the token. The container is started from the terminal with the start script.
+- Only processes started by the start script get the token. Starting the container any other way, such as from the VS Code UI, skips the token, the workspace setup and the exec guard. The container is started from the terminal with the start script.
 - No other credentials are placed in the container. Claude Code's own credentials are the only exception and are treated as exposed if the container is compromised.
 - Anything given to the container can be read by agents. Protection comes from limiting the scope and lifetime of credentials, not from hiding them.
 
@@ -261,10 +265,10 @@ The topic is chosen by the owner. Small, disposable and justifiable as work.
 
 Each step ends with an exit check, and the next starts only after the owner has seen the result.
 
-1. **Foundations.** Factory repo, project template, test project repo, repository protections, dev container with network allowlist and read-only mounts, start script with token from 1Password and protection checks, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, cannot see anything outside the project workspace, and cannot push directly to `main`.
+1. **Foundations.** Factory repo, project template, test project repo, repository protections (including GitHub Actions disabled until step 4), dev container with network allowlist and read-only mounts, start script with token from 1Password and protection checks, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, cannot see anything outside the project workspace, and cannot push directly to `main`.
 2. **Context and spec chain.** Researcher, spec writer with understanding check, spec reviewer, question flow. Exit: approved project context, and one story with an approved spec where at least one question was answered through the issue.
 3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory-run`. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
-4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a machine user or a GitHub App, chosen when step 4 is planned) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR gets a preview link, and the agent identity cannot merge a PR without the owner's approval.
+4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a machine user or a GitHub App, chosen when step 4 is planned) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR gets a preview link, and the agent identity cannot merge a PR without the owner's approval. Step 4 re-enables GitHub Actions, which is disabled in steps 1 to 3, with restrictions, and updates the `up.sh` check to match.
 5. **First full run.** A new story from idea to merge without manual code edits. Exit: definition of done met and problems recorded.
 
 ## 11. Definition of done for v1
@@ -285,7 +289,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 - **Subscription limits.** Agent runs share the Team plan quota with the owner's other work.
 - **Agent loops.** Mitigation: turn limits and dispute rules.
 - **Specs approved without reading.** Mitigation: questions and assumptions are surfaced separately.
-- **Agents can technically merge PRs until step 4.** In steps 1 to 3 the agent token acts as the owner, so "the human merges" is a convention backed only by a deny rule in managed settings. Agents do not open PRs before step 3, which keeps the exposure short.
+- **Agents can technically merge PRs until step 4.** In steps 1 to 3 the agent token acts as the owner, so "the human merges" is a convention backed only by a deny rule in managed settings. Agents do not open PRs before step 3, which keeps the exposure short. A merged change never runs on the owner's Mac until the owner reviews and pulls it, because `up.sh` refuses to start while the host clone is behind `origin/main`. GitHub Actions is disabled until step 4, so no workflow runs outside the sandbox.
 - **Interaction limit expires** after six months. Mitigation: `up.sh` checks it on every run.
 - **Copied templates drift** from the factory as it evolves. Accepted in v1. Plugin distribution is in the backlog.
 

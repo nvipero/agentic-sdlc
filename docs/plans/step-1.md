@@ -13,11 +13,13 @@ Date: 2026-10-22
     - a firewall that fails closed
     - `scripts/up.sh`, which runs a preflight that fails closed and passes the 1Password token into the container
   - `sdlc-pilot` is created from the template.
-  - Both repos get a ruleset on `main`, a six-month interaction limit, and secret scanning with push protection.
+  - Both repos get a ruleset on `main`, a six-month interaction limit, and secret scanning with push protection. GitHub Actions is disabled on both until step 4.
   - `sdlc-pilot` also gets labels, an issue form and a label-filtered Projects board.
 - **Clone-in-volume (your item 3): evaluated and adopted.** A throwaway test on this machine showed no blocker (section 3), and Git's sparse checkout keeps the overlaid paths out of `git status` and `git add -A`.
 - **What the overlays do not fix:** an agent can still commit changes to factory paths using git plumbing. The step 4 CI guard catches that. Until then, the ruleset guarantees that every change reaches `main` **only through a PR**. It does **not** guarantee that a human merges that PR.
 - **Known limitation until step 4:** with a single GitHub identity, the agent token can merge a PR, because merging needs only Contents: write. A managed-settings deny rule for merge commands is defence in depth only. Spec revision 5, step 4, introduces a separate agent identity and a required approving review from you to close this.
+  - **What a merge can reach:** the change reaches `main` on GitHub, but it never runs on your Mac until you review and pull it yourself. `up.sh` does not update the host clone; it refuses to start while the host clone is behind `origin/main` (section 4).
+  - **GitHub Actions is disabled** on both repos, so a pushed workflow cannot run outside the sandbox. Step 4 re-enables Actions with restrictions for the deterministic gates.
 - **Exit check:** a scripted check plus a real headless agent session. It covers:
   - the network stays closed when the firewall fails
   - the agent token is rejected on a push to `main`
@@ -147,7 +149,7 @@ Ruleset body, built from the documented schema:
   - The script takes no arguments, and sudo resets the environment.
 - **Claude Code state:** a named volume per project at `/home/node/.claude`, with `CLAUDE_CONFIG_DIR` pointing to it.
 - **`userEnvProbe: "none"`:** no login shell runs before the firewall is up.
-- **`waitFor: "postStartCommand"`:** the CLI does not report the container as ready until the firewall and workspace init have finished.
+- **No lifecycle commands:** the firewall runs in the image entrypoint, and `up.sh` runs the workspace init with `docker exec` (section 4).
 - **Image identity:** the Dockerfile ends with `ARG DEVCONTAINER_TREE` and `LABEL factory.devcontainer.tree=$DEVCONTAINER_TREE`. `devcontainer.json` passes the build arg from `${localEnv:FACTORY_DEVCONTAINER_TREE}`. The label comes last so it does not break the layer cache (section 4).
 - **No VS Code:** no extensions and no customizations. `up.sh` is the only supported way in.
 - **Managed settings** (`/etc/claude-code/managed-settings.json`, root-owned, highest precedence; names verified in code.claude.com/docs settings and env-vars):
@@ -219,6 +221,7 @@ Ruleset body, built from the documented schema:
 **What remains:**
 - **Factory paths via git plumbing.** An agent can still create commits that change factory paths, because the index and objects are writable. It can also disable sparse checkout or create a story worktree that has no overlays.
   - The ruleset guarantees these changes can reach `main` **only through a PR**. Until step 4, the agent token can also **merge** that PR itself, because merging needs only Contents: write and there is one GitHub identity.
+  - A merged change is never executed on the host until you pull it yourself: `up.sh` never updates the host clone, so the overlays, the image build and `up.sh` itself only change when you have reviewed and pulled.
   - The merge deny rules (section 2) only make that less likely by accident. They do not prevent it.
   - Step 4 closes this with the factory definitions guard as a required check, and a separate agent identity. With that identity, the ruleset can require your approving review (spec revision 5, section 10).
   - Until then, the exposure is short: agents open no PRs before step 3 (spec section 12). The PR history on GitHub is the audit trail, but `merged_by` cannot tell you from an agent while you share one identity.
@@ -232,13 +235,14 @@ Each step fails closed: any failure prints the reason and exits non-zero, and no
    - `gh repo view --json visibility` returns `PUBLIC`.
    - **Ruleset:** `rules/branches/main` has active `pull_request`, `non_fast_forward` and `deletion` rules, and every active ruleset that applies to `main` has `bypass_actors == []`.
    - **Interaction limit:** `GET interaction-limits` returns `limit == collaborators_only` with `expires_at` in the future. It warns if fewer than 14 days are left. An empty response is a failure.
+   - **Actions:** `GET actions/permissions` returns `enabled == false`.
 2. **Host clone:**
    - It is on `main` and has no local changes.
-   - `git fetch` then `git merge --ff-only origin/main`.
-   - The overlays therefore always equal `origin/main`.
-3. **Token:** `op read "op://Agent Factory/<repo>-github/credential"` goes into a variable, exported as `FACTORY_GH_TOKEN` for this process only. It is never echoed and never written to disk.
+   - `git fetch`, then `HEAD` must equal `origin/main`. If the host clone is behind, `up.sh` refuses and tells you to review the new commits and pull manually.
+   - `up.sh` never merges or pulls. Anything that reaches `main` runs on the host only after you have pulled it, and the overlays always equal what you pulled.
+3. **Token:** `op read "op://Agent Factory/<repo>-github/credential"` goes into a shell variable `FACTORY_GH_TOKEN`, not exported. It is never echoed and never written to disk.
 4. **Image:**
-   - `FACTORY_DEVCONTAINER_TREE="$(git rev-parse HEAD:.devcontainer)"`, the git tree hash of `.devcontainer/` on the fast-forwarded `main`.
+   - `FACTORY_DEVCONTAINER_TREE="$(git rev-parse HEAD:.devcontainer)"`, the git tree hash of `.devcontainer/` on the checked `main`.
    - Then `devcontainer build --workspace-folder <host clone>` on every run. Docker's layer cache makes an unchanged build take seconds, and any changed file in `.devcontainer/` (Dockerfile, managed settings, firewall, allowlist) invalidates the affected layers.
    - After `up`, the running container's image must carry `factory.devcontainer.tree` equal to that hash. If it doesn't, the container is stopped and `up.sh` aborts.
    - So a policy change on `main` always takes effect, or nothing starts.
@@ -246,20 +250,18 @@ Each step fails closed: any failure prints the reason and exits non-zero, and no
 5. **Container:** `devcontainer up --workspace-folder <host clone> --remove-existing-container`.
    - It is always recreated. That closes the gap between container start and firewall start for anything left in the old container layer, and it refreshes the overlays.
    - The volumes persist.
-   - If `up` exits non-zero, `up.sh` aborts. Per CLI source, a failed `postStartCommand` makes `up` exit with 1.
+   - If `up` exits non-zero, `up.sh` aborts.
+   - Then `up.sh` runs `init-workspace.sh` in the container. If it fails, the container is stopped and `up.sh` aborts.
 6. **Network probe before exec:** from inside the container, `example.com` must fail and `api.github.com` must succeed. If either result is wrong, the container is stopped and `up.sh` aborts.
-7. **Exec:** `devcontainer exec ... zsh`, or `up.sh exec <cmd>`.
+7. **Exec:** the session, or `up.sh <cmd>`.
 
-**Token delivery:** `devcontainer.json` `"remoteEnv": {"GH_TOKEN": "${localEnv:FACTORY_GH_TOKEN}"}`. Per CLI source, `remoteEnv` reaches lifecycle commands and every exec.
+**Token delivery:** every exec that needs the token is a `docker exec -e GH_TOKEN` from `up.sh`, with the value only in the docker client's environment. The token is passed by name, never as `NAME=VALUE`, so it is in no process's argument list. `devcontainer.json` has no `remoteEnv` and no lifecycle commands.
 
-The CLI writes the raw `remoteEnv` into the `devcontainer.metadata` label. Whether that copy holds `${localEnv:...}` or the resolved value is not clear from the source, so:
-- I check `docker inspect` by comparing a hash of the token, printing only found or not found.
-- If it is found, I switch to `--remote-env GH_TOKEN=...` on both `up` and `exec`. Per source, the CLI does not store that in the label.
-- The cost of the fallback: the token is in the argv of a short-lived host process, visible to your own user's processes. I will report which option I used.
+**Correction (security review):** the earlier version of this section said that `remoteEnv` keeps the token out of argv and that only the `--remote-env` fallback puts it there. That was wrong. The devcontainer CLI turns `remoteEnv` and `--remote-env` into the same `docker exec -e GH_TOKEN=<value>` command line, so with `remoteEnv` the token was in a host process's argv for the whole session. The exit check now samples the host process list during start and session, and `docker inspect` is still checked for the token.
 
 ## 5. Firewall (fail closed)
 
-`init-firewall.sh` runs from `postStartCommand` on every start, as `sudo init-firewall.sh && init-workspace.sh`. Nothing else runs in `onCreateCommand` or `postCreateCommand`, because those run before `postStartCommand` with the network open.
+`init-firewall.sh` runs in the image entrypoint on every start, and `up.sh` runs `init-workspace.sh` after it (section 4). Nothing else runs in `onCreateCommand` or `postCreateCommand`, because those run before `postStartCommand` with the network open.
 
 1. **First action:** `set -euo pipefail`, then `iptables -P INPUT DROP; -P OUTPUT DROP; -P FORWARD DROP`, before any flush or lookup.
 2. **Rule rebuild:** flush, then allow loopback and established traffic. DNS is allowed only to the nameserver in `/etc/resolv.conf`.
@@ -338,7 +340,7 @@ The results are saved to `docs/verification/step-1.md` with command output. That
   - The rules are present again after a restart.
 - **Network stays closed on firewall failure:** as root from the host, the firewall is re-run with an allowlist containing an unresolvable domain.
   - Expected: exit non-zero, and `api.github.com` is then also unreachable.
-  - Separately, `up.sh` refuses to continue when `postStartCommand` fails, shown by running it against a container with a forced failure.
+  - Separately, `up.sh` stops the container and refuses to continue when the workspace init fails, shown by starting it without a token.
 - **Visibility:**
   - `findmnt` shows only the workspace volume, the five read-only overlays and the Claude volume.
   - No `/Users`, no `docker.sock`, no `~/.ssh`.

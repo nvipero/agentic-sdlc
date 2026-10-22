@@ -1,6 +1,6 @@
 {
   // Start only with scripts/up.sh. It runs the protection preflight, passes the
-  // token and verifies the image and firewall before giving you a shell.
+  // token, prepares the workspace and verifies the image and firewall before giving you a shell.
   "name": "${localWorkspaceFolderBasename}",
   "build": {
     "dockerfile": "Dockerfile",
@@ -30,12 +30,8 @@
   "containerUser": "node",
   "remoteUser": "node",
   "updateRemoteUserUID": false,
-  "userEnvProbe": "none",
-  "remoteEnv": {
-    "GH_TOKEN": "${localEnv:FACTORY_GH_TOKEN}",
-    "FACTORY_REPO_URL": "${localEnv:FACTORY_REPO_URL}"
-  },
-  // The entrypoint has already started the firewall; the workspace clone waits for its marker.
-  "postStartCommand": "/usr/local/bin/init-workspace.sh",
-  "waitFor": "postStartCommand"
+  // No remoteEnv and no lifecycle commands: the devcontainer CLI would pass the token as
+  // -e NAME=VALUE on the docker command line. scripts/up.sh runs init-workspace.sh and
+  // the session itself with docker exec -e GH_TOKEN (by name).
+  "userEnvProbe": "none"
 }

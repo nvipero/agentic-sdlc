@@ -39,8 +39,8 @@ export FACTORY_DEVCONTAINER_TREE="$(git -C "$REPO" rev-parse HEAD:.devcontainer)
 CID="$(container_id)"   # container_id comes from up.sh
 [ -n "$CID" ] || { echo "no running container; start it with scripts/up.sh first" >&2; exit 2; }
 
-# Run a command inside the container as the agent user.
-in_box() { devcontainer exec --workspace-folder "$REPO" bash -c "$1" 2>&1; }
+# Run a command inside the container as the agent user (box_exec from up.sh: token by name only).
+in_box() { box_exec bash -c "$1" 2>&1; }
 
 # expect_fail <name> <command> <pattern>: command must fail and print pattern.
 expect_fail() {
@@ -110,19 +110,20 @@ expect_ok "https://registry.npmjs.org/ is reachable (200 expected)" \
   "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://registry.npmjs.org/); echo \$c; [ \$c = 200 ]"
 
 section "Network stays closed when the firewall fails"
-docker exec -u root "$CID" sh -c 'printf "api.github.com\nno-such-host.invalid\n" > /tmp/bad-allowlist'
-out="$(docker exec -u root -e FACTORY_ALLOWLIST_FILE=/tmp/bad-allowlist "$CID" /usr/local/bin/init-firewall.sh 2>&1)"; rc=$?
+# Under root-owned /run, so the agent cannot pre-create or rewrite the file.
+docker exec -u root "$CID" sh -c 'printf "api.github.com\nno-such-host.invalid\n" > /run/exit-check-allowlist'
+out="$(docker exec -u root -e FACTORY_ALLOWLIST_FILE=/run/exit-check-allowlist "$CID" /usr/local/bin/init-firewall.sh 2>&1)"; rc=$?
 if [ "$rc" -ne 0 ]; then pass "firewall exits non-zero on resolution failure" "$(echo "$out" | tail -1)"; else fail "firewall exits non-zero on resolution failure"; fi
 expect_fail "api.github.com unreachable after failed firewall run" "curl -sS --max-time 5 -o /dev/null https://api.github.com/zen" "curl: \([0-9]+\)"
 expect_fail "firewall marker removed after failure" "test -f /run/firewall-ok" ""
-out="$(docker exec "$CID" bash -c 'FACTORY_ALLOWLIST_FILE=/tmp/bad-allowlist sudo /usr/local/bin/init-firewall.sh' 2>&1)"; rc=$?
+out="$(docker exec "$CID" bash -c 'FACTORY_ALLOWLIST_FILE=/run/exit-check-allowlist sudo /usr/local/bin/init-firewall.sh' 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ]; then pass "agent cannot pass an allowlist override through sudo" "$(echo "$out" | tail -1)"; else fail "agent cannot pass an allowlist override through sudo" "$out"; fi
-expect_fail "sudo refuses the firewall script with arguments" "sudo -n /usr/local/bin/init-firewall.sh /tmp/bad-allowlist" "not allowed|password is required|may not run"
-docker exec -u root "$CID" rm -f /tmp/bad-allowlist
+expect_fail "sudo refuses the firewall script with arguments" "sudo -n /usr/local/bin/init-firewall.sh /run/exit-check-allowlist" "not allowed|password is required|may not run"
+docker exec -u root "$CID" rm -f /run/exit-check-allowlist
 expect_ok "network restored by a normal firewall run (authenticated, 200 expected)" \
   "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer \$GH_TOKEN\" https://api.github.com/zen); echo \$c; [ \$c = 200 ]"
 docker exec -u root "$CID" rm -f /run/firewall-ok
-out="$(devcontainer exec --workspace-folder "$REPO" /usr/local/bin/factory-exec true 2>&1)"; rc=$?
+out="$(box_exec /usr/local/bin/factory-exec true 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING: firewall marker missing" \
   && pass "exec guard refuses without the firewall marker" "$(echo "$out" | grep REFUSING)" || fail "exec guard without marker" "$out"
 docker exec -u root "$CID" /usr/local/bin/init-firewall.sh >/dev/null 2>&1 \
@@ -223,6 +224,8 @@ for r in "$NWO" "$FACTORY_NWO"; do
   [ "$ok" = "true" ] && pass "$r: pull_request, non_fast_forward, deletion active on main" || fail "$r: rules on main"
   ok="$(gh api "repos/$r/rulesets" --jq '.[].id' | while read -r id; do gh api "repos/$r/rulesets/$id" --jq 'has("bypass_actors") and (.bypass_actors|length==0)'; done | sort -u)"
   [ "$ok" = "true" ] && pass "$r: no bypass actors" || fail "$r: bypass actors" "$ok"
+  ok="$(gh api "repos/$r/actions/permissions" --jq .enabled)"
+  [ "$ok" = "false" ] && pass "$r: GitHub Actions disabled" || fail "$r: GitHub Actions" "enabled=$ok"
 done
 
 section "Image is rebuilt when .devcontainer/ changes"
@@ -256,10 +259,35 @@ out="$(FACTORY_EXPECTED_VISIBILITY=PRIVATE "$REPO/scripts/up.sh" true 2>&1)"; rc
   || fail "preflight refusal" "$out"
 [ "$(container_id)" = "$CID" ] && pass "preflight refusal leaves the running container untouched" "$CID" \
   || fail "preflight refusal changed the container" "before '$CID', after '$(container_id)'"
-out="$( (FACTORY_GH_TOKEN=""; export FACTORY_GH_TOKEN; NWO="$NWO"; start_container) 2>&1 )"; rc=$?
-[ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING TO START: devcontainer up failed" && pass "up.sh aborts when postStartCommand fails" "$(echo "$out" | grep -E 'init-workspace|REFUSING' | tail -2 | tr '\n' ' ')" \
-  || fail "postStartCommand failure abort" "$(echo "$out" | tail -3)"
+out="$( (FACTORY_GH_TOKEN=""; NWO="$NWO"; start_container) 2>&1 )"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING TO START: workspace init failed" && pass "up.sh aborts when workspace init fails" "$(echo "$out" | grep -E 'init-workspace|REFUSING' | tail -2 | tr '\n' ' ')" \
+  || fail "workspace init failure abort" "$(echo "$out" | tail -3)"
 [ -z "$(container_id)" ] && pass "no container left running after failed start" || fail "container running after failed start"
+# A throwaway clone one commit behind: the check must refuse and must not update it.
+BEHIND_PARENT="$(mktemp -d)"
+git clone -q "$REPO" "$BEHIND_PARENT/clone" && git -C "$BEHIND_PARENT/clone" reset -q --hard HEAD~1
+behind_head="$(git -C "$BEHIND_PARENT/clone" rev-parse HEAD)"
+out="$( (REPO_DIR="$BEHIND_PARENT/clone"; check_clone) 2>&1 )"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "not at origin/main" && [ "$(git -C "$BEHIND_PARENT/clone" rev-parse HEAD)" = "$behind_head" ] \
+  && pass "a host clone behind origin/main is refused and not updated" "$(echo "$out" | grep -o 'not at origin/main.*' | cut -c1-80)" \
+  || fail "host clone behind origin/main" "rc=$rc: $out"
+rm -rf "$BEHIND_PARENT"
+
+section "Token never in a host process's arguments"
+# Samples every host process's argument list while up.sh starts the container
+# (workspace init, probe) and runs a session command. Only match counts are
+# written; the patterns come from a file descriptor, so they are in no argv either.
+PS_COUNTS="$(mktemp)"
+( while :; do ps -Aww -o args= | grep -cF -f <(printf 'GH_TOKEN=\n%s\n' "$FACTORY_GH_TOKEN"); sleep 0.2; done ) > "$PS_COUNTS" 2>/dev/null &
+sampler=$!
+"$REPO/scripts/up.sh" sleep 5 >/dev/null 2>&1; rc=$?
+kill "$sampler"; wait "$sampler" 2>/dev/null
+samples="$(grep -c . "$PS_COUNTS")"; hits="$(awk '{s += $1} END {print s + 0}' "$PS_COUNTS")"
+rm -f "$PS_COUNTS"
+[ "$rc" -eq 0 ] && [ "$samples" -ge 10 ] && [ "$hits" = "0" ] \
+  && pass "GH_TOKEN= and the token value never in a host process list during start and session" "$samples samples" \
+  || fail "token in host process list" "rc=$rc, $samples samples, $hits matching lines"
+CID="$(container_id)"
 
 section "Workspace is never deleted automatically"
 # run_on_volume and workspace_image come from up.sh, so both use the same image and mount.

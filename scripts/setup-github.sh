@@ -5,6 +5,7 @@
 #   scripts/setup-github.sh ruleset           <owner/repo>
 #   scripts/setup-github.sh interaction-limit <owner/repo>
 #   scripts/setup-github.sh secret-scanning   <owner/repo>
+#   scripts/setup-github.sh actions           <owner/repo>   (disables Actions until step 4)
 #   scripts/setup-github.sh labels            <owner/repo>
 #   scripts/setup-github.sh board             <owner/repo>
 #   scripts/setup-github.sh status            <owner/repo>   (read-only)
@@ -48,6 +49,14 @@ secret_scanning() {
 {"security_and_analysis":{"secret_scanning":{"status":"enabled"},
  "secret_scanning_push_protection":{"status":"enabled"}}}
 EOF
+}
+
+# Off until step 4, which re-enables Actions with restrictions: a workflow
+# pushed by an agent would otherwise run outside the sandbox.
+actions() {
+  local nwo="$1"
+  gh api -X PUT "repos/$nwo/actions/permissions" -F enabled=false
+  gh api "repos/$nwo/actions/permissions" --jq '"actions enabled: \(.enabled)"'
 }
 
 labels() {
@@ -149,14 +158,16 @@ status() {
       '"ruleset \(.name): enforcement=\(.enforcement) bypass_actors=\(.bypass_actors | length) target=\(.conditions.ref_name.include) rules=\([.rules[].type])"'
   done
   gh api "repos/$nwo/interaction-limits" --jq '"interaction limit: \(.limit // "none") until \(.expires_at // "-")"'
+  gh api "repos/$nwo/actions/permissions" --jq '"actions enabled: \(.enabled)"'
   gh api "repos/$nwo" --jq '.security_and_analysis | "secret scanning: \(.secret_scanning.status), push protection: \(.secret_scanning_push_protection.status)"'
 }
 
-[ "$#" -eq 2 ] || die "usage: $0 <ruleset|interaction-limit|secret-scanning|labels|board|status> <owner/repo>"
+[ "$#" -eq 2 ] || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|labels|board|status> <owner/repo>"
 case "$1" in
   ruleset) ruleset "$2" ;;
   interaction-limit) interaction_limit "$2" ;;
   secret-scanning) secret_scanning "$2" ;;
+  actions) actions "$2" ;;
   labels) labels "$2" ;;
   board) board "$2" ;;
   status) status "$2" ;;
