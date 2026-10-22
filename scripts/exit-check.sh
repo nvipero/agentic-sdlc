@@ -5,14 +5,19 @@
 #
 #   scripts/exit-check.sh <path-to-project-clone> <factory-owner/repo>
 #
-# Side effects, all cleaned up: one branch and one draft PR on the project
-# (agent token positive test), a throwaway local branch and worktree, a test
-# image and container restarts. The workspace is reset with reset-workspace:
-# the old one is kept as an archive volume (named in the output), and the
-# new one is a fresh clone. Nothing is merged and nothing is deleted.
+# Side effects:
+# - cleaned up: one branch and one draft PR on the project (agent token
+#   positive test), a throwaway local branch and worktree, a test image,
+#   container restarts. Nothing is merged.
+# - NOT cleaned up, on purpose: every run tests reset-workspace for real.
+#   The project's workspace is archived to <repo>-workspace-archive-<time>
+#   (a full copy, named in the output) and replaced by a fresh clone. Run it
+#   when the workspace holds no work you need, and remove old archives with
+#   docker volume rm. Nothing is deleted by the check.
 set -uo pipefail
 
 REPO="$(cd "${1:?project clone path}" && pwd)"
+for c in expect perl; do command -v "$c" >/dev/null || { echo "exit-check: '$c' is not installed" >&2; exit 2; }; done
 FACTORY_NWO="${2:?factory owner/repo}"
 FACTORY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FAILS=0
@@ -286,9 +291,19 @@ out="$(perl -MPOSIX -e 'POSIX::setsid() or die "setsid failed: $!\n"; exec @ARGV
   && pass "reset-workspace without a terminal refuses and changes nothing (report shows HEAD and ignored files)" "$(echo "$out" | grep -o 'current HEAD:.*')" \
   || fail "reset-workspace refusal without terminal" "$(echo "$out" | tail -3)"
 # Answers through a pseudo-terminal (expect).
+# Paths and answers go through the environment, so spaces need no quoting in Tcl.
+# A timeout ends the run (exit 124) instead of waiting forever.
 reset_with() {
-  expect -c "set timeout 300; spawn $REPO/scripts/up.sh reset-workspace; expect {
-    \"Type the repository name\" { send \"$1\r\"; exp_continue } eof }; catch wait r; exit [lindex \$r 3]" 2>&1
+  RESET_CMD="$REPO/scripts/up.sh" RESET_ANSWER="$1" expect -c '
+    set timeout 600
+    spawn $env(RESET_CMD) reset-workspace
+    expect {
+      timeout { puts "expect: timed out"; exit 124 }
+      "Type the repository name" { send "$env(RESET_ANSWER)\r"; exp_continue }
+      eof
+    }
+    catch wait r
+    exit [lindex $r 3]' 2>&1
 }
 out="$(reset_with "wrong/name")"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "confirmation did not match; nothing was changed" \
@@ -308,9 +323,11 @@ if [ "$rc" -eq 0 ] && [ -n "$archive" ]; then
   [ "$new" = "$(printf '%s\n0' "$(git -C "$REPO" rev-parse origin/main)")" ] \
     && pass "the new workspace is a fresh clone of origin/main" "$(echo "$new" | head -1 | cut -c1-12), clean" \
     || fail "new workspace after reset" "$new"
-  echo "NOTE  the archive volume $archive is kept; remove it with: docker volume rm $archive"
+  echo "NOTE  reset-workspace archived the project's workspace to $archive (kept on purpose; remove it with: docker volume rm $archive)"
 else
   fail "reset-workspace with confirmation" "rc=$rc: $(echo "$out" | tail -3)"
+  # Put the workspace back on main so later checks and normal starts work.
+  run_on_volume "git switch -q main && rm -f src/exit-check-sentinel exit-check-ignored" >/dev/null 2>&1
 fi
 section "Restart through up.sh restores the firewall"
 "$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(container_id)"

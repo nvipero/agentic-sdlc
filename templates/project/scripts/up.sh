@@ -34,6 +34,14 @@ stop_container() {
   if [ -n "$cid" ]; then docker stop "$cid" >/dev/null; fi
 }
 
+# Removes the project's containers, running or stopped (they are recreated on every start).
+remove_containers() {
+  local cid
+  for cid in $(docker ps -aq --filter "label=devcontainer.local_folder=$REPO_DIR"); do
+    docker rm -f "$cid" >/dev/null
+  done
+}
+
 # --- 1. Preflight: GitHub protections (host, owner's gh login) ---------------
 preflight() {
   local nwo repo visibility branch_rules rules ruleset_ids id ok limit days scanning
@@ -145,19 +153,22 @@ workspace_image() {
 }
 
 # Runs a bash command against the workspace volume in a throwaway container
-# without network. Extra docker run options go before the command.
+# without network. --read-only first mounts the volume read-only; other
+# docker run options go before the command.
 run_on_volume() {
-  local cmd="${!#}" image
+  local mode="" cmd image
+  if [ "${1:-}" = "--read-only" ]; then mode=":ro"; shift; fi
+  cmd="${!#}"
   image="$(workspace_image)"
   [ -n "$image" ] || { echo "no image for tree $FACTORY_DEVCONTAINER_TREE" >&2; return 1; }
-  docker run --rm --network none --entrypoint bash -v "$VOLUME:/workspace" "${@:1:$#-1}" "$image" \
+  docker run --rm --network none --entrypoint bash -v "$VOLUME:/workspace$mode" "${@:1:$#-1}" "$image" \
     -c "cd /workspace && $cmd"
 }
 
 # Informational: the old workspace is archived, not deleted, so this does not
 # have to be complete. Lists are cut at 50 lines with a count of the rest.
 workspace_report() {
-  run_on_volume -e GIT_OPTIONAL_LOCKS=0 '
+  run_on_volume --read-only -e GIT_OPTIONAL_LOCKS=0 '
     list() { local all; all="$(cat)"; [ -z "$all" ] && return; echo "$all" | head -50 | sed "s/^/    /";
              n=$(echo "$all" | wc -l); [ "$n" -gt 50 ] && echo "    ... and $((n - 50)) more"; return 0; }
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
@@ -177,35 +188,38 @@ workspace_report() {
 }
 
 reset_workspace() {
-  local answer cid archive from to
+  local answer archive
   if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
     say "no workspace volume $VOLUME; a fresh clone is made on start"
     return
   fi
+  archive="${VOLUME}-archive-$(date -u +%Y%m%dT%H%M%SZ)"
+  ! docker volume inspect "$archive" >/dev/null 2>&1 \
+    || die "archive volume $archive already exists; try again in a second; nothing was changed"
+  say "reset-workspace: volume $VOLUME will be ARCHIVED as $archive and replaced by a fresh clone of $NWO main."
+  say "Its current content (read-only report; everything stays in the archive):"
+  workspace_report >&2 || die "cannot inspect the workspace; nothing was changed"
   if ! (exec </dev/tty) 2>/dev/null; then
-    say "Current content of $VOLUME:"
-    workspace_report >&2 || true
     die "reset-workspace needs an interactive terminal to confirm; nothing was changed"
   fi
-  # Stop first, so nothing changes between the report and the archive.
-  for cid in $(docker ps -aq --filter "label=devcontainer.local_folder=$REPO_DIR"); do
-    docker rm -f "$cid" >/dev/null
-  done
-  archive="${VOLUME}-archive-$(date -u +%Y%m%dT%H%M%SZ)"
-  say "reset-workspace: volume $VOLUME will be ARCHIVED as $archive and replaced by a fresh clone of $NWO main."
-  say "Its current content (stays in the archive):"
-  workspace_report >&2 || die "cannot inspect the workspace; nothing was changed"
   printf 'Type the repository name (%s) to archive and reset the workspace: ' "$NWO" >/dev/tty
   read -r answer </dev/tty || answer=""
   [ "$answer" = "$NWO" ] || die "confirmation did not match; nothing was changed"
-  docker volume create "$archive" >/dev/null || die "cannot create $archive; nothing was changed"
-  run_on_volume -u root -v "$archive:/archive" 'cp -a /workspace/. /archive/' \
-    || die "copy to $archive failed; $VOLUME was not removed"
-  # Same paths and same file contents.
-  local digest='{ find . | sort; find . -type f -print0 | sort -z | xargs -0 -r sha256sum; } | sha256sum'
-  from="$(run_on_volume -u root "$digest")"
-  to="$(run_on_volume -u root -v "$archive:/archive" "cd /archive && $digest")"
-  [ -n "$from" ] && [ "$from" = "$to" ] || die "archive $archive does not match $VOLUME; $VOLUME was not removed"
+  # Stop only now. The archive is copied from the stopped workspace, so
+  # anything written before this point, after the report too, is kept.
+  remove_containers
+  docker volume create "$archive" >/dev/null || die "cannot create $archive; the workspace was not changed"
+  # Copy, then compare paths, types, modes, owners, symlink targets and file
+  # contents of both volumes in one container.
+  if ! run_on_volume -u root -v "$archive:/archive" '
+      cp -a /workspace/. /archive/ || exit 1
+      manifest() { cd "$1" && find . -printf "%p %y %m %U %G %l\n" | LC_ALL=C sort &&
+                   find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum; }
+      [ "$(manifest /workspace | sha256sum)" = "$(manifest /archive | sha256sum)" ]'; then
+    # Only the incomplete copy is removed; the workspace itself is untouched.
+    docker volume rm "$archive" >/dev/null 2>&1 || true
+    die "copying to $archive failed or did not match; the incomplete copy was removed and $VOLUME was not changed"
+  fi
   docker volume rm "$VOLUME" >/dev/null || die "cannot remove $VOLUME (archive $archive is complete)"
   say "archived to volume $archive (remove it yourself with: docker volume rm $archive); cloning a fresh workspace"
 }
