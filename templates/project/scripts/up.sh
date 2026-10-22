@@ -5,8 +5,8 @@
 #   scripts/up.sh <cmd...>   same, but run <cmd> instead of a shell
 #   scripts/up.sh stop       stop the container (volumes are kept)
 #   scripts/up.sh reset-workspace
-#                            show what would be lost, ask for confirmation, then
-#                            delete the workspace volume and clone it again
+#                            show the workspace content, ask for confirmation,
+#                            archive the workspace volume and clone a fresh one
 #
 # Needs on the host: gh (logged in as the repo owner), git, op, devcontainer, docker.
 set -euo pipefail
@@ -138,50 +138,76 @@ probe_network() {
   say "container probe OK (firewall, network, managed settings)"
 }
 
-# --- Workspace reset: the only path that deletes the workspace ----------------
-# Read-only look at the workspace volume, without network.
+# --- Workspace reset: archives the old workspace, never deletes it -----------
+# The image built from the current .devcontainer/ tree (after build_image).
+workspace_image() {
+  docker images -q --filter "label=factory.devcontainer.tree=$FACTORY_DEVCONTAINER_TREE" | head -1
+}
+
+# Runs a bash command against the workspace volume in a throwaway container
+# without network. Extra docker run options go before the command.
+run_on_volume() {
+  local cmd="${!#}" image
+  image="$(workspace_image)"
+  [ -n "$image" ] || { echo "no image for tree $FACTORY_DEVCONTAINER_TREE" >&2; return 1; }
+  docker run --rm --network none --entrypoint bash -v "$VOLUME:/workspace" "${@:1:$#-1}" "$image" \
+    -c "cd /workspace && $cmd"
+}
+
+# Informational: the old workspace is archived, not deleted, so this does not
+# have to be complete. Lists are cut at 50 lines with a count of the rest.
 workspace_report() {
-  docker run --rm --network none --entrypoint bash -e GIT_OPTIONAL_LOCKS=0 \
-    -v "$VOLUME:/workspace:ro" "$1" -c '
-    cd /workspace
+  run_on_volume -e GIT_OPTIONAL_LOCKS=0 '
+    list() { local all; all="$(cat)"; [ -z "$all" ] && return; echo "$all" | head -50 | sed "s/^/    /";
+             n=$(echo "$all" | wc -l); [ "$n" -gt 50 ] && echo "    ... and $((n - 50)) more"; return 0; }
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
-      echo "  no usable git repository; top-level entries:"; ls -A | sed "s/^/    /"; exit 0
+      echo "  no usable git repository; top-level entries:"; ls -A | list; exit 0
     fi
     echo "  current HEAD: $(git symbolic-ref -q --short HEAD || echo detached) at $(git rev-parse -q --verify --short HEAD || echo "no commits (orphan or unborn branch)")"
     echo "  local branches (upstream and ahead/behind as of the last fetch):"
-    git for-each-ref --format="    %(refname:short) %(upstream:short) %(upstream:track)" refs/heads
-    echo "  commits on no remote branch (as of the last fetch):"
-    git log --branches --not --remotes --oneline 2>/dev/null | head -50 | sed "s/^/    /"
+    git for-each-ref --format="%(refname:short) %(upstream:short) %(upstream:track)" refs/heads | list
+    echo "  commits on no remote branch, including a detached HEAD (as of the last fetch):"
+    { if git rev-parse -q --verify HEAD >/dev/null; then git log --oneline HEAD --branches --not --remotes;
+      else git log --oneline --branches --not --remotes; fi; } 2>/dev/null | list
     echo "  stashes:"
-    git stash list 2>/dev/null | sed "s/^/    /"
-    echo "  uncommitted changes:"
-    git status --porcelain 2>/dev/null | head -50 | sed "s/^/    /"
+    git stash list 2>/dev/null | list
+    echo "  uncommitted, untracked and ignored files:"
+    git status --porcelain --ignored 2>/dev/null | list
   '
 }
 
 reset_workspace() {
-  local image answer cid
+  local answer cid archive from to
   if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
     say "no workspace volume $VOLUME; a fresh clone is made on start"
     return
   fi
-  build_image "$REPO_DIR"
-  image="$(docker images -q --filter "label=factory.devcontainer.tree=$FACTORY_DEVCONTAINER_TREE" | head -1)"
-  [ -n "$image" ] || die "cannot find the built image"
-  say "reset-workspace: volume $VOLUME will be DELETED and cloned again from $NWO main."
-  say "This is what would be lost (unpushed work):"
-  workspace_report "$image" >&2 || die "cannot inspect the workspace; nothing was deleted"
   if ! (exec </dev/tty) 2>/dev/null; then
-    die "reset-workspace needs an interactive terminal to confirm; nothing was deleted"
+    say "Current content of $VOLUME:"
+    workspace_report >&2 || true
+    die "reset-workspace needs an interactive terminal to confirm; nothing was changed"
   fi
-  printf 'Type the repository name (%s) to delete the workspace: ' "$NWO" >/dev/tty
-  read -r answer </dev/tty || answer=""
-  [ "$answer" = "$NWO" ] || die "confirmation did not match; nothing was deleted"
+  # Stop first, so nothing changes between the report and the archive.
   for cid in $(docker ps -aq --filter "label=devcontainer.local_folder=$REPO_DIR"); do
     docker rm -f "$cid" >/dev/null
   done
-  docker volume rm "$VOLUME" >/dev/null || die "cannot delete volume $VOLUME"
-  say "workspace volume deleted; cloning a fresh one"
+  archive="${VOLUME}-archive-$(date -u +%Y%m%dT%H%M%SZ)"
+  say "reset-workspace: volume $VOLUME will be ARCHIVED as $archive and replaced by a fresh clone of $NWO main."
+  say "Its current content (stays in the archive):"
+  workspace_report >&2 || die "cannot inspect the workspace; nothing was changed"
+  printf 'Type the repository name (%s) to archive and reset the workspace: ' "$NWO" >/dev/tty
+  read -r answer </dev/tty || answer=""
+  [ "$answer" = "$NWO" ] || die "confirmation did not match; nothing was changed"
+  docker volume create "$archive" >/dev/null || die "cannot create $archive; nothing was changed"
+  run_on_volume -u root -v "$archive:/archive" 'cp -a /workspace/. /archive/' \
+    || die "copy to $archive failed; $VOLUME was not removed"
+  # Same paths and same file contents.
+  local digest='{ find . | sort; find . -type f -print0 | sort -z | xargs -0 -r sha256sum; } | sha256sum'
+  from="$(run_on_volume -u root "$digest")"
+  to="$(run_on_volume -u root -v "$archive:/archive" "cd /archive && $digest")"
+  [ -n "$from" ] && [ "$from" = "$to" ] || die "archive $archive does not match $VOLUME; $VOLUME was not removed"
+  docker volume rm "$VOLUME" >/dev/null || die "cannot remove $VOLUME (archive $archive is complete)"
+  say "archived to volume $archive (remove it yourself with: docker volume rm $archive); cloning a fresh workspace"
 }
 
 main() {
@@ -196,12 +222,12 @@ main() {
     say "up.sh changed on main; restarting with the new version"
     FACTORY_UP_REEXEC=1 exec "$REPO_DIR/scripts/up.sh" "$@"
   fi
+  read_token
+  build_image "$REPO_DIR"
   if [ "${1:-}" = "reset-workspace" ]; then
     reset_workspace
     set -- true
   fi
-  read_token
-  build_image "$REPO_DIR"
   start_container
   probe_network
   exec devcontainer exec --workspace-folder "$REPO_DIR" /usr/local/bin/factory-exec "$@"

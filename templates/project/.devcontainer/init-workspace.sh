@@ -13,7 +13,7 @@ OVERLAYS='.factory .claude .github .devcontainer CLAUDE.md'
 log() { echo "init-workspace: $*" >&2; }
 stop() {
   log "STOPPING: $1"
-  log "Nothing was changed. To discard this workspace and clone again, run on the host:"
+  log "Nothing was changed. To archive this workspace and clone a fresh one, run on the host:"
   log "  scripts/up.sh reset-workspace"
   exit 1
 }

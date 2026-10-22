@@ -110,7 +110,13 @@ fi
 if curl -s --max-time 5 -o /dev/null https://1.1.1.1; then
   log "1.1.1.1 is reachable"; exit 1
 fi
-# A web URL, not the API, so this check does not count against the API limit.
+# Neither check sends an API request, so they do not count against the API limit:
+# a TCP connection to a pinned api.github.com address, and a github.com web URL.
+api_ok=
+for ip in $gh_ips; do
+  if timeout 5 bash -c "exec 3<>/dev/tcp/$ip/443" 2>/dev/null; then api_ok=1; break; fi
+done
+[ -n "$api_ok" ] || { log "api.github.com is not reachable on port 443"; exit 1; }
 curl -fsS --max-time 10 -o /dev/null https://github.com/robots.txt \
   || { log "github.com is not reachable"; exit 1; }
 

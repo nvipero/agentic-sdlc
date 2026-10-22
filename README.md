@@ -63,7 +63,14 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 6. **Start the container:** `cd ../<repo-name> && scripts/up.sh`.
    - The first time, log in to Claude Code inside the container with `claude`, then `/login`. The login is stored in the project's Claude volume.
    - To stop the container, run `scripts/up.sh stop`.
-   - **The workspace is never deleted automatically.** If `up.sh` stops because the workspace is incomplete or ambiguous (files without `.git`, or a `.git` whose `HEAD` does not resolve), run `scripts/up.sh reset-workspace`. It first lists what would be lost: local branches, commits on no remote branch, stashes and uncommitted changes. It then asks you to type the repository name, and only after that deletes the workspace volume and clones it again.
+   - **The workspace is never deleted automatically.** If `up.sh` stops because the workspace is incomplete or ambiguous (files without `.git`, or a `.git` whose `HEAD` does not resolve), run `scripts/up.sh reset-workspace`. It works in this order:
+     1. Stops the container.
+     2. Shows the workspace content: current `HEAD`, local branches, commits on no remote branch, stashes, and uncommitted, untracked and ignored files.
+     3. Asks you to type the repository name.
+     4. Copies the workspace to an archive volume `<repo>-workspace-archive-<timestamp>` and checks the copy.
+     5. Only then replaces the workspace with a fresh clone.
+
+     Nothing is deleted: the archive stays until you remove it with `docker volume rm`.
 
 ## Renewing protections
 

@@ -80,9 +80,15 @@ board() {
   if [ -z "$number" ]; then
     number="$(gh project create --owner "$owner" --title "$repo" --format json --jq .number)"
     say "project $number created"
-  elif [ "$(gh project view "$number" --owner "$owner" --format json --jq .closed)" = "true" ]; then
-    gh project close "$number" --owner "$owner" --undo >/dev/null
-    say "project $number was closed; reopened"
+  else
+    local closed
+    closed="$(gh project view "$number" --owner "$owner" --format json --jq .closed)" \
+      || die "cannot read project $number"
+    case "$closed" in
+      true) gh project close "$number" --owner "$owner" --undo >/dev/null; say "project $number was closed; reopened" ;;
+      false) ;;
+      *) die "unexpected closed state for project $number: '$closed'" ;;
+    esac
   fi
   local link_out
   if ! link_out="$(gh project link "$number" --owner "$owner" --repo "$nwo" 2>&1)"; then

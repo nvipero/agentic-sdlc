@@ -7,8 +7,9 @@
 #
 # Side effects, all cleaned up: one branch and one draft PR on the project
 # (agent token positive test), a throwaway local branch and worktree, a test
-# image, an orphan branch and an untracked file in the workspace (restored),
-# and container restarts. Nothing is merged and the workspace is never deleted.
+# image and container restarts. The workspace is reset with reset-workspace:
+# the old one is kept as an archive volume (named in the output), and the
+# new one is a fresh clone. Nothing is merged and nothing is deleted.
 set -uo pipefail
 
 REPO="$(cd "${1:?project clone path}" && pwd)"
@@ -256,34 +257,61 @@ out="$( (FACTORY_GH_TOKEN=""; export FACTORY_GH_TOKEN; NWO="$NWO"; start_contain
 [ -z "$(container_id)" ] && pass "no container left running after failed start" || fail "container running after failed start"
 
 section "Workspace is never deleted automatically"
-image_now() { docker images -q --filter "label=factory.devcontainer.tree=$FACTORY_DEVCONTAINER_TREE" | head -1; }
-# Runs a command against the workspace volume in a throwaway container without network.
-on_volume() { docker run --rm --network none --entrypoint bash -v "$VOLUME:/workspace" "$(image_now)" -c "cd /workspace && $1" 2>&1; }
+# run_on_volume and workspace_image come from up.sh, so both use the same image and mount.
 "$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(container_id)" || { echo "RESULT: aborted, cannot start container"; exit 1; }
-head_before="$(in_box "cd /workspace && echo exit-check > src/exit-check-sentinel && git rev-parse HEAD" | tail -1)"
-"$REPO/scripts/up.sh" true >/dev/null 2>&1
-out="$(in_box "cd /workspace && cat src/exit-check-sentinel && git rev-parse HEAD")"
-[ "$out" = "$(printf 'exit-check\n%s' "$head_before")" ] \
-  && pass "an existing workspace (cloned before any marker existed) survives a restart unchanged" "HEAD ${head_before:0:12}, untracked file kept" \
-  || fail "workspace changed across restart" "$out"
+head_before="$(in_box "cd /workspace && echo exit-check > src/exit-check-sentinel && echo exit-check-ignored >> .git/info/exclude && touch exit-check-ignored && git rev-parse HEAD" | tail -1)"
+if "$REPO/scripts/up.sh" true >/dev/null 2>&1 && [ -n "$(container_id)" ] && [ "$(container_id)" != "$CID" ]; then
+  CID="$(container_id)"
+  out="$(in_box "cd /workspace && cat src/exit-check-sentinel && git rev-parse HEAD")"
+  [ "$out" = "$(printf 'exit-check\n%s' "$head_before")" ] \
+    && pass "an existing workspace (cloned before any marker existed) survives a restart unchanged" "new container, HEAD ${head_before:0:12}, untracked file kept" \
+    || fail "workspace changed across restart" "$out"
+else
+  fail "restart for the workspace survival check" "up.sh did not recreate the container"
+fi
 in_box "cd /workspace && git switch -q --orphan exit-check-orphan" >/dev/null
 out="$("$REPO/scripts/up.sh" true 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "HEAD does not resolve" && echo "$out" | grep -q "reset-workspace" \
   && pass "unresolvable HEAD (orphan branch) is reported and the start refused" "$(echo "$out" | grep -o 'STOPPING:.*' | head -1 | cut -c1-140)" \
   || fail "unresolvable HEAD report" "$(echo "$out" | grep -E 'init-workspace|REFUSING' | tail -3)"
-out="$(on_volume "git symbolic-ref HEAD; cat src/exit-check-sentinel; git rev-parse --verify -q main")"
+out="$(run_on_volume "git symbolic-ref HEAD; cat src/exit-check-sentinel; git rev-parse --verify -q main" 2>&1)"
 [ "$out" = "$(printf 'refs/heads/exit-check-orphan\nexit-check\n%s' "$head_before")" ] \
   && pass "the workspace with an unresolvable HEAD was left untouched" "HEAD -> exit-check-orphan, main and untracked file intact" \
   || fail "workspace with unresolvable HEAD was changed" "$out"
-# No controlling terminal (setsid), so reset-workspace cannot ask for confirmation.
-out="$(perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$REPO/scripts/up.sh" reset-workspace </dev/null 2>&1)"; rc=$?
-[ "$rc" -ne 0 ] && echo "$out" | grep -q "nothing was deleted" && docker volume inspect "$VOLUME" >/dev/null 2>&1 \
-  && echo "$out" | grep -q "current HEAD: exit-check-orphan at no commits" \
-  && pass "reset-workspace refuses without confirmation, after listing what would be lost" "$(echo "$out" | grep -o 'current HEAD:.*'); $(echo "$out" | grep -o 'REFUSING.*')" \
-  || fail "reset-workspace refusal" "$(echo "$out" | tail -3)"
-out="$(on_volume "git switch -q main && rm -f src/exit-check-sentinel && git status --porcelain && git rev-parse HEAD")"
-[ "$out" = "$head_before" ] && pass "workspace restored to main for the remaining checks" || fail "workspace restore" "$out"
-
+archives_before="$(docker volume ls -q --filter "name=^${VOLUME}-archive-" | sort)"
+# No controlling terminal: setsid must succeed, or the check could prompt on the real terminal.
+out="$(perl -MPOSIX -e 'POSIX::setsid() or die "setsid failed: $!\n"; exec @ARGV' "$REPO/scripts/up.sh" reset-workspace </dev/null 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "needs an interactive terminal to confirm; nothing was changed" \
+  && echo "$out" | grep -q "current HEAD: exit-check-orphan at no commits" && echo "$out" | grep -q '!! exit-check-ignored' \
+  && pass "reset-workspace without a terminal refuses and changes nothing (report shows HEAD and ignored files)" "$(echo "$out" | grep -o 'current HEAD:.*')" \
+  || fail "reset-workspace refusal without terminal" "$(echo "$out" | tail -3)"
+# Answers through a pseudo-terminal (expect).
+reset_with() {
+  expect -c "set timeout 300; spawn $REPO/scripts/up.sh reset-workspace; expect {
+    \"Type the repository name\" { send \"$1\r\"; exp_continue } eof }; catch wait r; exit [lindex \$r 3]" 2>&1
+}
+out="$(reset_with "wrong/name")"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "confirmation did not match; nothing was changed" \
+  && [ "$(docker volume ls -q --filter "name=^${VOLUME}-archive-" | sort)" = "$archives_before" ] \
+  && [ "$(run_on_volume "git symbolic-ref HEAD" 2>&1)" = "refs/heads/exit-check-orphan" ] \
+  && pass "reset-workspace with a wrong repository name refuses and changes nothing" \
+  || fail "reset-workspace wrong-name refusal" "$(echo "$out" | tail -3)"
+out="$(reset_with "$NWO")"; rc=$?
+archive="$(comm -13 <(echo "$archives_before") <(docker volume ls -q --filter "name=^${VOLUME}-archive-" | sort) | head -1)"
+if [ "$rc" -eq 0 ] && [ -n "$archive" ]; then
+  arch="$(run_on_volume -v "$archive:/archive" "cd /archive && git symbolic-ref HEAD; cat src/exit-check-sentinel; ls exit-check-ignored" 2>&1)"
+  [ "$arch" = "$(printf 'refs/heads/exit-check-orphan\nexit-check\nexit-check-ignored')" ] \
+    && pass "reset-workspace with confirmation archives the old workspace intact" "$archive: orphan HEAD, untracked and ignored files kept" \
+    || fail "archive content" "$arch"
+  CID="$(container_id)"
+  new="$(in_box "cd /workspace && git rev-parse HEAD && git status --porcelain --ignored | grep -v '^!! node_modules' | wc -l | tr -d ' '")"
+  [ "$new" = "$(printf '%s\n0' "$(git -C "$REPO" rev-parse origin/main)")" ] \
+    && pass "the new workspace is a fresh clone of origin/main" "$(echo "$new" | head -1 | cut -c1-12), clean" \
+    || fail "new workspace after reset" "$new"
+  echo "NOTE  the archive volume $archive is kept; remove it with: docker volume rm $archive"
+else
+  fail "reset-workspace with confirmation" "rc=$rc: $(echo "$out" | tail -3)"
+fi
 section "Restart through up.sh restores the firewall"
 "$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(container_id)"
 expect_ok "firewall active after restart via up.sh" "test -f /run/firewall-ok || exit 1; curl -s --max-time 5 https://example.com >/dev/null && exit 1 || echo 'marker present, example.com blocked'"
