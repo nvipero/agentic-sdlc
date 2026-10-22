@@ -46,7 +46,8 @@ COPY --chmod=0644 allowlist.txt /etc/factory/allowlist.txt
 COPY --chmod=0755 init-firewall.sh init-workspace.sh /usr/local/bin/
 COPY --chmod=0755 container-entrypoint.sh /usr/local/bin/container-entrypoint
 COPY --chmod=0755 factory-exec.sh /usr/local/bin/factory-exec
-RUN echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall \
+# The trailing "" allows the script only without arguments.
+RUN echo 'node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""' > /etc/sudoers.d/node-firewall \
  && chmod 0440 /etc/sudoers.d/node-firewall \
  && visudo -cf /etc/sudoers.d/node-firewall
 

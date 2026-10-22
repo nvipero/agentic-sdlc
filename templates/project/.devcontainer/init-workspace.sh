@@ -19,9 +19,11 @@ git config --global user.name "factory-agent"
 git config --global user.email "factory-agent@users.noreply.github.com"
 
 cd /workspace
-if [ ! -d .git ]; then
+# Clone unless a previous clone completed; a half-finished one is removed first.
+if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
   : "${FACTORY_REPO_URL:?FACTORY_REPO_URL is not set}"
   log "cloning $FACTORY_REPO_URL"
+  rm -rf .git
   git init -q -b main
   git config sparse.expectFilesOutsideOfPatterns true
   git remote add origin "$FACTORY_REPO_URL"

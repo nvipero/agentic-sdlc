@@ -23,7 +23,12 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands.
 - **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, and secret scanning with push protection.
-- **Preflight:** `up.sh` checks all of the above on every start, and refuses to start if a check fails.
+- **Preflight:** on every start, `up.sh` checks five things and refuses to start if any check fails:
+  - the repository's visibility
+  - an active ruleset without bypass actors
+  - the interaction limit
+  - secret scanning
+  - push protection
 
 **Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it.
 

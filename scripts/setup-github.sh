@@ -73,12 +73,17 @@ board() {
   local nwo="$1" owner repo number project_id
   owner="${nwo%%/*}"
   repo="${nwo##*/}"
-  number="$(gh project list --owner "$owner" --format json --jq ".projects[] | select(.title == \"$repo\") | .number")"
+  number="$(gh project list --owner "$owner" --closed --limit 200 --format json \
+    --jq ".projects[] | select(.title == \"$repo\") | .number")"
+  [ "$(printf '%s\n' "$number" | grep -c .)" -le 1 ] || die "more than one project named '$repo': $(echo $number)"
   if [ -z "$number" ]; then
     number="$(gh project create --owner "$owner" --title "$repo" --format json --jq .number)"
     say "project $number created"
   fi
-  gh project link "$number" --owner "$owner" --repo "$nwo" >/dev/null 2>&1 || true
+  local link_out
+  if ! link_out="$(gh project link "$number" --owner "$owner" --repo "$nwo" 2>&1)"; then
+    echo "$link_out" | grep -qi "already" || die "cannot link project $number to $nwo: $link_out"
+  fi
   project_id="$(gh project view "$number" --owner "$owner" --format json --jq .id)"
 
   local views name filter view_id

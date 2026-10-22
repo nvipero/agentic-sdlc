@@ -32,7 +32,7 @@ stop_container() {
 
 # --- 1. Preflight: GitHub protections (host, owner's gh login) ---------------
 preflight() {
-  local nwo visibility rules ruleset_ids id ok limit days
+  local nwo visibility branch_rules rules ruleset_ids id ok limit days scanning
   nwo="$(cd "$REPO_DIR" && gh repo view --json nameWithOwner --jq .nameWithOwner)" \
     || die "cannot read repository with gh"
   NWO="$nwo"
@@ -41,13 +41,13 @@ preflight() {
   [ "$visibility" = "$EXPECTED_VISIBILITY" ] \
     || die "visibility is $visibility, expected $EXPECTED_VISIBILITY"
 
-  rules="$(gh api "repos/$nwo/rules/branches/main" --jq '[.[].type] | unique | join(" ")')" \
-    || die "cannot read rules for main"
+  branch_rules="$(gh api "repos/$nwo/rules/branches/main")" || die "cannot read rules for main"
+  rules="$(echo "$branch_rules" | jq -r '[.[].type] | unique | join(" ")')"
   for r in pull_request non_fast_forward deletion; do
     case " $rules " in *" $r "*) ;; *) die "rule '$r' is not active on main" ;; esac
   done
 
-  ruleset_ids="$(gh api "repos/$nwo/rules/branches/main" --jq '[.[].ruleset_id] | unique | .[]')"
+  ruleset_ids="$(echo "$branch_rules" | jq -r '[.[].ruleset_id] | unique | .[]')"
   [ -n "$ruleset_ids" ] || die "no ruleset applies to main"
   for id in $ruleset_ids; do
     ok="$(gh api "repos/$nwo/rulesets/$id" \
@@ -55,6 +55,10 @@ preflight() {
       || die "cannot read ruleset $id"
     [ "$ok" = "true" ] || die "ruleset $id is not active or has bypass actors"
   done
+
+  scanning="$(gh api "repos/$nwo" --jq '.security_and_analysis | "\(.secret_scanning.status) \(.secret_scanning_push_protection.status)"')" \
+    || die "cannot read security settings"
+  [ "$scanning" = "enabled enabled" ] || die "secret scanning or push protection is not enabled ($scanning)"
 
   limit="$(gh api "repos/$nwo/interaction-limits")" || die "cannot read interaction limits"
   [ -n "$limit" ] && [ "$limit" != "{}" ] || die "no interaction limit is active"
@@ -65,7 +69,7 @@ preflight() {
   if [ "$days" -lt "$WARN_DAYS" ]; then
     say "WARNING: interaction limit expires in $days days; renew it with scripts/setup-github.sh in the factory repo"
   fi
-  say "preflight OK: $nwo is $visibility, ruleset active without bypass, interaction limit $days days left"
+  say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, interaction limit $days days left"
 }
 
 # --- 2. Host clone: clean main, fast-forwarded to origin/main ----------------
@@ -96,13 +100,14 @@ build_image() {
   devcontainer build --workspace-folder "$dir" "$@" >&2 || die "image build failed"
 }
 
+# No side effects: prints the problem and returns non-zero on a mismatch.
 check_image_label() {
   local cid="$1" image label
   image="$(docker inspect -f '{{.Image}}' "$cid")"
   label="$(docker image inspect -f '{{index .Config.Labels "factory.devcontainer.tree"}}' "$image")"
   if [ "$label" != "$FACTORY_DEVCONTAINER_TREE" ]; then
-    docker stop "$cid" >/dev/null
-    die "container image was built from tree '$label', expected '$FACTORY_DEVCONTAINER_TREE'"
+    echo "container image was built from tree '$label', expected '$FACTORY_DEVCONTAINER_TREE'"
+    return 1
   fi
 }
 
@@ -113,7 +118,8 @@ start_container() {
     || { stop_container; die "devcontainer up failed (firewall or workspace init)"; }
   CID="$(container_id)"
   [ -n "$CID" ] || die "container not found after start"
-  check_image_label "$CID"
+  local mismatch
+  mismatch="$(check_image_label "$CID")" || { stop_container; die "$mismatch"; }
   [ "$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$CID")" = "no" ] \
     || { stop_container; die "container restart policy is not 'no'"; }
 }

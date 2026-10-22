@@ -39,9 +39,13 @@ rm -f "$MARKER"
 # 1. Close everything first. The nat table is left alone so Docker's DNS keeps working.
 close_network
 
-# IPv6: drop everything. If the container has a global IPv6 address and the
+# IPv6: drop everything except loopback. If the container has a global IPv6 address and the
 # policy cannot be set, fail.
-if ! { ip6tables -P INPUT DROP && ip6tables -P FORWARD DROP && ip6tables -P OUTPUT DROP; } 2>/dev/null; then
+if { ip6tables -P INPUT DROP && ip6tables -P FORWARD DROP && ip6tables -P OUTPUT DROP; } 2>/dev/null; then
+  ip6tables -F
+  ip6tables -A INPUT -i lo -j ACCEPT
+  ip6tables -A OUTPUT -o lo -j ACCEPT
+else
   if ip -6 addr show scope global 2>/dev/null | grep -q inet6; then
     log "cannot set IPv6 policy on a container with global IPv6"
     exit 1
