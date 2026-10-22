@@ -2,7 +2,7 @@
 
 Status: approved by owner, 2026-10-21  
 Owner: Niko (human decision maker)  
-Author: Claude (claude.ai planning session, 2026-10-13, revision 3)
+Author: Claude (claude.ai planning session, 2026-10-13, revision 4)
 
 ## TL;DR
 
@@ -64,6 +64,8 @@ Fixed for v1. Changing one requires an owner decision.
 15. Using the factory to develop the factory itself.
 16. Optional spec-first pull request merged before implementation.
 17. 1Password service account limited to the factory vault only, so that even the start script cannot read other vaults (availability and cost to be checked).
+18. Private project support through a GitHub organization on the Team plan, with the step 1 exit check repeated in a private repository.
+19. Inspection mode: attach VS Code to the container only while agents are stopped, with credential forwarding disabled and VS Code hosts allowlisted only for that mode.
 
 ## 4. Architecture
 
@@ -71,11 +73,25 @@ Fixed for v1. Changing one requires an owner decision.
 
 | Component | Location |
 |---|---|
-| Stories, specs, PRs, status | GitHub, private repositories |
+| Stories, specs, PRs, status | GitHub, public repositories with enforced protections |
 | Agents | Claude Code inside the project's dev container on the owner's Mac |
 | Container runtime | Rancher Desktop, engine dockerd (moby) |
 | Deterministic gates | GitHub Actions |
 | Preview | Vercel preview deployment per PR |
+
+### Repository visibility and protections
+
+Both repositories are public. On a free GitHub account, rulesets and branch protection are enforced only in public repositories, and principle 5 requires enforced limits. The factory definitions would be public anyway, because the project template copies them into every project repo.
+
+Applied to both `agentic-sdlc` and `sdlc-pilot`:
+
+- **Ruleset on `main`:** pull request required, force pushes and deletion blocked, **no bypass actors** (agents and Claude Code on the host act with the owner's credentials, and the owner is admin). No required approvals, because there is a single maintainer. Required status checks are added in step 4.
+- **Interaction limit "repository collaborators only":** outsiders cannot open issues or PRs, comment, react or edit. This keeps outside text out of agent input. The limit expires after at most six months.
+- **Secret scanning and push protection** enabled.
+
+`scripts/up.sh` verifies on the host, before starting the container, that the ruleset is active with no bypass actors, the interaction limit is active, and the repository visibility is as expected. If any check fails, it refuses to start agents. Protections that can lapse silently (expiring limits, plan changes) are checked on every run instead of trusted.
+
+A future private project needs a paid plan (a GitHub organization on Team) for enforced rulesets. The same exit check is then repeated in that environment.
 
 ### Container lifecycle
 
@@ -231,7 +247,7 @@ Required checks on every PR:
 - **Factory definitions guard:** fails if the PR modifies `.factory/`, `.claude/`, `.github/`, `.devcontainer/`, `scripts/up.sh` or `CLAUDE.md`
 - **Gate change visibility:** any change to gate configuration is labelled `gate-change` and needs a written justification in the PR description
 
-Exact static analysis tools are chosen in step 4 and checked for current pricing and availability on private repositories.
+Exact static analysis tools are chosen in step 4 and checked for current availability on public repositories.
 
 ## 9. Test project defaults
 
@@ -245,7 +261,7 @@ The topic is chosen by the owner. Small, disposable and justifiable as work.
 
 Each step ends with an exit check, and the next starts only after the owner has seen the result.
 
-1. **Foundations.** Factory repo, project template, test project repo, dev container with network allowlist and read-only mounts, start script with token from 1Password, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, and cannot see anything outside the project workspace.
+1. **Foundations.** Factory repo, project template, test project repo, repository protections, dev container with network allowlist and read-only mounts, start script with token from 1Password and protection checks, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, cannot see anything outside the project workspace, and cannot push directly to `main`.
 2. **Context and spec chain.** Researcher, spec writer with understanding check, spec reviewer, question flow. Exit: approved project context, and one story with an approved spec where at least one question was answered through the issue.
 3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory-run`. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
 4. **Gates and preview.** All gates in section 8 and Vercel preview. Exit: a PR that breaks any gate cannot be merged, and every PR gets a preview link.
@@ -268,6 +284,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 - **Subscription limits.** Agent runs share the Team plan quota with the owner's other work.
 - **Agent loops.** Mitigation: turn limits and dispute rules.
 - **Specs approved without reading.** Mitigation: questions and assumptions are surfaced separately.
+- **Interaction limit expires** after six months. Mitigation: `up.sh` checks it on every run.
 - **Copied templates drift** from the factory as it evolves. Accepted in v1. Plugin distribution is in the backlog.
 
 ## 13. Open questions for the owner
