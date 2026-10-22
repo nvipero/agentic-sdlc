@@ -81,34 +81,49 @@ board() {
   gh project link "$number" --owner "$owner" --repo "$nwo" >/dev/null 2>&1 || true
   project_id="$(gh project view "$number" --owner "$owner" --format json --jq .id)"
 
-  local existing name filter view_id
-  existing="$(gh api graphql -f id="$project_id" -f query='
-    query($id: ID!) { node(id: $id) { ... on ProjectV2 { views(first: 50) { nodes { name } } } } }' \
-    --jq '.data.node.views.nodes[].name')"
+  local views name filter view_id
+  # Board shows issues only: a story is an issue and its PR is linked to it.
+  # Filters are (re)applied on every run, so this also fixes existing views.
+  views="$(gh api graphql -f id="$project_id" -f query='
+    query($id: ID!) { node(id: $id) { ... on ProjectV2 { views(first: 50) { nodes { id name } } } } }' \
+    --jq '.data.node.views.nodes[] | "\(.name)|\(.id)"')"
   while IFS='|' read -r name filter; do
     [ -n "$name" ] || continue
-    if printf '%s\n' "$existing" | grep -qxF "$name"; then
-      say "view '$name' exists"
-      continue
+    view_id="$(printf '%s\n' "$views" | awk -F'|' -v n="$name" '$1 == n {print $2; exit}')"
+    if [ -z "$view_id" ]; then
+      view_id="$(gh api graphql -f id="$project_id" -f name="$name" -f query='
+        mutation($id: ID!, $name: String!) {
+          createProjectV2View(input: {projectId: $id, name: $name, layout: TABLE_LAYOUT}) { projectV2View { id } } }' \
+        --jq '.data.createProjectV2View.projectV2View.id')"
     fi
-    view_id="$(gh api graphql -f id="$project_id" -f name="$name" -f query='
-      mutation($id: ID!, $name: String!) {
-        createProjectV2View(input: {projectId: $id, name: $name, layout: TABLE_LAYOUT}) { projectV2View { id } } }' \
-      --jq '.data.createProjectV2View.projectV2View.id')"
     gh api graphql -f id="$view_id" -f filter="$filter" -f query='
       mutation($id: ID!, $filter: String!) {
         updateProjectV2View(input: {viewId: $id, filter: $filter}) { projectV2View { name filter } } }' \
       --jq '.data.updateProjectV2View.projectV2View | "view \(.name): \(.filter)"'
   done <<'EOF'
-Idea|is:open -label:ready-for-factory
-Ready for factory|is:open label:ready-for-factory -label:spec-approved
-Needs human|is:open label:needs-human
-Dispute|is:open label:dispute
-In progress|is:open label:spec-approved
-Done|is:closed
+Idea|is:issue is:open -label:ready-for-factory
+Ready for factory|is:issue is:open label:ready-for-factory -label:spec-approved
+Needs human|is:issue is:open label:needs-human
+Dispute|is:issue is:open label:dispute
+In progress|is:issue is:open label:spec-approved
+Done|is:issue is:closed
 EOF
+
+  # GitHub creates an unfiltered default view; the factory views replace it.
+  view_id="$(printf '%s\n' "$views" | awk -F'|' '$1 == "View 1" {print $2; exit}')"
+  if [ -n "$view_id" ]; then
+    gh api graphql -f id="$view_id" -f query='
+      mutation($id: ID!) { deleteProjectV2View(input: {viewId: $id}) { clientMutationId } }' >/dev/null
+    say "default view 'View 1' deleted"
+  fi
+
+  # Built-in workflows cannot be disabled through the API; report them.
+  gh api graphql -f id="$project_id" -f query='
+    query($id: ID!) { node(id: $id) { ... on ProjectV2 { workflows(first: 20) { nodes { name enabled } } } } }' \
+    --jq '.data.node.workflows.nodes[] | select(.enabled) | "enabled workflow: \(.name)"' >&2 \
+    || say "could not list project workflows"
   say "board: https://github.com/users/$owner/projects/$number"
-  say "manual step: add the auto-add workflow in the project UI (see README)"
+  say "manual steps: auto-add rule with filter is:issue, and disable the Status workflows (see README)"
 }
 
 status() {

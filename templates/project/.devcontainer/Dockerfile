@@ -44,6 +44,8 @@ RUN install -d -m 0755 /etc/claude-code /etc/factory
 COPY --chmod=0644 managed-settings.json /etc/claude-code/managed-settings.json
 COPY --chmod=0644 allowlist.txt /etc/factory/allowlist.txt
 COPY --chmod=0755 init-firewall.sh init-workspace.sh /usr/local/bin/
+COPY --chmod=0755 container-entrypoint.sh /usr/local/bin/container-entrypoint
+COPY --chmod=0755 factory-exec.sh /usr/local/bin/factory-exec
 RUN echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall \
  && chmod 0440 /etc/sudoers.d/node-firewall \
  && visudo -cf /etc/sudoers.d/node-firewall
@@ -56,6 +58,11 @@ ENV DEVCONTAINER=true \
 
 USER node
 WORKDIR /workspace
+
+# The firewall starts with the container, on every start (devcontainer.json
+# sets overrideCommand: false so the devcontainer CLI keeps this).
+ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
+CMD ["sleep", "infinity"]
 
 # Last, so it does not invalidate the layer cache: identifies which
 # .devcontainer/ tree this image was built from (checked by scripts/up.sh).

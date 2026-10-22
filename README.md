@@ -9,7 +9,7 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 | Path | Contents |
 |---|---|
 | `templates/project/` | Everything copied into a new project repository |
-| `scripts/setup-github.sh` | Sets up GitHub protections, labels and the Projects board for a repository |
+| `scripts/setup-github.sh` | Sets up GitHub protections, labels and the Projects board (six issue-only views, default view removed) for a repository |
 | `scripts/exit-check.sh`, `scripts/redact.sh` | Step 1 exit check, and redaction of its output before publishing |
 | `skills/`, `agents/`, `commands/` | Role knowledge, role definitions and commands (later steps) |
 | `specs/`, `docs/` | Specification, plans and verification evidence |
@@ -51,9 +51,10 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
    scripts/setup-github.sh labels <owner>/<repo-name>
    scripts/setup-github.sh board <owner>/<repo-name>
    ```
-5. **Add the board's auto-add rule** in the GitHub UI. There is no API for it:
-   - Open the project, then **⋯ → Workflows → Auto-add to project**.
-   - Select the repository, set the filter to `is:issue,pr is:open`, and turn the rule on.
+5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:
+   - **Auto-add to project:** select the repository, set the filter to `is:issue`, and turn it on. The board shows issues only, because a story is an issue and its PR is linked to it. All six saved views also filter on `is:issue`.
+   - **Turn off the workflows that change the Status field:** "Item added to project", "Item closed", "Pull request linked to issue", "Pull request merged" and "Auto-close issue". The factory uses labels as status, so a second status that GitHub changes by itself would be misleading.
+   - Keep "Auto-add to project" and "Auto-add sub-issues to project" on.
 6. **Start the container:** `cd ../<repo-name> && scripts/up.sh`.
    - The first time, log in to Claude Code inside the container with `claude`, then `/login`. The login is stored in the project's Claude volume.
    - To stop the container, run `scripts/up.sh stop`.

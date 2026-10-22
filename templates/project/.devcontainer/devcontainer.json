@@ -22,6 +22,11 @@
     "source=${localWorkspaceFolderBasename}-claude,target=/home/node/.claude,type=volume"
   ],
   "capAdd": ["NET_ADMIN", "NET_RAW"],
+  // Firewall marker lives on tmpfs so it never survives a restart; never restart automatically;
+  // an init process as PID 1 so docker stop's SIGTERM reaches the container processes.
+  "runArgs": ["--tmpfs", "/run:rw,nosuid,nodev,noexec,mode=0755", "--restart", "no", "--init"],
+  // Keep the image's entrypoint, which brings the firewall up on every start.
+  "overrideCommand": false,
   "containerUser": "node",
   "remoteUser": "node",
   "updateRemoteUserUID": false,
@@ -30,7 +35,7 @@
     "GH_TOKEN": "${localEnv:FACTORY_GH_TOKEN}",
     "FACTORY_REPO_URL": "${localEnv:FACTORY_REPO_URL}"
   },
-  // Firewall first, then the workspace clone. Nothing runs earlier with the network open.
-  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh && /usr/local/bin/init-workspace.sh",
+  // The entrypoint has already started the firewall; the workspace clone waits for its marker.
+  "postStartCommand": "/usr/local/bin/init-workspace.sh",
   "waitFor": "postStartCommand"
 }

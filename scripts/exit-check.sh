@@ -95,6 +95,59 @@ expect_fail "firewall marker removed after failure" "test -f /run/firewall-ok" "
 out="$(docker exec "$CID" bash -c 'FACTORY_ALLOWLIST_FILE=/tmp/bad-allowlist sudo /usr/local/bin/init-firewall.sh' 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ]; then pass "agent cannot pass an allowlist override through sudo" "$(echo "$out" | tail -1)"; else fail "agent cannot pass an allowlist override through sudo" "$out"; fi
 expect_ok "network restored by a normal firewall run" "curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://api.github.com/zen"
+docker exec -u root "$CID" rm -f /run/firewall-ok
+out="$(devcontainer exec --workspace-folder "$REPO" /usr/local/bin/factory-exec true 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING: firewall marker missing" \
+  && pass "exec guard refuses without the firewall marker" "$(echo "$out" | grep REFUSING)" || fail "exec guard without marker" "$out"
+docker exec -u root "$CID" /usr/local/bin/init-firewall.sh >/dev/null 2>&1 \
+  || { fail "firewall restore after exec guard test"; echo "RESULT: aborted, network not restored"; exit 1; }
+
+# Waits until the container has a firewall marker or has stopped; prints "marker" or "stopped".
+wait_marker_or_stop() {
+  local i
+  for i in $(seq 1 90); do
+    [ "$(docker inspect -f '{{.State.Running}}' "$CID")" = "true" ] || { echo stopped; return; }
+    docker exec "$CID" test -f /run/firewall-ok 2>/dev/null && { echo marker; return; }
+    sleep 1
+  done
+  echo timeout
+}
+
+section "Restarts: no automatic restart, firewall on every start"
+policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$CID")"
+[ "$policy" = "no" ] && pass "restart policy is 'no'" || fail "restart policy" "$policy"
+expect_ok "firewall marker is on tmpfs" "findmnt -no FSTYPE -T /run/firewall-ok | grep -x tmpfs"
+pid1="$(docker exec "$CID" cat /proc/1/comm)"
+[ "$pid1" = "docker-init" ] && pass "PID 1 is docker-init (signals are forwarded)" || fail "PID 1" "$pid1"
+before="$(docker exec "$CID" date +%s)"   # container clock, not the host's
+t0="$(date +%s)"
+docker restart "$CID" >/dev/null
+stop_secs=$(( $(date +%s) - t0 ))
+[ "$stop_secs" -lt 8 ] && pass "docker restart completes without waiting for SIGKILL" "${stop_secs}s" || fail "restart took ${stop_secs}s"
+case "$(wait_marker_or_stop)" in
+  marker)
+    expect_ok "after a manual docker restart: fresh marker, example.com blocked" \
+      "m=\$(stat -c %Y /run/firewall-ok) && test \$m -ge $before && ! curl -s --max-time 5 -o /dev/null https://example.com && echo \"marker from \$(date -d @\$m +%T), example.com blocked\"" ;;
+  stopped)
+    pass "after a manual docker restart the container is not running (firewall failed, container stopped)"
+    "$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(cid)" || { echo "RESULT: aborted, cannot restart container"; exit 1; } ;;
+  *)
+    fail "after a manual docker restart: no marker within 90s and still running" ;;
+esac
+docker rm -f exit-check-fw-fail >/dev/null 2>&1
+if docker run -d --name exit-check-fw-fail "$(docker inspect -f '{{.Image}}' "$CID")" >/dev/null; then
+  for _ in $(seq 1 60); do
+    [ "$(docker inspect -f '{{.State.Running}}' exit-check-fw-fail)" = "false" ] && break
+    sleep 1
+  done
+  state="$(docker inspect -f 'running={{.State.Running}} exit={{.State.ExitCode}}' exit-check-fw-fail)"
+  log="$(docker logs exit-check-fw-fail 2>&1 | tail -1)"
+  [ "$state" = "running=false exit=1" ] && pass "firewall failure at start stops the container (run without NET_ADMIN)" "$state; $log" \
+    || fail "firewall failure at start" "$state; $log"
+else
+  fail "firewall failure at start" "docker run failed"
+fi
+docker rm -f exit-check-fw-fail >/dev/null 2>&1
 
 section "Visibility: nothing outside the project workspace"
 echo '```'
