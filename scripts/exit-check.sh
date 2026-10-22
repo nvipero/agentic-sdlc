@@ -314,9 +314,9 @@ out="$(reset_with "wrong/name")"; rc=$?
 out="$(reset_with "$NWO")"; rc=$?
 archive="$(comm -13 <(echo "$archives_before") <(docker volume ls -q --filter "name=^${VOLUME}-archive-" | sort) | head -1)"
 if [ "$rc" -eq 0 ] && [ -n "$archive" ]; then
-  arch="$(run_on_volume -v "$archive:/archive" "cd /archive && git symbolic-ref HEAD; cat src/exit-check-sentinel; ls exit-check-ignored" 2>&1)"
-  [ "$arch" = "$(printf 'refs/heads/exit-check-orphan\nexit-check\nexit-check-ignored')" ] \
-    && pass "reset-workspace with confirmation archives the old workspace intact" "$archive: orphan HEAD, untracked and ignored files kept" \
+  arch="$(run_on_volume -v "$archive:/archive" "cd /archive && git symbolic-ref HEAD; cat src/exit-check-sentinel; ls exit-check-ignored; test -s .factory-archive-complete && echo marker" 2>&1)"
+  [ "$arch" = "$(printf 'refs/heads/exit-check-orphan\nexit-check\nexit-check-ignored\nmarker')" ] \
+    && pass "reset-workspace with confirmation archives the old workspace intact" "$archive: orphan HEAD, untracked and ignored files kept, completion marker present" \
     || fail "archive content" "$arch"
   CID="$(container_id)"
   new="$(in_box "cd /workspace && git rev-parse HEAD && git status --porcelain --ignored | grep -v '^!! node_modules' | wc -l | tr -d ' '")"

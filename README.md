@@ -70,7 +70,7 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
      4. Copies the workspace to an archive volume `<repo>-workspace-archive-<timestamp>`, and checks paths, modes, owners, symlinks and file contents.
      5. Only then replaces the workspace with a fresh clone.
 
-     Nothing is deleted: the archive stays until you remove it with `docker volume rm`.
+     Nothing is deleted: the archive stays until you remove it with `docker volume rm`. An archive is complete only if it contains the file `.factory-archive-complete`, which is written after the copy has been checked. An interrupted or failed copy removes its own incomplete archive.
 
 ## Renewing protections
 

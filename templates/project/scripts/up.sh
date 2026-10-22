@@ -187,16 +187,29 @@ workspace_report() {
   '
 }
 
+ARCHIVE_DONE_MARKER=.factory-archive-complete
+
+# Ctrl-C or a closed terminal during the copy: stop the copy and remove the
+# incomplete archive this run created. The workspace itself is untouched.
+abort_archive() {
+  trap - INT TERM HUP
+  docker rm -f "$ARCHIVER" >/dev/null 2>&1 || true
+  if docker volume rm "$ARCHIVE" >/dev/null 2>&1; then
+    die "interrupted; the incomplete archive $ARCHIVE was removed and $VOLUME was not changed"
+  fi
+  die "interrupted; could NOT remove the incomplete archive $ARCHIVE (it has no $ARCHIVE_DONE_MARKER); $VOLUME was not changed"
+}
+
 reset_workspace() {
-  local answer archive
+  local answer
   if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
     say "no workspace volume $VOLUME; a fresh clone is made on start"
     return
   fi
-  archive="${VOLUME}-archive-$(date -u +%Y%m%dT%H%M%SZ)"
-  ! docker volume inspect "$archive" >/dev/null 2>&1 \
-    || die "archive volume $archive already exists; try again in a second; nothing was changed"
-  say "reset-workspace: volume $VOLUME will be ARCHIVED as $archive and replaced by a fresh clone of $NWO main."
+  # Unique per run, so two resets can never share (or delete) an archive.
+  ARCHIVE="${VOLUME}-archive-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  ARCHIVER="${VOLUME}-archiver-$$"
+  say "reset-workspace: volume $VOLUME will be ARCHIVED as $ARCHIVE and replaced by a fresh clone of $NWO main."
   say "Its current content (read-only report; everything stays in the archive):"
   workspace_report >&2 || die "cannot inspect the workspace; nothing was changed"
   if ! (exec </dev/tty) 2>/dev/null; then
@@ -208,20 +221,31 @@ reset_workspace() {
   # Stop only now. The archive is copied from the stopped workspace, so
   # anything written before this point, after the report too, is kept.
   remove_containers
-  docker volume create "$archive" >/dev/null || die "cannot create $archive; the workspace was not changed"
+  ! docker volume inspect "$ARCHIVE" >/dev/null 2>&1 \
+    || die "archive volume $ARCHIVE already exists; the workspace was not changed"
+  docker volume create "$ARCHIVE" >/dev/null || die "cannot create $ARCHIVE; the workspace was not changed"
+  trap abort_archive INT TERM HUP
   # Copy, then compare paths, types, modes, owners, symlink targets and file
-  # contents of both volumes in one container.
-  if ! run_on_volume -u root -v "$archive:/archive" '
-      cp -a /workspace/. /archive/ || exit 1
+  # contents of both volumes in one container. Both manifests must be
+  # non-empty, so a broken tool cannot make the comparison pass vacuously.
+  # The completion marker is written only after the comparison succeeds.
+  if ! run_on_volume -u root --name "$ARCHIVER" -v "$ARCHIVE:/archive" '
+      set -euo pipefail
+      cp -a /workspace/. /archive/
       manifest() { cd "$1" && find . -printf "%p %y %m %U %G %l\n" | LC_ALL=C sort &&
                    find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum; }
-      [ "$(manifest /workspace | sha256sum)" = "$(manifest /archive | sha256sum)" ]'; then
-    # Only the incomplete copy is removed; the workspace itself is untouched.
-    docker volume rm "$archive" >/dev/null 2>&1 || true
-    die "copying to $archive failed or did not match; the incomplete copy was removed and $VOLUME was not changed"
+      a="$(manifest /workspace)"; b="$(manifest /archive)"
+      if [ "$(printf "%s\n" "$a" | grep -c .)" -le 1 ] || [ "$a" != "$b" ]; then exit 1; fi
+      date -u +%Y-%m-%dT%H:%M:%SZ > "/archive/'"$ARCHIVE_DONE_MARKER"'"'; then
+    trap - INT TERM HUP
+    if docker volume rm "$ARCHIVE" >/dev/null 2>&1; then
+      die "copying to $ARCHIVE failed or did not match; the incomplete copy was removed and $VOLUME was not changed"
+    fi
+    die "copying to $ARCHIVE failed or did not match, and the incomplete copy could NOT be removed (it has no $ARCHIVE_DONE_MARKER); $VOLUME was not changed"
   fi
-  docker volume rm "$VOLUME" >/dev/null || die "cannot remove $VOLUME (archive $archive is complete)"
-  say "archived to volume $archive (remove it yourself with: docker volume rm $archive); cloning a fresh workspace"
+  trap - INT TERM HUP
+  docker volume rm "$VOLUME" >/dev/null || die "cannot remove $VOLUME (archive $ARCHIVE is complete)"
+  say "archived to volume $ARCHIVE (complete: contains $ARCHIVE_DONE_MARKER; remove it yourself with: docker volume rm $ARCHIVE); cloning a fresh workspace"
 }
 
 main() {
