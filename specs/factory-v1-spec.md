@@ -2,7 +2,7 @@
 
 Status: approved by owner, 2026-10-21  
 Owner: Niko (human decision maker)  
-Author: Claude (claude.ai planning session, 2026-10-13, revision 4)
+Author: Claude (claude.ai planning session, 2026-10-13, revision 5)
 
 ## TL;DR
 
@@ -55,7 +55,7 @@ Fixed for v1. Changing one requires an owner decision.
 6. Stack-fit check: researcher or architect raises justified reasons to use something other than the default stack.
 7. Retro agent and evals for the factory itself. The retro agent cannot change skills or instructions. Its output is a proposal: observed problem, evidence (links to issues, PRs, disputes, gate failures) and suggested change. First it posts proposals to the project issue tracker with the label `factory-feedback` and the human decides whether to move them to the factory repo. Later it may create issues in the factory repo directly with a separate token limited to issues only. Changes are always made in the factory repo through a PR the human approves. The retro agent does not need to run in the project container.
 8. Parallel alternative implementations for uncertain stories.
-9. Agents get their own GitHub identity (for example a GitHub App), enabling branch protection and CODEOWNERS rules that separate agent changes from human changes.
+9. CODEOWNERS rules and finer-grained permissions per role, built on the agent identity introduced in step 4.
 10. Factory distributed as a Claude Code plugin instead of a copied template.
 11. Fresh container per story, managed by an orchestrator outside the container.
 12. Orchestrator triggered by labels instead of a manual command.
@@ -264,7 +264,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 1. **Foundations.** Factory repo, project template, test project repo, repository protections, dev container with network allowlist and read-only mounts, start script with token from 1Password and protection checks, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, cannot see anything outside the project workspace, and cannot push directly to `main`.
 2. **Context and spec chain.** Researcher, spec writer with understanding check, spec reviewer, question flow. Exit: approved project context, and one story with an approved spec where at least one question was answered through the issue.
 3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory-run`. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
-4. **Gates and preview.** All gates in section 8 and Vercel preview. Exit: a PR that breaks any gate cannot be merged, and every PR gets a preview link.
+4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a machine user or a GitHub App, chosen when step 4 is planned) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR gets a preview link, and the agent identity cannot merge a PR without the owner's approval.
 5. **First full run.** A new story from idea to merge without manual code edits. Exit: definition of done met and problems recorded.
 
 ## 11. Definition of done for v1
@@ -274,6 +274,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 - The spec's problem and why section is traceable to the approved project context.
 - All gates ran and were required for merge.
 - No agent modified acceptance tests, factory definitions or gates.
+- No agent merged a pull request.
 - No agent accessed anything outside its container workspace or allowlisted network.
 - Observed problems are written down for the next iteration.
 
@@ -284,6 +285,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 - **Subscription limits.** Agent runs share the Team plan quota with the owner's other work.
 - **Agent loops.** Mitigation: turn limits and dispute rules.
 - **Specs approved without reading.** Mitigation: questions and assumptions are surfaced separately.
+- **Agents can technically merge PRs until step 4.** In steps 1 to 3 the agent token acts as the owner, so "the human merges" is a convention backed only by a deny rule in managed settings. Agents do not open PRs before step 3, which keeps the exposure short.
 - **Interaction limit expires** after six months. Mitigation: `up.sh` checks it on every run.
 - **Copied templates drift** from the factory as it evolves. Accepted in v1. Plugin distribution is in the backlog.
 
