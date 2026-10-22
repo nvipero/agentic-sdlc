@@ -73,12 +73,16 @@ board() {
   local nwo="$1" owner repo number project_id
   owner="${nwo%%/*}"
   repo="${nwo##*/}"
+  # Includes closed projects; an owner with more than 200 projects is not supported.
   number="$(gh project list --owner "$owner" --closed --limit 200 --format json \
     --jq ".projects[] | select(.title == \"$repo\") | .number")"
   [ "$(printf '%s\n' "$number" | grep -c .)" -le 1 ] || die "more than one project named '$repo': $(echo $number)"
   if [ -z "$number" ]; then
     number="$(gh project create --owner "$owner" --title "$repo" --format json --jq .number)"
     say "project $number created"
+  elif [ "$(gh project view "$number" --owner "$owner" --format json --jq .closed)" = "true" ]; then
+    gh project close "$number" --owner "$owner" --undo >/dev/null
+    say "project $number was closed; reopened"
   fi
   local link_out
   if ! link_out="$(gh project link "$number" --owner "$owner" --repo "$nwo" 2>&1)"; then

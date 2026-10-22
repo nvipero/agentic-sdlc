@@ -4,6 +4,9 @@
 #   scripts/up.sh            preflight, start, open a shell in the container
 #   scripts/up.sh <cmd...>   same, but run <cmd> instead of a shell
 #   scripts/up.sh stop       stop the container (volumes are kept)
+#   scripts/up.sh reset-workspace
+#                            show what would be lost, ask for confirmation, then
+#                            delete the workspace volume and clone it again
 #
 # Needs on the host: gh (logged in as the repo owner), git, op, devcontainer, docker.
 set -euo pipefail
@@ -16,6 +19,7 @@ PROJECT="$(basename "$REPO_DIR")"
 TOKEN_REF="${FACTORY_TOKEN_REF:-op://Agent Factory/${PROJECT}-github/credential}"
 EXPECTED_VISIBILITY="${FACTORY_EXPECTED_VISIBILITY:-PUBLIC}"
 WARN_DAYS=14
+VOLUME="${PROJECT}-workspace"   # matches workspaceMount in devcontainer.json
 
 die() { echo "up.sh: REFUSING TO START: $*" >&2; exit 1; }
 say() { echo "up.sh: $*" >&2; }
@@ -32,12 +36,14 @@ stop_container() {
 
 # --- 1. Preflight: GitHub protections (host, owner's gh login) ---------------
 preflight() {
-  local nwo visibility branch_rules rules ruleset_ids id ok limit days scanning
+  local nwo repo visibility branch_rules rules ruleset_ids id ok limit days scanning
   nwo="$(cd "$REPO_DIR" && gh repo view --json nameWithOwner --jq .nameWithOwner)" \
     || die "cannot read repository with gh"
   NWO="$nwo"
 
-  visibility="$(gh repo view "$nwo" --json visibility --jq .visibility)"
+  # One read of the repository object for visibility and security settings.
+  repo="$(gh api "repos/$nwo")" || die "cannot read repository settings"
+  visibility="$(echo "$repo" | jq -r '.visibility | ascii_upcase')"
   [ "$visibility" = "$EXPECTED_VISIBILITY" ] \
     || die "visibility is $visibility, expected $EXPECTED_VISIBILITY"
 
@@ -56,8 +62,7 @@ preflight() {
     [ "$ok" = "true" ] || die "ruleset $id is not active or has bypass actors"
   done
 
-  scanning="$(gh api "repos/$nwo" --jq '.security_and_analysis | "\(.secret_scanning.status) \(.secret_scanning_push_protection.status)"')" \
-    || die "cannot read security settings"
+  scanning="$(echo "$repo" | jq -r '.security_and_analysis | "\(.secret_scanning.status) \(.secret_scanning_push_protection.status)"')"
   [ "$scanning" = "enabled enabled" ] || die "secret scanning or push protection is not enabled ($scanning)"
 
   limit="$(gh api "repos/$nwo/interaction-limits")" || die "cannot read interaction limits"
@@ -133,6 +138,52 @@ probe_network() {
   say "container probe OK (firewall, network, managed settings)"
 }
 
+# --- Workspace reset: the only path that deletes the workspace ----------------
+# Read-only look at the workspace volume, without network.
+workspace_report() {
+  docker run --rm --network none --entrypoint bash -e GIT_OPTIONAL_LOCKS=0 \
+    -v "$VOLUME:/workspace:ro" "$1" -c '
+    cd /workspace
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+      echo "  no usable git repository; top-level entries:"; ls -A | sed "s/^/    /"; exit 0
+    fi
+    echo "  current HEAD: $(git symbolic-ref -q --short HEAD || echo detached) at $(git rev-parse -q --verify --short HEAD || echo "no commits (orphan or unborn branch)")"
+    echo "  local branches (upstream and ahead/behind as of the last fetch):"
+    git for-each-ref --format="    %(refname:short) %(upstream:short) %(upstream:track)" refs/heads
+    echo "  commits on no remote branch (as of the last fetch):"
+    git log --branches --not --remotes --oneline 2>/dev/null | head -50 | sed "s/^/    /"
+    echo "  stashes:"
+    git stash list 2>/dev/null | sed "s/^/    /"
+    echo "  uncommitted changes:"
+    git status --porcelain 2>/dev/null | head -50 | sed "s/^/    /"
+  '
+}
+
+reset_workspace() {
+  local image answer cid
+  if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
+    say "no workspace volume $VOLUME; a fresh clone is made on start"
+    return
+  fi
+  build_image "$REPO_DIR"
+  image="$(docker images -q --filter "label=factory.devcontainer.tree=$FACTORY_DEVCONTAINER_TREE" | head -1)"
+  [ -n "$image" ] || die "cannot find the built image"
+  say "reset-workspace: volume $VOLUME will be DELETED and cloned again from $NWO main."
+  say "This is what would be lost (unpushed work):"
+  workspace_report "$image" >&2 || die "cannot inspect the workspace; nothing was deleted"
+  if ! (exec </dev/tty) 2>/dev/null; then
+    die "reset-workspace needs an interactive terminal to confirm; nothing was deleted"
+  fi
+  printf 'Type the repository name (%s) to delete the workspace: ' "$NWO" >/dev/tty
+  read -r answer </dev/tty || answer=""
+  [ "$answer" = "$NWO" ] || die "confirmation did not match; nothing was deleted"
+  for cid in $(docker ps -aq --filter "label=devcontainer.local_folder=$REPO_DIR"); do
+    docker rm -f "$cid" >/dev/null
+  done
+  docker volume rm "$VOLUME" >/dev/null || die "cannot delete volume $VOLUME"
+  say "workspace volume deleted; cloning a fresh one"
+}
+
 main() {
   if [ "${1:-}" = "stop" ]; then stop_container; say "stopped"; exit 0; fi
   for c in gh git jq op devcontainer docker; do
@@ -144,6 +195,10 @@ main() {
     [ -z "${FACTORY_UP_REEXEC:-}" ] || die "up.sh changed again after re-exec"
     say "up.sh changed on main; restarting with the new version"
     FACTORY_UP_REEXEC=1 exec "$REPO_DIR/scripts/up.sh" "$@"
+  fi
+  if [ "${1:-}" = "reset-workspace" ]; then
+    reset_workspace
+    set -- true
   fi
   read_token
   build_image "$REPO_DIR"

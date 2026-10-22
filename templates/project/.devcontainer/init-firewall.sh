@@ -84,7 +84,10 @@ gh_ips="$(resolve api.github.com)"
 add_ips "$gh_ips"
 gh_resolve="api.github.com:443:$(echo "$gh_ips" | paste -sd, -)"
 
-meta="$(curl -fsS --max-time 20 --resolve "$gh_resolve" https://api.github.com/meta)"
+# The only unauthenticated GitHub API call (60 per hour per IP); the token is
+# not available here, because the firewall starts before any exec.
+meta="$(curl -fsS --max-time 20 --resolve "$gh_resolve" https://api.github.com/meta)" \
+  || { log "cannot fetch https://api.github.com/meta (if GitHub answered 403, the unauthenticated API limit of 60 requests per hour for this IP is used up; wait and start again)"; exit 1; }
 echo "$meta" | jq -e '.web and .api and .git' >/dev/null || { log "unexpected GitHub meta document"; exit 1; }
 gh_ranges="$(echo "$meta" | jq -r '(.web + .api + .git)[]' | grep -v ':' | aggregate -q)"
 [ -n "$gh_ranges" ] || { log "no GitHub IPv4 ranges"; exit 1; }
@@ -107,8 +110,9 @@ fi
 if curl -s --max-time 5 -o /dev/null https://1.1.1.1; then
   log "1.1.1.1 is reachable"; exit 1
 fi
-curl -fsS --max-time 10 -o /dev/null --resolve "$gh_resolve" https://api.github.com/zen \
-  || { log "api.github.com is not reachable"; exit 1; }
+# A web URL, not the API, so this check does not count against the API limit.
+curl -fsS --max-time 10 -o /dev/null https://github.com/robots.txt \
+  || { log "github.com is not reachable"; exit 1; }
 
 touch "$MARKER"
 log "OK: $(ipset list "$SET" | grep -c '^[0-9]') allowed networks"

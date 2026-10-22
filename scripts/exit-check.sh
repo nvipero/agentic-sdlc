@@ -7,7 +7,8 @@
 #
 # Side effects, all cleaned up: one branch and one draft PR on the project
 # (agent token positive test), a throwaway local branch and worktree, a test
-# image, and container restarts. Nothing is merged.
+# image, an orphan branch and an untracked file in the workspace (restored),
+# and container restarts. Nothing is merged and the workspace is never deleted.
 set -uo pipefail
 
 REPO="$(cd "${1:?project clone path}" && pwd)"
@@ -17,6 +18,7 @@ FAILS=0
 
 pass() { echo "PASS  $1${2:+ — $2}"; }
 fail() { echo "FAIL  $1${2:+ — $2}"; FAILS=$((FAILS + 1)); }
+skip() { echo "SKIP  $1${2:+ — $2}"; }   # not applicable here; not counted as a pass
 section() { echo; echo "## $1"; }
 
 # Load up.sh functions (read_token, build_image, check_image_label, ...).
@@ -28,8 +30,7 @@ NWO="$(cd "$REPO" && gh repo view --json nameWithOwner --jq .nameWithOwner)"
 export FACTORY_REPO_URL="https://github.com/$NWO.git"
 export FACTORY_DEVCONTAINER_TREE="$(git -C "$REPO" rev-parse HEAD:.devcontainer)"
 
-cid() { container_id; }   # from up.sh, so both always look up the same container
-CID="$(cid)"
+CID="$(container_id)"   # container_id comes from up.sh
 [ -n "$CID" ] || { echo "no running container; start it with scripts/up.sh first" >&2; exit 2; }
 
 # Run a command inside the container as the agent user.
@@ -81,13 +82,26 @@ expect_fail "outside DNS resolver is blocked" "dig +time=3 +tries=1 @8.8.8.8 exa
 expect_fail "host gateway is blocked" \
   "gw=\$(ip route | awk '/default/ {print \$3}'); curl -sS --max-time 5 -o /dev/null http://\$gw/" "curl: \([0-9]+\)"
 for h in host.lima.internal host.docker.internal; do
-  expect_fail "$h is blocked" "curl -sS --max-time 5 -o /dev/null http://$h/" "curl: \([0-9]+\)"
+  out="$(in_box "curl -sS --max-time 5 -o /dev/null http://$h/")"; rc=$?
+  case "$out" in
+    *"curl: (6)"*) skip "$h is blocked" "the name does not resolve on this runtime" ;;
+    *"curl: (7)"*|*"curl: (28)"*) pass "$h is blocked by the firewall" "$(echo "$out" | tail -1)" ;;
+    *) fail "$h is blocked" "rc=$rc: $(echo "$out" | tail -1)" ;;
+  esac
 done
-expect_ok "IPv6 loopback is open (if the container has IPv6)" \
-  "if ! ip -6 addr show lo 2>/dev/null | grep -q '::1'; then echo 'no IPv6 in container'; exit 0; fi; node -e \"const h=require('http');setTimeout(()=>{console.log('timeout');process.exit(1)},5000);const s=h.createServer((q,r)=>r.end()).listen(8765,'::1',()=>h.get('http://[::1]:8765/',r=>{console.log('http://[::1] '+r.statusCode);s.close();process.exit(0)}).on('error',e=>{console.log(e.message);process.exit(1)}))\""
-for u in https://api.anthropic.com https://api.github.com/zen https://registry.npmjs.org/; do
-  expect_ok "$u is reachable" "curl -sS --max-time 10 -o /dev/null -w '%{http_code}' $u"
-done
+if in_box "ip -6 addr show lo | grep -q '::1'" >/dev/null; then
+  expect_ok "IPv6 loopback is open" \
+    "node -e \"const h=require('http');setTimeout(()=>{console.log('timeout');process.exit(1)},5000);const s=h.createServer((q,r)=>r.end()).listen(8765,'::1',()=>h.get('http://[::1]:8765/',r=>{console.log('http://[::1] '+r.statusCode);s.close();process.exit(0)}).on('error',e=>{console.log(e.message);process.exit(1)}))\""
+else
+  skip "IPv6 loopback is open" "the container has no IPv6"
+fi
+# Each allowed host must answer with the status it gives without credentials (GitHub: with the token).
+expect_ok "https://api.anthropic.com is reachable (404 expected for the bare host)" \
+  "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://api.anthropic.com); echo \$c; [ \$c = 404 ]"
+expect_ok "https://api.github.com/zen is reachable (authenticated, 200 expected)" \
+  "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer \$GH_TOKEN\" https://api.github.com/zen); echo \$c; [ \$c = 200 ]"
+expect_ok "https://registry.npmjs.org/ is reachable (200 expected)" \
+  "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://registry.npmjs.org/); echo \$c; [ \$c = 200 ]"
 
 section "Network stays closed when the firewall fails"
 docker exec -u root "$CID" sh -c 'printf "api.github.com\nno-such-host.invalid\n" > /tmp/bad-allowlist'
@@ -99,7 +113,8 @@ out="$(docker exec "$CID" bash -c 'FACTORY_ALLOWLIST_FILE=/tmp/bad-allowlist sud
 if [ "$rc" -eq 0 ]; then pass "agent cannot pass an allowlist override through sudo" "$(echo "$out" | tail -1)"; else fail "agent cannot pass an allowlist override through sudo" "$out"; fi
 expect_fail "sudo refuses the firewall script with arguments" "sudo -n /usr/local/bin/init-firewall.sh /tmp/bad-allowlist" "not allowed|password is required|may not run"
 docker exec -u root "$CID" rm -f /tmp/bad-allowlist
-expect_ok "network restored by a normal firewall run" "curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://api.github.com/zen"
+expect_ok "network restored by a normal firewall run (authenticated, 200 expected)" \
+  "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer \$GH_TOKEN\" https://api.github.com/zen); echo \$c; [ \$c = 200 ]"
 docker exec -u root "$CID" rm -f /run/firewall-ok
 out="$(devcontainer exec --workspace-folder "$REPO" /usr/local/bin/factory-exec true 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING: firewall marker missing" \
@@ -135,7 +150,7 @@ case "$(wait_marker_or_stop)" in
       "m=\$(stat -c %Y /run/firewall-ok) && test \$m -ge $before && ! curl -s --max-time 5 -o /dev/null https://example.com && echo \"marker from \$(date -d @\$m +%T), example.com blocked\"" ;;
   stopped)
     pass "after a manual docker restart the container is not running (firewall failed, container stopped)"
-    "$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(cid)" || { echo "RESULT: aborted, cannot restart container"; exit 1; } ;;
+    "$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(container_id)" || { echo "RESULT: aborted, cannot restart container"; exit 1; } ;;
   *)
     fail "after a manual docker restart: no marker within 90s and still running" ;;
 esac
@@ -189,8 +204,8 @@ expect_fail "agent token cannot push to the factory repo" \
   "cd /workspace && git push --dry-run https://github.com/$FACTORY_NWO.git HEAD:refs/heads/exit-check-probe" "403|denied|not found"
 in_box "cd /workspace && gh pr close $BR --delete-branch --comment 'Exit check finished; closing without merge.' >/dev/null 2>&1; git switch -q main; git branch -q -D $BR" >/dev/null
 gh api "repos/$NWO/branches/$BR" >/dev/null 2>&1 && fail "probe branch cleaned up" || pass "probe branch and PR cleaned up (closed, not merged)"
-expect_fail "merge deny rule active in bypass mode (claude -p)" \
-  "cd /workspace && claude -p --dangerously-skip-permissions 'Run exactly this shell command with the Bash tool and report its output verbatim, nothing else: gh pr merge --help. If the tool call is denied, reply with the single word DENIED and the denial reason.' ; exit 1" "Permission to use Bash with command gh pr merge"
+expect_ok "merge deny rule active in bypass mode (claude -p, permission_denials)" \
+  "cd /workspace && claude -p --dangerously-skip-permissions --output-format json 'Run exactly this shell command with the Bash tool: gh pr merge --help. Then reply OK.' < /dev/null | jq -ce '[.permission_denials[] | select(.tool_name == \"Bash\" and (.tool_input.command | startswith(\"gh pr merge\")))] | if length > 0 then .[0] | {tool_name, command: .tool_input.command} else error(\"no denial recorded\") end'"
 
 section "Protections through the API (owner login)"
 for r in "$NWO" "$FACTORY_NWO"; do
@@ -205,8 +220,11 @@ for r in "$NWO" "$FACTORY_NWO"; do
 done
 
 section "Image is rebuilt when .devcontainer/ changes"
+# Leftovers from an aborted run: the worktree that has the branch checked out, then the branch.
+old_wt="$(git -C "$REPO" worktree list --porcelain | awk '/^worktree /{w=$2} /^branch refs\/heads\/exit-check-rebuild$/{print w}')"
+[ -z "$old_wt" ] || git -C "$REPO" worktree remove --force "$old_wt"
 git -C "$REPO" worktree prune
-git -C "$REPO" branch -q -D exit-check-rebuild 2>/dev/null   # left over from an aborted run
+git -C "$REPO" branch -q -D exit-check-rebuild 2>/dev/null
 WT_PARENT="$(mktemp -d)"
 WT="$WT_PARENT/wt"
 git -C "$REPO" worktree add -q -b exit-check-rebuild "$WT" HEAD
@@ -222,7 +240,7 @@ docker run --rm --entrypoint cat factory-exit-check-rebuild:latest /etc/claude-c
 out="$( (FACTORY_DEVCONTAINER_TREE="$NEW_TREE"; check_image_label "$CID") 2>&1 )"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "expected '$NEW_TREE'" && pass "image tree mismatch is detected (start_container then stops and refuses)" "$(echo "$out" | tail -1)" \
   || fail "label mismatch detection" "$out"
-[ "$(cid)" = "$CID" ] && pass "the mismatch check itself has no side effects" || fail "mismatch check stopped the container"
+[ "$(container_id)" = "$CID" ] && pass "the mismatch check itself has no side effects" || fail "mismatch check stopped the container"
 git -C "$REPO" worktree remove --force "$WT"; git -C "$REPO" branch -q -D exit-check-rebuild; rm -rf "$WT_PARENT"
 docker rmi -f factory-exit-check-rebuild:latest >/dev/null 2>&1
 
@@ -230,15 +248,44 @@ section "up.sh fails closed"
 out="$(FACTORY_EXPECTED_VISIBILITY=PRIVATE "$REPO/scripts/up.sh" true 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING TO START: visibility" && pass "preflight refuses on unexpected visibility" "$(echo "$out" | grep REFUSING)" \
   || fail "preflight refusal" "$out"
-[ -n "$CID" ] && [ "$(cid)" = "$CID" ] && pass "preflight refusal leaves the running container untouched" "$CID" \
-  || fail "preflight refusal changed the container" "before '$CID', after '$(cid)'"
+[ "$(container_id)" = "$CID" ] && pass "preflight refusal leaves the running container untouched" "$CID" \
+  || fail "preflight refusal changed the container" "before '$CID', after '$(container_id)'"
 out="$( (FACTORY_GH_TOKEN=""; export FACTORY_GH_TOKEN; NWO="$NWO"; start_container) 2>&1 )"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING TO START: devcontainer up failed" && pass "up.sh aborts when postStartCommand fails" "$(echo "$out" | grep -E 'init-workspace|REFUSING' | tail -2 | tr '\n' ' ')" \
   || fail "postStartCommand failure abort" "$(echo "$out" | tail -3)"
-[ -z "$(cid)" ] && pass "no container left running after failed start" || fail "container running after failed start"
+[ -z "$(container_id)" ] && pass "no container left running after failed start" || fail "container running after failed start"
+
+section "Workspace is never deleted automatically"
+image_now() { docker images -q --filter "label=factory.devcontainer.tree=$FACTORY_DEVCONTAINER_TREE" | head -1; }
+# Runs a command against the workspace volume in a throwaway container without network.
+on_volume() { docker run --rm --network none --entrypoint bash -v "$VOLUME:/workspace" "$(image_now)" -c "cd /workspace && $1" 2>&1; }
+"$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(container_id)" || { echo "RESULT: aborted, cannot start container"; exit 1; }
+head_before="$(in_box "cd /workspace && echo exit-check > src/exit-check-sentinel && git rev-parse HEAD" | tail -1)"
+"$REPO/scripts/up.sh" true >/dev/null 2>&1
+out="$(in_box "cd /workspace && cat src/exit-check-sentinel && git rev-parse HEAD")"
+[ "$out" = "$(printf 'exit-check\n%s' "$head_before")" ] \
+  && pass "an existing workspace (cloned before any marker existed) survives a restart unchanged" "HEAD ${head_before:0:12}, untracked file kept" \
+  || fail "workspace changed across restart" "$out"
+in_box "cd /workspace && git switch -q --orphan exit-check-orphan" >/dev/null
+out="$("$REPO/scripts/up.sh" true 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "HEAD does not resolve" && echo "$out" | grep -q "reset-workspace" \
+  && pass "unresolvable HEAD (orphan branch) is reported and the start refused" "$(echo "$out" | grep -o 'STOPPING:.*' | head -1 | cut -c1-140)" \
+  || fail "unresolvable HEAD report" "$(echo "$out" | grep -E 'init-workspace|REFUSING' | tail -3)"
+out="$(on_volume "git symbolic-ref HEAD; cat src/exit-check-sentinel; git rev-parse --verify -q main")"
+[ "$out" = "$(printf 'refs/heads/exit-check-orphan\nexit-check\n%s' "$head_before")" ] \
+  && pass "the workspace with an unresolvable HEAD was left untouched" "HEAD -> exit-check-orphan, main and untracked file intact" \
+  || fail "workspace with unresolvable HEAD was changed" "$out"
+# No controlling terminal (setsid), so reset-workspace cannot ask for confirmation.
+out="$(perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$REPO/scripts/up.sh" reset-workspace </dev/null 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -q "nothing was deleted" && docker volume inspect "$VOLUME" >/dev/null 2>&1 \
+  && echo "$out" | grep -q "current HEAD: exit-check-orphan at no commits" \
+  && pass "reset-workspace refuses without confirmation, after listing what would be lost" "$(echo "$out" | grep -o 'current HEAD:.*'); $(echo "$out" | grep -o 'REFUSING.*')" \
+  || fail "reset-workspace refusal" "$(echo "$out" | tail -3)"
+out="$(on_volume "git switch -q main && rm -f src/exit-check-sentinel && git status --porcelain && git rev-parse HEAD")"
+[ "$out" = "$head_before" ] && pass "workspace restored to main for the remaining checks" || fail "workspace restore" "$out"
 
 section "Restart through up.sh restores the firewall"
-"$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(cid)"
+"$REPO/scripts/up.sh" true >/dev/null 2>&1 && CID="$(container_id)"
 expect_ok "firewall active after restart via up.sh" "test -f /run/firewall-ok || exit 1; curl -s --max-time 5 https://example.com >/dev/null && exit 1 || echo 'marker present, example.com blocked'"
 
 echo

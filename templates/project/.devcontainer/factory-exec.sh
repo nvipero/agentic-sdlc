@@ -13,7 +13,10 @@ jq -e .permissions.deny /etc/claude-code/managed-settings.json >/dev/null \
 if curl -s --max-time 5 -o /dev/null https://example.com; then
   refuse "example.com is reachable"
 fi
-curl -fsS --max-time 10 -o /dev/null https://api.github.com/zen || refuse "api.github.com unreachable"
+# Authenticated: proves both the network path and the token (5000 requests per hour).
+[ -n "${GH_TOKEN:-}" ] || refuse "GH_TOKEN is not set"
+code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/zen || true)"
+[ "$code" = "200" ] || refuse "authenticated api.github.com check returned HTTP ${code:-none}"
 
 [ "$#" -gt 0 ] || set -- bash -l
 exec "$@"
