@@ -106,6 +106,15 @@ Recorded under the rule agreed after the fourth review round: only blocking find
 - **Duplicated filter:** `remove_containers` repeats the container label filter from `container_id`.
 - **IPv6 fallback:** if `ip6tables` cannot set a policy, the firewall continues when the container has no global IPv6 address, so link-local IPv6 would be unfiltered. Not reachable on this runtime (`ip6tables` works and Docker disables IPv6 on `eth0`). Fix: fail if any interface other than `lo` has an IPv6 address.
 - **Stdin of `up.sh <cmd>`:** the workspace init and probe execs use `docker exec -i`, so they consume stdin before the session command runs. `up.sh <cmd> < file` therefore gives the command an empty stdin. Found while re-running the agent session; the prompt is now passed as an argument. Fix: give those two execs `</dev/null`.
+- **Sixth code review (security review round), all non-blocking:**
+  - **Token in the docker client's environment:** the session's `docker exec` client keeps `GH_TOKEN` in its environment for the whole session. Processes of the same macOS user can read it with `ps -E`, as they could before, and they can also reach the container through Docker. The exit check samples argument lists only.
+  - **Session signals:** the session is no longer started with `exec`. Without a terminal (`-t`), Ctrl-C stops `up.sh` and the docker client, but the command keeps running in the container until it is stopped.
+  - **Terminal for init:** the terminal check looks at stdout after the `>&2` redirect, so the workspace init and the probe get `-t` whenever stderr is a terminal.
+  - **Extra variable:** `FACTORY_REPO_URL` goes to every exec, although only the workspace init uses it.
+  - **Messages:** a failed Actions API call reports "Actions is not disabled", and a host clone that is ahead of or diverged from `origin/main` gets the "behind" advice.
+  - **README:** the setup steps disable Actions only on the project repo, but the exit check also expects it off on the factory repo.
+  - **Exit check setup:** the behind-clone test does not check that its clone and `reset --hard HEAD~1` succeeded.
+  - **Stale comment:** the mounts comment in `devcontainer.json` still says the host clone always equals `origin/main`.
 - **Workflow-push probe:** an exit check item that pushes a branch adding `.github/workflows/probe.yml` with the agent token and expects a refusal. This proves the token has no Workflows permission. Actions is disabled in step 1, so a pushed workflow would not run anyway.
 
 ## Deviations from the plan
