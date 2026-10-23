@@ -1,6 +1,6 @@
 # Factory configuration for this project. Owned by the human; read-only for agents.
 roles:
-  researcher:    { model: opus }
+  researcher:    { model: opus }   # not applied: the researcher runs in the main session
   spec-writer:   { model: opus }
   spec-reviewer: { model: sonnet }
   test-writer:   { model: sonnet }
@@ -9,5 +9,6 @@ roles:
 disputes:
   max_rounds: 4
   escalate_when_no_progress_for: 2   # consecutive rounds repeating the same findings
+  rework_resets: 1                   # a rework restarts the round count this many times, then escalates
 light_path:
   allowed_for_labels: [trivial]      # skip spec review and acceptance tests
