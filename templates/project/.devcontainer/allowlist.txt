@@ -1,0 +1,10 @@
+# Outbound HTTPS (tcp/443) allowlist for the agent container.
+# GitHub's web, api and git ranges are added from https://api.github.com/meta.
+# Changing this file changes the image; scripts/up.sh rebuilds it.
+
+api.github.com
+api.anthropic.com
+# OAuth login and token refresh for claude.ai accounts
+claude.ai
+platform.claude.com
+registry.npmjs.org

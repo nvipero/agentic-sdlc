@@ -1,0 +1,43 @@
+name: User story
+description: A story for the agent factory to specify, test and implement.
+labels: ["user-story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in plain language. Add the `ready-for-factory` label when the story is ready to be picked up.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be possible after this story is done?
+    validations:
+      required: true
+  - type: textarea
+    id: user-value
+    attributes:
+      label: User value
+      description: Who benefits, and why does it matter to them?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: One criterion per line, in plain language. The spec writer turns these into testable criteria.
+      placeholder: |
+        - A user can ...
+        - When ..., then ...
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - High
+        - Medium
+        - Low
+      default: 1
+    validations:
+      required: true

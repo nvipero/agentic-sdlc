@@ -1,0 +1,37 @@
+{
+  // Start only with scripts/up.sh. It runs the protection preflight, passes the
+  // token, prepares the workspace and verifies the image and firewall before giving you a shell.
+  "name": "${localWorkspaceFolderBasename}",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "DEVCONTAINER_TREE": "${localEnv:FACTORY_DEVCONTAINER_TREE}"
+    }
+  },
+  // The workspace is a clone inside a named volume, not the host clone.
+  "workspaceMount": "source=${localWorkspaceFolderBasename}-workspace,target=/workspace,type=volume",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    // Factory definitions, read-only from the host clone (always equal to origin/main).
+    "source=${localWorkspaceFolder}/.factory,target=/workspace/.factory,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.claude,target=/workspace/.claude,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.github,target=/workspace/.github,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.devcontainer,target=/workspace/.devcontainer,type=bind,readonly",
+    "source=${localWorkspaceFolder}/CLAUDE.md,target=/workspace/CLAUDE.md,type=bind,readonly",
+    // Claude Code login and state.
+    "source=${localWorkspaceFolderBasename}-claude,target=/home/node/.claude,type=volume"
+  ],
+  "capAdd": ["NET_ADMIN", "NET_RAW"],
+  // Firewall marker lives on tmpfs so it never survives a restart; never restart automatically;
+  // an init process as PID 1 so docker stop's SIGTERM reaches the container processes.
+  "runArgs": ["--tmpfs", "/run:rw,nosuid,nodev,noexec,mode=0755", "--restart", "no", "--init"],
+  // Keep the image's entrypoint, which brings the firewall up on every start.
+  "overrideCommand": false,
+  "containerUser": "node",
+  "remoteUser": "node",
+  "updateRemoteUserUID": false,
+  // No remoteEnv and no lifecycle commands: the devcontainer CLI would pass the token as
+  // -e NAME=VALUE on the docker command line. scripts/up.sh runs init-workspace.sh and
+  // the session itself with docker exec -e GH_TOKEN (by name).
+  "userEnvProbe": "none"
+}
