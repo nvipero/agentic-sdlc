@@ -207,6 +207,17 @@ expect_fail "agent token cannot change interaction limits" \
   "gh api -X PUT repos/$NWO/interaction-limits -f limit=invalid" "HTTP 403|HTTP 404"
 expect_fail "agent token cannot change repository settings" \
   "gh api -X PATCH repos/$NWO --input - <<< '{}'" "HTTP 403|HTTP 404"
+# A commit that adds a workflow file, built with plumbing (the .github overlay is read-only):
+# GitHub must refuse it, because the token has no Workflows permission. On an unexpected
+# success the branch is deleted again; Actions is disabled, so it would not run.
+WF_BR="chore/exit-check-workflow-$(date +%s)"
+out="$(in_box "cd /workspace && git fetch -q origin main && idx=\$(mktemp) && export GIT_INDEX_FILE=\$idx && git read-tree origin/main && blob=\$(printf 'on: push\njobs:\n  probe:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo probe\n' | git hash-object -w --stdin) && git update-index --add --cacheinfo 100644,\$blob,.github/workflows/exit-check-probe.yml && tree=\$(git write-tree) && rm -f \$idx && unset GIT_INDEX_FILE && c=\$(git commit-tree \$tree -p origin/main -m 'chore: exit check workflow probe') && git push origin \$c:refs/heads/$WF_BR")"; rc=$?
+if [ "$rc" -ne 0 ] && echo "$out" | grep -qiE "workflow.*(scope|permission)|refusing to allow"; then
+  pass "agent token cannot push a workflow file (no Workflows permission)" "$(echo "$out" | grep -iE 'refusing|workflow' | head -1 | cut -c1-140)"
+else
+  fail "agent token cannot push a workflow file" "rc=$rc: $(echo "$out" | tail -2 | tr '\n' ' ')"
+  in_box "cd /workspace && git push -q origin --delete $WF_BR" >/dev/null 2>&1
+fi
 expect_fail "agent token cannot push to the factory repo" \
   "cd /workspace && git push --dry-run https://github.com/$FACTORY_NWO.git HEAD:refs/heads/exit-check-probe" "403|denied|not found"
 in_box "cd /workspace && gh pr close $BR --delete-branch --comment 'Exit check finished; closing without merge.' >/dev/null 2>&1; git switch -q main; git branch -q -D $BR" >/dev/null
@@ -265,12 +276,15 @@ out="$( (FACTORY_GH_TOKEN=""; NWO="$NWO"; start_container) 2>&1 )"; rc=$?
 [ -z "$(container_id)" ] && pass "no container left running after failed start" || fail "container running after failed start"
 # A throwaway clone one commit behind: the check must refuse and must not update it.
 BEHIND_PARENT="$(mktemp -d)"
-git clone -q "$REPO" "$BEHIND_PARENT/clone" && git -C "$BEHIND_PARENT/clone" reset -q --hard HEAD~1
-behind_head="$(git -C "$BEHIND_PARENT/clone" rev-parse HEAD)"
-out="$( (REPO_DIR="$BEHIND_PARENT/clone"; check_clone) 2>&1 )"; rc=$?
-[ "$rc" -ne 0 ] && echo "$out" | grep -q "not at origin/main" && [ "$(git -C "$BEHIND_PARENT/clone" rev-parse HEAD)" = "$behind_head" ] \
-  && pass "a host clone behind origin/main is refused and not updated" "$(echo "$out" | grep -o 'not at origin/main.*' | cut -c1-80)" \
-  || fail "host clone behind origin/main" "rc=$rc: $out"
+if git clone -q "$REPO" "$BEHIND_PARENT/clone" && git -C "$BEHIND_PARENT/clone" reset -q --hard HEAD~1; then
+  behind_head="$(git -C "$BEHIND_PARENT/clone" rev-parse HEAD)"
+  out="$( (REPO_DIR="$BEHIND_PARENT/clone"; check_clone) 2>&1 )"; rc=$?
+  [ "$rc" -ne 0 ] && echo "$out" | grep -q "behind origin/main" && [ "$(git -C "$BEHIND_PARENT/clone" rev-parse HEAD)" = "$behind_head" ] \
+    && pass "a host clone behind origin/main is refused and not updated" "$(echo "$out" | grep -o '[0-9]* commit(s) behind origin/main' | head -1)" \
+    || fail "host clone behind origin/main" "rc=$rc: $out"
+else
+  fail "host clone behind origin/main" "test setup failed: could not clone the project or reset it one commit back"
+fi
 rm -rf "$BEHIND_PARENT"
 
 section "Token never in a host process's arguments"

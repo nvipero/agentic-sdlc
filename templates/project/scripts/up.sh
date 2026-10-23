@@ -33,12 +33,15 @@ stop_container() {
 
 # Runs a command in the container ($CID) as the agent user. The token is passed
 # by name only (-e GH_TOKEN): the docker client reads the value from its own
-# environment, so it never appears in any process's argument list.
+# environment, so it never appears in any process's argument list. Leading
+# "-e NAME" arguments pass more variables by name. A terminal (-t) is used only
+# when both stdin and stdout are one; give non-interactive execs </dev/null so
+# they do not consume the caller's stdin.
 box_exec() {
-  local tty=
+  local tty= envs=(-e GH_TOKEN)
+  while [ "${1:-}" = "-e" ]; do envs+=(-e "$2"); shift 2; done
   if [ -t 0 ] && [ -t 1 ]; then tty=1; fi
-  GH_TOKEN="$FACTORY_GH_TOKEN" FACTORY_REPO_URL="$FACTORY_REPO_URL" \
-    docker exec -i ${tty:+-t} -u node -w /workspace -e GH_TOKEN -e FACTORY_REPO_URL "$CID" "$@"
+  GH_TOKEN="$FACTORY_GH_TOKEN" docker exec -i ${tty:+-t} -u node -w /workspace "${envs[@]}" "$CID" "$@"
 }
 
 # Removes the project's containers, running or stopped (they are recreated on every start).
@@ -90,8 +93,10 @@ preflight() {
     say "WARNING: interaction limit expires in $days days; renew it with scripts/setup-github.sh in the factory repo"
   fi
   # Actions stays off until step 4: a workflow run would execute outside the sandbox.
-  [ "$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" = "false" ] \
-    || die "GitHub Actions is not disabled; run scripts/setup-github.sh actions in the factory repo"
+  local actions
+  actions="$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" || die "cannot read GitHub Actions settings"
+  [ "$actions" = "false" ] \
+    || die "GitHub Actions is not disabled (enabled=$actions); run scripts/setup-github.sh actions in the factory repo"
   say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, Actions disabled, interaction limit $days days left"
 }
 
@@ -104,8 +109,14 @@ check_clone() {
   [ "$branch" = "main" ] || die "host clone is on '$branch', expected main"
   [ -z "$(git -C "$REPO_DIR" status --porcelain)" ] || die "host clone has local changes"
   git -C "$REPO_DIR" fetch -q origin main || die "git fetch failed"
-  [ "$(git -C "$REPO_DIR" rev-parse HEAD)" = "$(git -C "$REPO_DIR" rev-parse origin/main)" ] \
-    || die "host clone main is not at origin/main. Review the new commits (git log -p HEAD..origin/main), then pull manually (git pull --ff-only)"
+  local ahead behind
+  read -r ahead behind < <(git -C "$REPO_DIR" rev-list --left-right --count HEAD...origin/main) \
+    || die "cannot compare the host clone with origin/main"
+  if [ "$ahead" -gt 0 ]; then
+    die "host clone main has $ahead commit(s) that are not on origin/main$([ "$behind" -gt 0 ] && echo " and is $behind behind"). main only changes through pull requests; move those commits to a branch"
+  fi
+  [ "$behind" -eq 0 ] \
+    || die "host clone main is $behind commit(s) behind origin/main. Review the new commits (git log -p HEAD..origin/main), then pull manually (git pull --ff-only)"
 }
 
 # --- 3. Token: the only secret source step ----------------------------------
@@ -137,7 +148,7 @@ check_image_label() {
 
 # --- 5. Container, recreated on every start ---------------------------------
 start_container() {
-  FACTORY_REPO_URL="https://github.com/$NWO.git"
+  export FACTORY_REPO_URL="https://github.com/$NWO.git"   # not secret; only the workspace init gets it
   devcontainer up --workspace-folder "$REPO_DIR" --remove-existing-container >&2 \
     || { stop_container; die "devcontainer up failed"; }
   CID="$(container_id)"
@@ -147,7 +158,7 @@ start_container() {
   [ "$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$CID")" = "no" ] \
     || { stop_container; die "container restart policy is not 'no'"; }
   # Waits for the firewall marker, then clones or checks the workspace.
-  box_exec /usr/local/bin/init-workspace.sh >&2 \
+  box_exec -e FACTORY_REPO_URL /usr/local/bin/init-workspace.sh </dev/null >&2 \
     || { stop_container; die "workspace init failed"; }
 }
 
@@ -155,7 +166,7 @@ start_container() {
 # factory-exec (in the image) checks the tmpfs firewall marker, managed
 # settings and the network before running anything; every exec goes through it.
 probe_network() {
-  box_exec /usr/local/bin/factory-exec true >&2 \
+  box_exec /usr/local/bin/factory-exec true </dev/null >&2 \
     || { stop_container; die "container probe failed"; }
   say "container probe OK (firewall, network, managed settings)"
 }
@@ -243,7 +254,7 @@ reset_workspace() {
   # contents of both volumes in one container. Both manifests must be
   # non-empty, so a broken tool cannot make the comparison pass vacuously.
   # The completion marker is written only after the comparison succeeds.
-  if ! run_on_volume -u root --name "$ARCHIVER" -v "$ARCHIVE:/archive" '
+  if ! run_on_volume --read-only -u root --name "$ARCHIVER" -v "$ARCHIVE:/archive" '
       set -euo pipefail
       cp -a /workspace/. /archive/
       manifest() { cd "$1" && find . -printf "%p %y %m %U %G %l\n" | LC_ALL=C sort &&
