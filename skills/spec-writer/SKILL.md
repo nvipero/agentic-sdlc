@@ -22,6 +22,8 @@ Write the "Problem and why" section before anything else, in your own words:
 - What problem the story solves, and for whom.
 - Why it matters, traced to the context: name the section of `docs/product-context.md` each claim comes from, such as "(context: Users)".
 
+Trace only to claims the spec writer may rely on: tags `(owner)`, `(material: …)`, `(standard: …)` and `(practice: …)`. Never to "Research, not confirmed", and never to your own memory.
+
 If you cannot trace the problem to the context, do not write a spec. Return questions instead. When the context itself seems wrong or incomplete, say so: the orchestrator then sends the owner to the researcher.
 
 ## 2. The spec
@@ -48,9 +50,12 @@ TL;DR: <two lines>
 - **Assumptions** are things you decided without asking, because the answer would not change the spec much. Each has a reason.
 - **Open questions** stay empty in a finished spec. Questions go to the owner instead (below).
 
-## 3. Questions, not guesses
+## 3. Research, then ask, then assume
 
-Ask when the answer changes the scope or an acceptance criterion. Otherwise state an assumption.
+For each open point, in this order:
+1. **Research it** when a standard, official documentation or clear best practice answers it. Use the same source rules as the researcher skill: read the source itself, at least two independent sources for a practice, and memory is not a source. Cite it in the spec, such as "(standard: <URL>, read <date>)".
+2. **Ask the owner** only when it is a product decision that only the owner can make, and the answer changes the scope or an acceptance criterion. Never ask what you could have looked up, and never ask a question the owner cannot be expected to answer.
+3. **Assume** in every other case, and say why it is safe.
 
 Each question has:
 - the question in one sentence, in plain language;

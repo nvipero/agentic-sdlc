@@ -64,8 +64,8 @@ Technical choices I made, with the reason. Each one can be overruled.
 skills/researcher/SKILL.md            interview, context and glossary format, open questions
 skills/spec-writer/SKILL.md           understanding check, spec format, questions vs assumptions
 skills/spec-reviewer/SKILL.md         review checklist and finding format
-agents/spec-writer.md                 tools: Read, Grep, Glob, Write, Edit, Bash; skill preloaded
-agents/spec-reviewer.md               tools: Read, Grep, Glob; skill preloaded
+agents/spec-writer.md                 tools: Read, Grep, Glob, Write, Edit, Bash, Skill, WebSearch, WebFetch; skill preloaded
+agents/spec-reviewer.md               tools: Read, Grep, Glob, Skill, WebFetch; skill preloaded
 commands/run.md                       /factory:run <issue>, spec phase only
 commands/context.md                   /factory:context
 templates/project/.factory/.claude-plugin/plugin.json   name "factory"
@@ -124,6 +124,16 @@ The README documents this command. A sync script is not worth it in v1 (spec sec
 - **Why this is not a boundary:** an agent with Bash can start its own `claude --plugin-dir` anyway. What matters is that the definitions it reads are read-only and that a subagent cannot change what the main session loaded.
 - **Plugin subagent limits:** the docs say plugin subagents ignore `hooks`, `mcpServers` and `permissionMode`. None of the roles needs them.
 - **Story worktrees (step 3):** the plugin path is absolute, so a session in a worktree loads the same read-only definitions. What a worktree still has is its own `CLAUDE.md` and `.claude/` from git, which an agent could change. Step 3 decides whether sessions run only from `/workspace` or worktrees get their own read-only mounts. Step 2 uses no worktrees: the spec writer works in `/workspace` on the story branch.
+
+## 4b. Research and sources (owner direction, 2026-10-23)
+
+- **Research before asking.** Roles ask the owner only what research cannot answer and the owner can. A question the owner could not answer, or one research could have answered, is a review finding.
+- **Research is trusted when it was actually done.** Every claim in the context carries a source tag: `(owner)`, `(material: …)`, `(standard: <URL>, read <date>)`, or `(practice: <URL>; <URL>, read <date>)` for best practice that two independent sources agree on, with a search for counter-sources. The spec writer may rely on these.
+- **Unconfirmed:** a single source, a blog, a contested point, a page that could not be read, and anything known only from memory. These go to a separate "Research, not confirmed" section, and the spec writer never relies on them. Merging the context does not confirm them.
+- **Facts and decisions are separate.** A decision that follows from a standard or a clear practice is recorded as `Decision (researcher, from <tag>)`, visible in the PR.
+- **What the network allows** (tested on 2026-10-23 in the sandbox): WebSearch works, because it runs on Anthropic's side and returns titles, URLs and a summary. WebFetch reads pages on GitHub-hosted addresses, including GitHub Pages sites such as semver.org, and the allowlisted hosts. Other sites, such as rfc-editor.org and MDN, are blocked. Opening them is not done: most sit behind shared CDN addresses, so one allowlisted site would open thousands of others.
+- **Tools:** the main session (researcher) and the spec writer get WebSearch and WebFetch. The spec reviewer gets WebFetch only, to check that a cited source says what the spec claims.
+- **Backlog:** a separate research container with open web access and no token or project files, if too much stays unconfirmed.
 
 ## 5. `/factory:context`
 
@@ -213,6 +223,7 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
 - Sections 4 and 10: `/factory-run` also appears in the repository layout and in step 3.
 - Section 4: "Each story gets its own git worktree" does not apply in step 2, which works on the story branch in `/workspace`. Step 3 decides the worktree setup.
 - Section 4: `roles.researcher.model` in `config.yaml` has no effect, because the researcher runs in the main session with the session's model. The config entry stays, with a comment, and `/factory:context` says which model the session uses.
+- Sections 5 and 6: the researcher researches as well as interviews, every context claim carries a source tag, and roles research before asking (section 4b).
 - Section 4: `config.yaml` gets `rework_resets`, and section 5 gets the review loop rules (section 6 of this plan). The spec shows the config file in full, so it must match.
 
 ## 11. Known limitations in step 2
@@ -222,6 +233,8 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
 - **The role trailer is not proof of authorship.** Any session can write any trailer. It makes honest mistakes visible, not deliberate ones. A separate agent identity in step 4 does not change this either, since all roles share it.
 - **Same session, different roles:** the main session holds the orchestrator and the researcher. The researcher has no reviewer in the spec, because you approve the context. The researcher commits the context under the same commit rule with `Factory-Role: researcher`.
 - **The rework classification is the reviewer's judgement.** A reviewer that calls a rework a targeted fix skips the full review. The change size in the handoff comment shows it to you, but nothing prevents it.
+- **GitHub Pages is reachable.** Step 1's "all of GitHub is reachable" includes every GitHub Pages site, also on custom domains. Pages gives site owners no request logs, so it is a weak channel out, and inbound content from any public repository was already readable.
+- **WebSearch queries leave through Anthropic.** A query reaches the search backend without passing the firewall. Everything an agent sees already goes to Anthropic, so the extra channel is the search provider.
 - **The Claude volume is writable by the agent.** A session could change user-level settings in `/home/node/.claude`. Managed permission rules and the managed plugin settings (section 4) win over them, but other user settings, such as `~/.claude/CLAUDE.md`, still apply to later sessions. This was true in step 1 too.
 
 ## 12. Where I need you, and what can go wrong

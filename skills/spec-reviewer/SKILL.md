@@ -18,13 +18,14 @@ Read the spec, `docs/product-context.md` and `docs/glossary.md`.
 
 ## Checklist
 
-1. **Problem and why:** written in the writer's own words, and each claim traced to a section of the context. A claim the context does not support is a finding.
-2. **Acceptance criteria:** each one observable and testable without reading the code. Vague words such as "fast", "easy" or "properly" without a measure are findings.
-3. **Edge cases:** empty input, limits, repeated actions, failure and undo, where they matter for this story.
-4. **Consistency:** terms match the glossary. Nothing contradicts the context, its non-goals, or an existing spec.
-5. **Scope:** the spec does what the story asks, and no more. Scope creep is a finding.
-6. **Assumptions:** each one safe, with a reason. An assumption that changes scope or an acceptance criterion should have been a question.
-7. **Open questions:** none left in the spec.
+1. **Problem and why:** written in the writer's own words, and each claim traced to a section of the context. A claim the context does not support is a finding, and so is a claim traced to "Research, not confirmed".
+2. **Sources:** every cited standard or practice has a URL and a read date, and a practice has two independent sources. Fetch a cited page when you can, and check that it says what the spec claims. A citation that does not support the claim is a blocking finding.
+3. **Acceptance criteria:** each one observable and testable without reading the code. Vague words such as "fast", "easy" or "properly" without a measure are findings.
+4. **Edge cases:** empty input, limits, repeated actions, failure and undo, where they matter for this story.
+5. **Consistency:** terms match the glossary. Nothing contradicts the context, its non-goals, or an existing spec.
+6. **Scope:** the spec does what the story asks, and no more. Scope creep is a finding.
+7. **Assumptions and questions:** each one safe, with a reason. An assumption that changes scope or an acceptance criterion should have been a question. A question that research could have answered, or that the owner cannot be expected to answer, is a finding too.
+8. **Open questions:** none left in the spec.
 
 ## Findings
 
