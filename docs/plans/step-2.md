@@ -95,10 +95,10 @@ docs/verification/step-2.md          evidence
 The project's `.factory/` is a copy of the factory's `skills/`, `agents/` and `commands/` (spec: "copied skills, agents, commands"). The copy goes to the project through a PR you merge, then you pull the host clone, as with every change to factory paths:
 
 ```sh
-rsync -a --delete --exclude README.md skills agents commands templates/project/.factory/ ../<project>/.factory/
+rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<project>/.factory/
 ```
 
-- `README.md` is excluded, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command.
+- `README.md` is excluded, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is excluded, because after the first copy it belongs to the project (found in review).
 - The same command goes into the README's steps for a new project. `templates/project/` alone has an empty `.factory/`.
 
 The README documents this command. A sync script is not worth it in v1 (spec section 12: template drift is accepted).
@@ -233,6 +233,7 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
 ## 11. Known limitations in step 2
 
 - **Write paths and the commit rule are instructions until step 4.** The spec writer can write anywhere in the workspace, and with Bash it could also stage other files, comment or change labels with the token. Removing Bash would not have been a boundary either, because the main session has Bash. Per-path limits per subagent are not documented, and the PreToolUse hook the docs suggest is ignored for plugin subagents. The path ownership guard in step 4 enforces this. Until then the exit check shows that the story branch only touches `specs/`.
+- **Trusted input can be forged until step 4.** The roles share the owner's GitHub identity and have Bash. A prompt injection, for example in a page the researcher reads, could make a role post a comment without the orchestrator's marker, and it would count as the owner's input. Nothing at tool level prevents it. The separate agent identity in step 4 closes it, because agent comments then come from another account. Until then, the owner approves every spec with `spec-approved` and sees each comment in the issue (found in review).
 - **The orchestrator could still edit a spec.** Nothing at tool level prevents it, because the main session needs Write and Bash. The commit rule makes it visible instead: such an edit is a commit without the spec writer's trailer.
 - **The role trailer is not proof of authorship.** Any session can write any trailer. It makes honest mistakes visible, not deliberate ones. A separate agent identity in step 4 does not change this either, since all roles share it.
 - **Same session, different roles:** the main session holds the orchestrator and the researcher. The researcher has no reviewer in the spec, because you approve the context. The researcher commits the context under the same commit rule with `Factory-Role: researcher`.

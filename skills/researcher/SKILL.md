@@ -111,7 +111,7 @@ Keep both short. A reader should get the product in two minutes. The glossary's 
 
 ## Commit
 
-- Branch: `chore/project-context` for the first context, `chore/update-project-context` for an update. Create it from `origin/main`. For research requests, stay on the story branch.
+- Branch: stay on the branch the command checked out: `chore/project-context` for the first context, `chore/update-project-context-<date>` for an update, the story branch for research requests. Do not switch branches.
 - Stage only your files by name: `git add docs/product-context.md docs/glossary.md`, or the research file. Never `git add -A` or `git add .`.
 - Message in Conventional Commits form with a role trailer:
 

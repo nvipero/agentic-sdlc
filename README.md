@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in later steps.
+Status: step 2 (context and spec chain) of five, in progress. `/factory:context` and `/factory:run` (spec phase) are in place; tests and implementation come in step 3.
 
 ## What is here
 
@@ -57,7 +57,7 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 3. **Copy the template and push the first commit:**
    ```sh
    rsync -a templates/project/ ../<repo-name>/
-   rsync -a --delete --exclude README.md skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
+   rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
    cd ../<repo-name> && git add -A && git commit -m "chore: initialize project from factory template" && git push -u origin main
    ```
 4. **Apply the GitHub setup from this repo.** Run the ruleset after the first push, because it blocks direct pushes to `main`:
@@ -92,10 +92,10 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 A project's `.factory/` is a copy of this repository's `skills/`, `agents/` and `commands/`, plus the template's `.factory/`. After a change here, copy it into the project on a branch, open a PR there, merge it, and pull the project's host clone:
 
 ```sh
-rsync -a --delete --exclude README.md skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
+rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
 ```
 
-`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way.
+`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way.
 
 ## Renewing protections
 

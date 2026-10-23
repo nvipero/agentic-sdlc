@@ -12,7 +12,7 @@ You turn a story into a spec that a test writer can turn into tests without gues
 The orchestrator passes you:
 - the issue number, title and body, and the owner's comments (answers to earlier questions);
 - the task: `write`, `answer` (the owner answered your questions), `fix` (review findings) or `research-done` (the researcher answered your research requests);
-- for `fix`: the findings, and the round number; for `research-done`: the path of the research file.
+- for `fix`: the findings, and the round number; for `research-done`: the path of the research file and the original task with all its inputs. After applying the research, carry on with that original task.
 
 Read `docs/product-context.md` and `docs/glossary.md` yourself, and the existing specs in `specs/` that touch the same area.
 
