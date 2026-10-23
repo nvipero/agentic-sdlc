@@ -22,7 +22,7 @@ Date: 2026-10-23
 |---|---|---|
 | 1 | **Blocking:** commands are flat files (`commands/run.md`), because a plugin's `commands/` does not read `<name>/SKILL.md` | 3 |
 | 2 | READMEs excluded from the copy into `.factory/`, and the copy step added to the new-project README steps | 3 |
-| 3 | Managed settings force-enable the factory plugin and allow only plugin and managed customization, so the agent cannot swap it through user settings | 4 |
+| 3 | Managed settings allow only plugin and managed customization and no marketplace, so the agent cannot swap the plugin through user settings. Changed again after a test: force-enabling the plugin in managed `enabledPlugins`, as the review suggested, stops it from loading | 4 |
 | 4 | Bypass mode's first-start dialog skipped in managed settings | 4 |
 | 5 | Push at every stop, not only when the spec is ready | 3, 6 |
 | 6 | Exit checks read the event stream, not the model's wording | 8 |
@@ -69,7 +69,7 @@ agents/spec-reviewer.md               tools: Read, Grep, Glob; skill preloaded
 commands/run.md                       /factory:run <issue>, spec phase only
 commands/context.md                   /factory:context
 templates/project/.factory/.claude-plugin/plugin.json   name "factory"
-templates/project/.devcontainer/managed-settings.json   plugin dir, plugin force-enabled, plugin-only customization, bypass default
+templates/project/.devcontainer/managed-settings.json   plugin dir, plugin-only customization, no marketplaces, bypass default
 templates/project/CLAUDE.md           naming conventions, how to start
 templates/project/.factory/config.yaml   rework_resets added (section 6), researcher model comment
 scripts/exit-check.sh                 step 2 checks added (section 8)
@@ -109,8 +109,17 @@ The README documents this command. A sync script is not worth it in v1 (spec sec
 ## 4. Discovery and the story worktree question
 
 - **Loading:** managed settings set `CLAUDE_CODE_PLUGIN_DIRS=/workspace/.factory` in `env`. The variable exists from v2.1.280, and the image pins 2.1.308.
-- **Managed `env`:** the docs say project and local settings cannot set this variable, which implies that user and managed settings can, and step 1 already uses managed `env` for `CLAUDE_CONFIG_DIR`. The exit check confirms it. Fallback: `ENV CLAUDE_CODE_PLUGIN_DIRS=/workspace/.factory` in the Dockerfile, which is equally out of the agent's reach.
-- **The plugin cannot be swapped:** the agent can write user settings in the Claude volume. Without more, it could disable `factory` there and load a same-named copy from `~/.claude`. Managed settings therefore set `enabledPlugins` to force-enable the factory plugin, which no other source overrides, and `strictPluginOnlyCustomization`, which blocks skills, agents and hooks that do not come from a plugin, managed settings or Claude Code itself. `disableSideloadFlags` is not used, because it would also reject `CLAUDE_CODE_PLUGIN_DIRS`.
+- **Managed `env`:** tested on 2026-10-23 with the step 1 image in a container without network: managed `env` loads the plugin from `/workspace/.factory`, and the `init` event lists `factory`, the command `factory:run` and the agent `factory:spec-reviewer`.
+- **The plugin cannot be swapped.** The agent can write user settings in the Claude volume. Tested with a same-named plugin in `~/.claude/skills/factory` and `"factory@inline": false` in user settings:
+
+  | Managed settings | Result |
+  |---|---|
+  | Plugin directory only | The impostor loads in place of the factory plugin |
+  | Plus `strictPluginOnlyCustomization: true` and `strictKnownMarketplaces: []` | No `factory` plugin loads. The agent can switch the factory off, but cannot replace it |
+  | Plus `enabledPlugins: {"factory@inline": true}` | The real plugin does not load either: "--plugin-dir copy of "factory" ignored: plugin is locked by managed settings" |
+
+  Managed settings therefore use the second row. `strictPluginOnlyCustomization` blocks skills, agents, hooks and MCP servers that do not come from a plugin, managed settings or Claude Code itself. The empty marketplace allowlist stops the agent from installing a same-named plugin from GitHub, which the firewall allows. `disableSideloadFlags` is not used, because it would also reject `CLAUDE_CODE_PLUGIN_DIRS`.
+- **What remains:** an agent that disables the factory plugin in user settings leaves the next session without `/factory:*` commands. That is visible at once, and nothing else loads in its place.
 - **Bypass mode's first-start dialog** is skipped with `skipDangerousModePermissionPrompt` in managed settings, so nothing is written to user settings for it.
 - **Why this is not a boundary:** an agent with Bash can start its own `claude --plugin-dir` anyway. What matters is that the definitions it reads are read-only and that a subagent cannot change what the main session loaded.
 - **Plugin subagent limits:** the docs say plugin subagents ignore `hooks`, `mcpServers` and `permissionMode`. None of the roles needs them.
@@ -162,7 +171,7 @@ Each run reads the issue's state and does the next step. Running it again after 
 
 Checks read the event stream of `claude -p --output-format stream-json --verbose`, not the model's wording:
 - **The plugin loads:** the `init` event lists `factory` under `plugins`, with no `plugin_errors`, and lists the agents `factory:spec-writer` and `factory:spec-reviewer` and the command `/factory:run`.
-- **The plugin cannot be swapped:** with `enabledPlugins` set to `false` for `factory` in user settings and a same-named plugin in `~/.claude`, the next session still loads the read-only one.
+- **The plugin cannot be swapped:** with `"factory@inline": false` in user settings and a same-named plugin in `~/.claude/skills/factory`, the next session loads no `factory` plugin at all, and the impostor's commands are absent.
 - **Bypass mode is the default** without a start flag, and the merge deny rule still holds.
 - **The reviewer writes nothing:** asked to write a file, the reviewer's run has no `Write`, `Edit` or `Bash` tool use under its `parent_tool_use_id`.
 - `.factory/` stays read-only, including the plugin manifest.
