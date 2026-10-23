@@ -192,7 +192,7 @@ hits="$( { docker inspect "$CID"; docker image inspect "$(docker inspect -f '{{.
 if [ "$hits" = "0" ]; then pass "token not in docker inspect (container or image)"; else fail "token found in docker inspect" "$hits matching lines"; fi
 
 section "Agent token reach (observed behaviour)"
-BR="exit-check-$(date +%s)"
+BR="chore/exit-check-$(date +%s)"
 expect_ok "agent token can push a branch" \
   "cd /workspace && git switch -q -c $BR && git commit -q --allow-empty -m 'chore: exit check probe' && git push -q origin $BR 2>&1 && echo pushed $BR"
 expect_ok "agent token can open a draft PR" \
@@ -230,13 +230,13 @@ done
 
 section "Image is rebuilt when .devcontainer/ changes"
 # Leftovers from an aborted run: the worktree that has the branch checked out, then the branch.
-old_wt="$(git -C "$REPO" worktree list --porcelain | awk '/^worktree /{w=$2} /^branch refs\/heads\/exit-check-rebuild$/{print w}')"
+old_wt="$(git -C "$REPO" worktree list --porcelain | awk '/^worktree /{w=$2} /^branch refs\/heads\/chore\/exit-check-rebuild$/{print w}')"
 [ -z "$old_wt" ] || git -C "$REPO" worktree remove --force "$old_wt"
 git -C "$REPO" worktree prune
-git -C "$REPO" branch -q -D exit-check-rebuild 2>/dev/null
+git -C "$REPO" branch -q -D chore/exit-check-rebuild 2>/dev/null
 WT_PARENT="$(mktemp -d)"
 WT="$WT_PARENT/wt"
-git -C "$REPO" worktree add -q -b exit-check-rebuild "$WT" HEAD
+git -C "$REPO" worktree add -q -b chore/exit-check-rebuild "$WT" HEAD
 jq '.permissions.deny += ["Bash(exit-check-probe *)"]' "$WT/.devcontainer/managed-settings.json" > "$WT/ms.json" \
   && mv "$WT/ms.json" "$WT/.devcontainer/managed-settings.json"
 git -C "$WT" commit -q -am "test: change managed settings (local only)"
@@ -250,7 +250,7 @@ out="$( (FACTORY_DEVCONTAINER_TREE="$NEW_TREE"; check_image_label "$CID") 2>&1 )
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "expected '$NEW_TREE'" && pass "image tree mismatch is detected (start_container then stops and refuses)" "$(echo "$out" | tail -1)" \
   || fail "label mismatch detection" "$out"
 [ "$(container_id)" = "$CID" ] && pass "the mismatch check itself has no side effects" || fail "mismatch check stopped the container"
-git -C "$REPO" worktree remove --force "$WT"; git -C "$REPO" branch -q -D exit-check-rebuild; rm -rf "$WT_PARENT"
+git -C "$REPO" worktree remove --force "$WT"; git -C "$REPO" branch -q -D chore/exit-check-rebuild; rm -rf "$WT_PARENT"
 docker rmi -f factory-exit-check-rebuild:latest >/dev/null 2>&1
 
 section "up.sh fails closed"

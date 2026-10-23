@@ -36,6 +36,12 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 
 **Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it. A merged change is never executed on your Mac until you review and pull it yourself.
 
+## Conventions
+
+- **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/), `type(scope): description`. Types: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
+- **Branches:** [Conventional Branch 1.1.0](https://conventionalbranch.org/), `<type>/<description>` in lowercase letters, digits and hyphens. `feat/` and `fix/` are allowed short forms.
+- The same conventions apply in project repos, including agents' story branches (spec section 5, "Naming conventions").
+
 ## Starting a new project
 
 **Requirements on the host:**

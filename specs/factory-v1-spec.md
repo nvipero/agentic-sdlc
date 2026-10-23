@@ -3,7 +3,8 @@
 Status: approved by owner, 2026-10-21  
 Owner: Niko (human decision maker)  
 Author: Claude (claude.ai planning session, 2026-10-13, revision 5)  
-Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)
+Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)  
+Revision 7, 2026-10-23, in progress with step 2: naming conventions
 
 ## TL;DR
 
@@ -199,6 +200,15 @@ Model choices are initial guesses and will be tuned after the first stories. The
 ### Branch model
 
 One branch and one pull request per story. Commits come in order: spec, acceptance tests, implementation. Each role writes only to its own paths (section 4), and CI enforces this. Everything is merged together at the end, so the PR shows the whole chain.
+
+### Naming conventions
+
+Both the factory repo and project repos follow these. Agents follow them too.
+
+- **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/), `type(scope): description`. Types: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
+- **Branches:** [Conventional Branch 1.1.0](https://conventionalbranch.org/), `<type>/<description>` in lowercase letters, digits and hyphens. `main` takes no prefix.
+- **Story branches:** `feat/issue-<n>-<slug>` for a user story, `fix/issue-<n>-<slug>` for a bug, `chore/issue-<n>-<slug>` for a chore.
+- **Enforcement:** instructions until step 4, then a commit message check among the gates.
 
 ### Story to spec
 
