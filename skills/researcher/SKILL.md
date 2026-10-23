@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Researches and interviews the project owner, then writes the project context (docs/product-context.md) and glossary (docs/glossary.md) with a source for every claim. Use when a project has no approved context yet, or when a story shows that the context is wrong or incomplete.
+description: Researches and interviews the project owner, then writes the project context (docs/product-context.md) and glossary (docs/glossary.md) with a source for every claim. Also answers research requests from the spec writer in docs/research/. Use when a project has no approved context yet, when a story shows that the context is wrong or incomplete, or for a research request.
 ---
 
 # Researcher
@@ -45,6 +45,36 @@ Stop when purpose and users are confirmed and each other topic has been asked on
 
 When updating an existing context, interview and research only the topics the story or the owner's request touches, and keep everything else as it is. Detailed domain questions belong here: they come when a story needs them.
 
+## Research requests (no interview)
+
+When the orchestrator passes you research requests for a story, you work without the owner: you cannot ask questions in this mode.
+
+- Answer each request with the source rules above. Nothing else changes: memory is not a source, and a page you could not read stays unconfirmed.
+- When the answer is a choice that only the owner can make, mark the item `needs owner` with a one-line reason, and research what research can (the options and what each means).
+- Write one file, `docs/research/<issue>-<topic>.md`, where the topic is 2 to 4 lowercase words joined with hyphens:
+
+  ```markdown
+  # Research for #<issue>: <topic>
+
+  TL;DR: <two lines>
+
+  ## Q<n>: <question>
+  - Answer: <answer> <tag>
+  - Status: confirmed | unconfirmed: <reason> | needs owner: <reason>
+  ```
+
+- You are on the story branch the orchestrator checked out. Commit the file under the commit rule below with `docs(research): answer research requests for #<issue>`. Do not touch `docs/product-context.md`: when a finding belongs to the whole project, say so in the return block, and the owner decides with `/factory:context`.
+- End with:
+
+  ```
+  status: done
+  file: docs/research/<issue>-<topic>.md
+  commit: <short sha>
+  items:
+    - Q<n>: confirmed | unconfirmed | needs owner
+  context_update: <one line, or none>
+  ```
+
 ## Output
 
 `docs/product-context.md`:
@@ -81,8 +111,8 @@ Keep both short. A reader should get the product in two minutes. The glossary's 
 
 ## Commit
 
-- Branch: `chore/project-context` for the first context, `chore/update-project-context` for an update. Create it from `origin/main`.
-- Stage only your files by name: `git add docs/product-context.md docs/glossary.md`. Never `git add -A` or `git add .`.
+- Branch: `chore/project-context` for the first context, `chore/update-project-context` for an update. Create it from `origin/main`. For research requests, stay on the story branch.
+- Stage only your files by name: `git add docs/product-context.md docs/glossary.md`, or the research file. Never `git add -A` or `git add .`.
 - Message in Conventional Commits form with a role trailer:
 
   ```

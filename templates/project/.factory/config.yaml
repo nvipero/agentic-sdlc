@@ -1,6 +1,6 @@
 # Factory configuration for this project. Owned by the human; read-only for agents.
 roles:
-  researcher:    { model: opus }   # not applied: the researcher runs in the main session
+  researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }
   spec-reviewer: { model: sonnet }
   test-writer:   { model: sonnet }

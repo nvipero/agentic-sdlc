@@ -1,7 +1,7 @@
 ---
 name: spec-writer
 description: Factory spec writer. Writes or fixes the spec for one story issue and commits it on the story branch. Started by /factory:run, not for general use.
-tools: Read, Grep, Glob, Write, Edit, Bash, Skill, WebSearch, WebFetch
+tools: Read, Grep, Glob, Write, Edit, Bash, Skill
 skills:
   - factory:spec-writer
 ---

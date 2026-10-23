@@ -39,12 +39,13 @@ Technical choices I made, with the reason. Each one can be overruled.
 |---|---|---|
 | 1 | `.factory/` is a Claude Code plugin named `factory`, loaded from `/workspace/.factory` with `CLAUDE_CODE_PLUGIN_DIRS` | Keeps the spec's layout. The absolute path works from any directory, including a story worktree |
 | 2 | Commands are namespaced: `/factory:run`, `/factory:context`. Role agents are `factory:spec-writer` and so on | Claude Code namespaces every plugin component. The spec's `/factory-run` becomes `/factory:run` (spec change, section 6) |
-| 3 | The researcher interview runs in the main session, not in a subagent | Subagents cannot ask the user questions: "AskUserQuestion" is removed from subagents (sub-agents docs) |
+| 3 | The researcher interview runs in the main session, not in a subagent. Its research-request mode (decision 9) is a subagent | Subagents cannot ask the user questions: "AskUserQuestion" is removed from subagents (sub-agents docs). Research requests need no owner |
 | 4 | **Each producing role commits its own work.** The spec writer is a subagent with Bash and commits only its own paths. The orchestrator never writes or commits role files: it creates the branch, pushes, sets labels and posts comments | Each round is its own commit with the role in it, so the history shows who changed what. An orchestrator edit to a spec would be a separate commit, not mixed into the writer's work. The same model works in step 3, where test writer and implementer need Bash to run tests |
 | 4b | The spec reviewer is a subagent with read tools only (Read, Grep, Glob) | It produces no files and needs no Bash. "Must not edit files" then holds at the tool level. The orchestrator records its findings in the issue |
 | 5 | Model per role comes from `.factory/config.yaml`. The command passes it on each subagent call | The docs list the per-call `model` parameter first in the resolution order. The config stays the single place to change a role's model |
 | 6 | Bypass mode is the default through managed settings: `permissions.defaultMode: "bypassPermissions"` | The spec says Claude Code runs without per-command prompts. Managed settings make that true without relying on a start flag. Deny rules still apply in bypass mode |
 | 7 | The story branch is `feat/issue-<n>-<slug>`. The spec is committed and pushed there, with no PR yet | Spec section 5: one branch per story, spec first. Agents open no PRs before step 3 (spec section 12) |
+| 9 | **The spec writer does not research.** It returns research requests, the orchestrator runs the researcher as a subagent, and the researcher answers in `docs/research/<issue>-<topic>.md` on the story branch | Research rules stay in one role, and the spec writer needs no web access (principle 4). All handoffs go through the orchestrator and are visible (principle 10). The request format is fixed, so a host-side gatekeeper can route it to a separate research container later (section 13) |
 | 8 | The project context goes to `main` through a PR you open and merge from the branch `chore/project-context` | Spec section 5: the context is approved before stories are accepted. You open the PR, so no agent opens one in step 2 |
 
 ## 2. Naming conventions (first change)
@@ -64,7 +65,8 @@ Technical choices I made, with the reason. Each one can be overruled.
 skills/researcher/SKILL.md            interview, context and glossary format, open questions
 skills/spec-writer/SKILL.md           understanding check, spec format, questions vs assumptions
 skills/spec-reviewer/SKILL.md         review checklist and finding format
-agents/spec-writer.md                 tools: Read, Grep, Glob, Write, Edit, Bash, Skill, WebSearch, WebFetch; skill preloaded
+agents/researcher.md                  research-request mode; tools: Read, Grep, Glob, Write, Edit, Bash, Skill, WebSearch, WebFetch
+agents/spec-writer.md                 tools: Read, Grep, Glob, Write, Edit, Bash, Skill (no web); skill preloaded
 agents/spec-reviewer.md               tools: Read, Grep, Glob, Skill, WebFetch; skill preloaded
 commands/run.md                       /factory:run <issue>, spec phase only
 commands/context.md                   /factory:context
@@ -86,7 +88,7 @@ docs/verification/step-2.md          evidence
   - Conventional Commits message, with a `Factory-Role: <role>` trailer, for example `Factory-Role: spec-writer`.
   - Commit, do not push. The orchestrator pushes at every stop (questions, dispute, ready), so the branch on GitHub changes only at handoff points and nothing waits unpushed in the workspace.
   - No comments, labels or other GitHub calls. Those belong to the orchestrator.
-- The researcher has no file in `agents/`: every file there becomes a subagent, and the researcher runs in the main session (decision 3). `/factory:context` loads its skill.
+- `agents/researcher.md` is the researcher's research-request mode. The interview runs in the main session through `/factory:context`, which loads the researcher skill (decision 3).
 
 ### Getting definitions into a project
 
@@ -132,7 +134,7 @@ The README documents this command. A sync script is not worth it in v1 (spec sec
 - **Unconfirmed:** a single source, a blog, a contested point, a page that could not be read, and anything known only from memory. These go to a separate "Research, not confirmed" section, and the spec writer never relies on them. Merging the context does not confirm them.
 - **Facts and decisions are separate.** A decision that follows from a standard or a clear practice is recorded as `Decision (researcher, from <tag>)`, visible in the PR.
 - **What the network allows** (tested on 2026-10-23 in the sandbox): WebSearch works, because it runs on Anthropic's side and returns titles, URLs and a summary. WebFetch reads pages on GitHub-hosted addresses, including GitHub Pages sites such as semver.org, and the allowlisted hosts. Other sites, such as rfc-editor.org and MDN, are blocked. Opening them is not done: most sit behind shared CDN addresses, so one allowlisted site would open thousands of others.
-- **Tools:** the main session (researcher) and the spec writer get WebSearch and WebFetch. The spec reviewer gets WebFetch only, to check that a cited source says what the spec claims.
+- **Tools:** the main session (interview) and the researcher subagent get WebSearch and WebFetch. The spec writer gets neither and requests research instead (decision 9). The spec reviewer gets WebFetch only, to check that a cited source says what the spec claims.
 - **Backlog:** a separate research container with open web access and no token or project files, if too much stays unconfirmed.
 
 ## 5. `/factory:context`
@@ -154,6 +156,7 @@ Each run reads the issue's state and does the next step. Running it again after 
 2. **Trusted input:** only the issue body and comments written by the repository owner are passed to the roles. Other authors are skipped and reported. This is defence in depth on top of the interaction limit.
 3. **Spec writer** (subagent): writes the "Problem and why" section first, traced to the project context. If it cannot, it returns questions instead of a spec. When the questions show that the project context itself is wrong or incomplete, the orchestrator says so in the issue and asks you to run `/factory:context` again; that is how a story "returns to the researcher" (spec section 5) in step 2. Otherwise it writes `specs/<issue>-<slug>.md` with the sections from spec section 5 and commits it under the commit rule (section 3).
 4. **Spec reviewer** (subagent, separate context): checks ambiguity, missing edge cases, testability and consistency with the context. Returns findings.
+4b. **Research requests:** when the spec writer returns `status: research`, the orchestrator posts the requests to the issue as a handoff comment, runs the researcher subagent with the model from `config.yaml`, and then runs the spec writer again with `research-done` and the research file. One research round per task: anything still open becomes a question or an assumption. An item the researcher could not confirm becomes an assumption that says so, not a question to you.
 5. **Producer and reviewer loop:** the orchestrator posts the findings to the issue and passes them to the spec writer, which fixes the spec and commits the fix. The orchestrator never fixes a spec itself: if it thinks the spec must change, it returns the spec to the writer with a reason, like any other handoff. The review loop rules below apply.
 6. **Review loop rules** (from `config.yaml`, the same in step 3):
    - **A loop ends in only two ways:** the reviewer approves the latest version, or the work escalates to you with `dispute`. Running out of rounds never approves anything.
@@ -192,7 +195,7 @@ Checks read the event stream of `claude -p --output-format stream-json --verbose
 - The merged context PR.
 - The story issue: the question comment, your answer, the handoff comments and the labels in order.
 - The spec on the story branch: its "Problem and why" section, with the parts that trace to the context marked.
-- The story branch diff touches only `specs/`, and every commit on it carries `Factory-Role: spec-writer`. A commit without a role trailer, or one that touches other paths, is a finding.
+- The story branch diff touches only `specs/` and `docs/research/`. Every commit on it carries `Factory-Role: spec-writer` (only `specs/`) or `Factory-Role: researcher` (only `docs/research/`). A commit without a role trailer, or one that touches other paths, is a finding.
 - The reviewer's findings and how the writer answered them.
 
 ## 9. Step 1 backlog: what I take now
@@ -223,6 +226,7 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
 - Sections 4 and 10: `/factory-run` also appears in the repository layout and in step 3.
 - Section 4: "Each story gets its own git worktree" does not apply in step 2, which works on the story branch in `/workspace`. Step 3 decides the worktree setup.
 - Section 4: `roles.researcher.model` in `config.yaml` has no effect, because the researcher runs in the main session with the session's model. The config entry stays, with a comment, and `/factory:context` says which model the session uses.
+- Sections 5 and 6: the spec writer requests research through the orchestrator instead of researching itself, and the researcher has a research-request mode writing to `docs/research/`.
 - Sections 5 and 6: the researcher researches as well as interviews, every context claim carries a source tag, and roles research before asking (section 4b).
 - Section 4: `config.yaml` gets `rework_resets`, and section 5 gets the review loop rules (section 6 of this plan). The spec shows the config file in full, so it must match.
 
@@ -233,6 +237,8 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
 - **The role trailer is not proof of authorship.** Any session can write any trailer. It makes honest mistakes visible, not deliberate ones. A separate agent identity in step 4 does not change this either, since all roles share it.
 - **Same session, different roles:** the main session holds the orchestrator and the researcher. The researcher has no reviewer in the spec, because you approve the context. The researcher commits the context under the same commit rule with `Factory-Role: researcher`.
 - **The rework classification is the reviewer's judgement.** A reviewer that calls a rework a targeted fix skips the full review. The change size in the handoff comment shows it to you, but nothing prevents it.
+- **The researcher subagent has the same network as everyone else.** It runs in the same container, so a research request gains structure now, not reach. Sources that are not GitHub-hosted stay unconfirmed until the layered model (section 13).
+- **Step 4 path guard:** a story branch now also has `docs/research/` commits from the researcher. The guard's allowed paths for the spec stage must include them.
 - **GitHub Pages is reachable.** Step 1's "all of GitHub is reachable" includes every GitHub Pages site, also on custom domains. Pages gives site owners no request logs, so it is a weak channel out, and inbound content from any public repository was already readable.
 - **WebSearch queries leave through Anthropic.** A query reaches the search backend without passing the firewall. Everything an agent sees already goes to Anthropic, so the extra channel is the search provider.
 - **The Claude volume is writable by the agent.** A session could change user-level settings in `/home/node/.claude`. Managed permission rules and the managed plugin settings (section 4) win over them, but other user settings, such as `~/.claude/CLAUDE.md`, still apply to later sessions. This was true in step 1 too.
@@ -245,3 +251,22 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
   - No real question in the spec phase (section 7).
   - The plugin does not load from managed `env` (section 4 fallback).
   - Interview quality: if the researcher asks too much or too little, the skill needs a round of tuning. That is expected in this step.
+
+## 13. Next design work: a layered sandbox (owner direction, 2026-10-23)
+
+Not built in step 2. Recorded so that step 2's choices fit it.
+
+**The idea:** separate environments by what they read and what they hold, so that no single environment combines untrusted input with power.
+
+| Layer | Reads | Holds | Does not have |
+|---|---|---|---|
+| Researcher | the open web | a Claude token that can only make model requests | GitHub token, Docker, project files. Its output is text with sources |
+| Developers (today's container) | the repo and GitHub | the repo-scoped token, a strict firewall | Docker |
+| Gatekeeper on the host | fixed-format requests only | the right to start containers | It is not an LLM. It reads no web pages and no free text from issues |
+
+- **The rule:** what reads untrusted input gets the least power, and what starts containers is a deterministic script, never an agent. The first version of this was the owner's question whether the orchestrator and researcher could sit in a freer outer layer. That order would give Docker access, which is root in the VM and reaches the Mac's files, to the part that reads arbitrary web pages.
+- **Why a gatekeeper:** an orchestrator inside a container cannot start other containers, because no container sees Docker (step 1). A host script that accepts only a few fixed request types, like the research request in section 6, keeps that boundary.
+- **Open before building:** how a Claude token for the research container is revoked (claude.ai lists Claude Code tokens under Settings > Claude Code; whether `claude setup-token` tokens appear there is not documented), whether the development container should also use a model-requests-only token, and how requests and results move between containers.
+- **Most likely failure:** the gatekeeper's request types grow until it does whatever an agent asks. Each new request type needs owner approval.
+- **The owner's note:** this is hard to judge before seeing it work. The step 2 run shows how much research stays unconfirmed with today's network, which is the evidence for whether the layered model is worth building next.
+
