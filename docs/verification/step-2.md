@@ -1,9 +1,81 @@
 # Step 2 verification
 
-Date: 2026-10-23. Plan: [docs/plans/step-2.md](../plans/step-2.md), approved 2026-10-23.
+Date: 2026-10-23 to 2026-10-29. Plan: [docs/plans/step-2.md](../plans/step-2.md), approved 2026-10-23.
 Host details in the outputs below are redacted: home path → `~`, private IPs → `<private-ip>`.
 
-Status: scripted exit check done; the real run (context, story, question, approved spec) is pending.
+## TL;DR
+
+- **Exit criterion met** (spec section 10): the Todo-app project context is approved (sdlc-pilot PR #27, merged), and issue #29 has an approved spec where the owner answered a question in the issue.
+- **Scripted exit check:** all 86 checks pass, none skipped, against sdlc-pilot main with PR #25 merged.
+- **What worked in the real run:** the understanding check traced every claim to the context; a research request went to the researcher and came back with two independent sources and the unreadable ones marked unconfirmed; the review loop ran two rounds, the writer disagreed with one finding and the reviewer withdrew it; every commit touched only its role's paths.
+- **What did not:** the first story produced no question, because the story's own wording answered it. The orchestrator missed an owner comment when run twice in one session. Issue comments were too many and too long. Twelve observations are listed below, to be fixed before step 2 is closed.
+
+## Exit criteria and evidence
+
+| Criterion | Evidence |
+|---|---|
+| Approved project context | PR #27 (`chore/project-context`), merged by the owner on 2026-10-23. One commit, only `docs/product-context.md` and `docs/glossary.md`, `Factory-Role: researcher` |
+| One story with an approved spec | Issue #29 "Remove a task I no longer need", label `spec-approved`. Spec `specs/29-remove-task-no-longer-needed.md` on `feat/issue-29-remove-task-no-longer-needed` |
+| At least one question answered through the issue | Issue #29: the spec writer asked how removal is protected (confirm first, undo window, or both). The owner answered in a comment (option B), and the next run applied it |
+
+## Real run
+
+### Project context (`/factory:context`, PR #27)
+
+- The interview ran in the main session, one topic at a time, with a read-back after each.
+- **Sources:** owner statements tagged `(owner)`. `localStorage` facts read from MDN's content repository on GitHub, and WCAG 2.2 from the W3C Editor's Draft on GitHub Pages: both reachable through the firewall's GitHub ranges. The WHATWG standard could not be reached and went to "Research, not confirmed".
+- **Owner's definition kept:** the owner defined a swimlane as one lane per status, which differs from common Kanban usage. The researcher recorded the owner's meaning and marked the common usage as unconfirmed.
+- **Five open questions** left for stories (accessibility level, blocked storage, task contents and editing, allowed status moves, supported browsers).
+
+### Issue #28 "Add a task and move it between statuses" (approved, no question)
+
+- One commit, `specs/28-add-task-move-statuses.md`, role line present.
+- **No question was asked.** The acceptance criterion "I can move a task to another status" answered the open question about allowed moves before the spec writer saw it. The writer assumed any-to-any moves from that wording, and the reviewer noted it as non-blocking (R1-2). The story was written in this session, so the leak was ours, not the factory's.
+- The orchestrator reported that the spec writer read files with `cat` through Bash, outside its allowed git-only use. Harmless, and visible.
+
+### Issue #29 "Remove a task I no longer need" (approved, question answered)
+
+| Step | Commit | Paths | Role line |
+|---|---|---|---|
+| Research request answered | `92e4611` | `docs/research/29-task-removal-safeguard.md` | researcher |
+| Owner's answer applied | `e5427a3` | `specs/29-remove-task-no-longer-needed.md` | spec-writer |
+| Review round 1 fixed | `3412c3c` | `specs/29-remove-task-no-longer-needed.md` | spec-writer |
+
+- **Research:** best-practice claims cite two independent sources read in full (Microsoft's UX guidelines on GitHub and GitHub's Primer). Nielsen Norman Group and Smashing Magazine could not be read and were marked unconfirmed. The researcher's own reading went to "Open questions", not into the answer.
+- **Question:** one product decision with three options and the writer's recommendation. It was combined with a context problem and an assumption list in one comment (observation 10).
+- **Review:** round 1 found one blocking issue (an untestable focus criterion) and three non-blocking. The writer fixed the blocking one and disagreed with R1-3 with a reason; round 2 withdrew R1-3 and approved, change class `targeted`.
+- **Owner's answer:** the comment the owner posted was an example written in this session that already contained option B. The spec records "the owner chose" B. The owner reviewed the spec and approved it with B. Lesson: example answers given to the owner must not contain the decision.
+- **State across runs:** after `/clear`, a re-run picked up the owner's comment and continued. Without `/clear`, the same session reported no new comment (observation 9).
+
+### Other confirmations
+
+- **Bypass first-start dialog:** not shown when the session started; managed `skipDangerousModePermissionPrompt` works.
+- **Skill preload:** the reviewer's output followed its skill's return format (finding ids, change class), so the `skills:` preload in plugin agents works. The exit check had left this open.
+- **Workflows permission:** the token's push of a workflow file was refused with "refusing to allow a Personal Access Token to create or update workflow". This was an assumption before step 2.
+
+## Observations from the real run (to fix before closing step 2)
+
+1. **Language is not configurable.** Agents spoke English at first. Repository content (context, specs, research, issues) stays English; the conversation language becomes a setting, Finnish by default.
+2. **Open questions were forced into option lists,** with options that said "choose Other", which the UI does not show. Read-backs need only "correct", with corrections typed. The researcher also offered "pilot only, no product": the factory's own purpose does not belong in the product context.
+3. **The researcher asked which language documents use.** That is a factory setting, not a product question.
+4. **Source tags are too coarse.** MDN (documentation) and a W3C Editor's Draft were both tagged `standard`. Tags must tell a normative standard, official documentation and a draft apart.
+5. **A factory setting landed in the product context** ("documentation is written in English"). Follows from observation 3.
+6. **Open questions in the context were recorded correctly.** No fix needed.
+7. **The role line is not a git trailer.** Claude Code adds its own `Co-Authored-By` paragraph after a blank line, so git parses only that paragraph as trailers; `git log --format=%(trailers:key=Factory-Role)` finds the role on one commit of four. The orchestrator's text check still works; a step 4 gate reading trailers would not.
+8. **A question and a context problem came in one comment.** Resolved by observation 10.
+9. **The orchestrator must read the issue at the start of every run.** Run twice in one session, it relied on its memory and missed the owner's comment. Confirmed: after `/clear` it found it.
+10. **A question comment contains only the question.** No context problems and no assumption lists in it. Agents make assumptions themselves; they are listed in the "spec ready" comment.
+11. **No TL;DR in issue comments.** TL;DR belongs in pull request descriptions.
+12. **No progress-log comments.** Issue #29 got 12 comments, each a notification. Only comments with value to the owner or another agent are posted; the run's state and chain go into one status comment edited in place.
+
+The owner decided that observations 10 to 12 refine spec principles 10 (visible handoff chain) and 13 (TL;DR for human output).
+
+## Deviations from the plan
+
+- **Managed `enabledPlugins` is not used.** The review suggested force-enabling the plugin; a test showed it locks out the `CLAUDE_CODE_PLUGIN_DIRS` copy ("--plugin-dir copy of "factory" ignored: plugin is locked by managed settings"). `strictPluginOnlyCustomization` and an empty marketplace allowlist are used instead.
+- **Research requests** (plan decision 9) were added after the plan was approved: the spec writer has no web tools and asks the researcher through the orchestrator.
+- **Research reach:** WebSearch works; WebFetch reaches GitHub-hosted pages, including GitHub Pages and documentation mirrored in GitHub repositories. The layered sandbox (plan section 13) is the next design item.
+- **Review before the pilot PR:** a code review of the step 2 diff found ten issues before anything reached sdlc-pilot. Eight were fixed, one is a known limitation until step 4 (forged trusted input), and none were blocking under the step 1 definition.
 
 ## Scripted exit check (`scripts/exit-check.sh`, steps 1 and 2, redacted)
 
