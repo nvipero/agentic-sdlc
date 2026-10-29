@@ -2,6 +2,9 @@
 language:
   conversation: fi   # the session with the owner: interview, questions in the session, command output
   repository: en     # everything written to the repository and GitHub: context, specs, research, issue comments
+acceptance:          # how acceptance tests start the app; start runs at the repository root
+  start: "npm run dev -- --strictPort"
+  url: "http://localhost:5173"
 roles:
   researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }

@@ -7,10 +7,11 @@ stories are issues, specs are Markdown files in `specs/`, and work happens in pu
 
 | Path | Owner |
 |---|---|
-| `docs/product-context.md`, `docs/glossary.md` | researcher |
+| `docs/product-context.md`, `docs/glossary.md`, `docs/research/` | researcher |
 | `specs/` | spec writer |
-| `tests/acceptance/` | test writer |
-| `src/`, `tests/unit/` | implementer |
+| `tests/acceptance/` (its own npm package) | test writer |
+| `src/`, `tests/unit/`, and the project's root files (`package.json`, lockfile, `tsconfig.json`, Vite and lint configuration, `index.html`) | implementer |
+| `.gitignore` | owner |
 
 ## Read-only for agents
 

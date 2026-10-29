@@ -1,0 +1,10 @@
+# Owned by the owner, like the factory definitions: roles do not change it.
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+*.log
+.DS_Store
