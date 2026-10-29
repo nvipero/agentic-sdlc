@@ -106,13 +106,10 @@ Ask all questions at once. Keep them few: the owner's attention is the scarcest 
 
 - You are on the story branch the orchestrator checked out. Do not switch branches.
 - Stage only the spec by name: `git add specs/<issue>-<slug>.md`. Never `git add -A` or `git add .`.
-- Message in Conventional Commits form, ending with one trailer paragraph. `Factory-Role` and any other trailer, such as `Co-Authored-By`, go in that **same last paragraph with no blank line between them**, otherwise git does not read the role as a trailer:
+- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run:
 
   ```
-  docs(spec): add spec for #<issue>
-
-  Factory-Role: spec-writer
-  Co-Authored-By: <if you add one>
+  git commit -m "docs(spec): add spec for #<issue>" --trailer "Factory-Role: spec-writer"
   ```
 
   For a fix: `docs(spec): address review round <n> for #<issue>`. For answers: `docs(spec): apply owner answers for #<issue>`.

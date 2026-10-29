@@ -117,13 +117,10 @@ Keep both short. A reader should get the product in two minutes. The glossary's 
 
 - Branch: stay on the branch the command checked out: `chore/project-context` for the first context, `chore/update-project-context-<date>` for an update, the story branch for research requests. Do not switch branches.
 - Stage only your files by name: `git add docs/product-context.md docs/glossary.md`, or the research file. Never `git add -A` or `git add .`.
-- Message in Conventional Commits form, ending with one trailer paragraph. `Factory-Role` and any other trailer, such as `Co-Authored-By`, go in that **same last paragraph with no blank line between them**, otherwise git does not read the role as a trailer:
+- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run:
 
   ```
-  docs(context): add product context and glossary
-
-  Factory-Role: researcher
-  Co-Authored-By: <if you add one>
+  git commit -m "docs(context): add product context and glossary" --trailer "Factory-Role: researcher"
   ```
 
 - Commit, do not push. Do not comment on issues or change labels. The command that started you does that.
