@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exit check for steps 1 and 2. Runs on the host against a project whose container was
+# Exit check for steps 1 to 3. Runs on the host against a project whose container was
 # started with scripts/up.sh. Prints PASS/FAIL lines; raw output may contain
 # host details, so redact it (scripts/redact.sh) before publishing.
 #
@@ -55,7 +55,7 @@ expect_ok() {
   if [ "$rc" -eq 0 ]; then pass "$1" "$(echo "$out" | tail -1)"; else fail "$1" "rc=$rc: $(echo "$out" | tail -1)"; fi
 }
 
-echo "# Exit check (steps 1 and 2)"
+echo "# Exit check (steps 1 to 3)"
 echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "project: $NWO  factory: $FACTORY_NWO"
 echo "devcontainer tree: $FACTORY_DEVCONTAINER_TREE"
@@ -232,8 +232,8 @@ init="$(init_json)"
 echo "$init" | jq -e '([.plugins[] | select(.name == "factory" and .path == "/workspace/.factory")] | length == 1) and ((.plugin_errors // []) | length == 0)' >/dev/null 2>&1 \
   && pass "factory plugin loads from the read-only overlay, no plugin errors" \
   || fail "factory plugin load" "$(echo "$init" | jq -c '{plugins, plugin_errors}' 2>/dev/null | cut -c1-200)"
-missing="$(echo "$init" | jq -r '[("factory:researcher","factory:spec-writer","factory:spec-reviewer") as $a | select((.agents | index($a)) == null) | $a] + [("factory:run","factory:context") as $c | select((.slash_commands | index($c)) == null) | $c] | join(" ")' 2>/dev/null)"
-[ -n "$init" ] && [ -z "$missing" ] && pass "agents and commands present" "factory:researcher, factory:spec-writer, factory:spec-reviewer, /factory:run, /factory:context" \
+missing="$(echo "$init" | jq -r '[("factory:researcher","factory:spec-writer","factory:spec-reviewer","factory:test-writer","factory:implementer","factory:code-reviewer") as $a | select((.agents | index($a)) == null) | $a] + [("factory:run","factory:context") as $c | select((.slash_commands | index($c)) == null) | $c] | join(" ")' 2>/dev/null)"
+[ -n "$init" ] && [ -z "$missing" ] && pass "agents and commands present" "six factory roles, /factory:run, /factory:context" \
   || fail "agents and commands present" "missing: ${missing:-no init event}"
 mode="$(echo "$init" | jq -r .permissionMode 2>/dev/null)"
 [ "$mode" = "bypassPermissions" ] && pass "bypass mode is the default without a start flag" || fail "default permission mode" "$mode"
@@ -271,6 +271,27 @@ else
   fail "spec reviewer writes nothing" "agent calls: $(echo $agent_ids | wc -w | tr -d ' '), tool uses: ${inner:-none}, probe file: $(echo "$rev" | grep -c NO-PROBE-FILE | sed 's/1/absent/;s/0/present or unknown/')"
 fi
 echo "NOTE  reviewer skill loaded with the Skill tool during that run: $(echo "$inner" | grep -o '[0-9]* Skill' || echo 'no (preloaded, or not loaded)')"
+
+section "Step 3: implementation roles and the browser"
+for role in test-writer implementer; do
+  t="$(tools_of $role)"
+  [ "$t" = "Read, Grep, Glob, Write, Edit, Bash, Skill" ] && pass "$role tools" "$t" || fail "$role tools" "$t"
+done
+t="$(tools_of code-reviewer)"
+{ [ -z "$t" ] || echo "$t" | grep -qE '(^|, )(Write|Edit|Bash|NotebookEdit|WebSearch|WebFetch)(,|$)'; } \
+  && fail "code reviewer has no write or web tool" "$t" || pass "code reviewer has no write or web tool" "$t"
+expect_fail "node cannot write to the browsers path" "touch /ms-playwright/exit-check" "Permission denied"
+# A throwaway package as node: the pinned @playwright/test from the registry, Chromium from the image.
+expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -eo pipefail; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
+  echo "{\"private\":true}" > package.json
+  npm i -D --save-exact --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION" >/dev/null 2>&1
+  printf "%s\n" "import { test, expect } from \"@playwright/test\";" "test(\"browser\", async ({ page }) => { await page.setContent(\"<h1>ok</h1>\"); await expect(page.getByRole(\"heading\")).toHaveText(\"ok\"); });" > b.spec.ts
+  npx playwright test --reporter=line b.spec.ts | tail -1; echo "playwright $PLAYWRIGHT_VERSION"'
+pin="$(in_box 'git -C /workspace show origin/main:tests/acceptance/package.json 2>/dev/null | jq -r ".devDependencies[\"@playwright/test\"] // empty"')"
+img="$(in_box 'echo "$PLAYWRIGHT_VERSION"')"
+if [ -z "$pin" ]; then skip "acceptance tests pin the image's Playwright version" "no tests/acceptance/package.json on main yet (image: $img)"
+elif [ "$pin" = "$img" ]; then pass "acceptance tests pin the image's Playwright version" "$pin"
+else fail "acceptance tests pin the image's Playwright version" "main: $pin, image: $img"; fi
 
 section "Protections through the API (owner login)"
 for r in "$NWO" "$FACTORY_NWO"; do

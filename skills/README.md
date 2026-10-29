@@ -1,7 +1,7 @@
 # Skills
 
 One Agent Skill per factory role, in the [Agent Skills](https://agentskills.io/specification) format.
-Roles arrive in step 2 (researcher, spec writer, spec reviewer) and step 3 (test writer, implementer, code reviewer).
+Roles: researcher, spec writer and spec reviewer (step 2); test writer, implementer and code reviewer (step 3).
 
 Conventions, verified against agentskills.io/specification on 2026-10-21:
 
