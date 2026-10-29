@@ -4,7 +4,8 @@ Status: approved by owner, 2026-10-21
 Owner: Niko (human decision maker)  
 Author: Claude (claude.ai planning session, 2026-10-13, revision 5)  
 Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)  
-Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)
+Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)  
+Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, and the layered sandbox as the first step of v2 (owner decision)
 
 ## TL;DR
 
@@ -59,7 +60,7 @@ Fixed for v1. Changing one requires an owner decision.
 8. Parallel alternative implementations for uncertain stories.
 9. CODEOWNERS rules and finer-grained permissions per role, built on the agent identity introduced in step 4.
 10. Factory distributed as a Claude Code plugin instead of a copied template.
-11. Fresh container per story, managed by an orchestrator outside the container.
+11. Fresh container per story, managed by an orchestrator outside the container. Merged with the layered sandbox (a researcher container with open web access, a strict development container, and a deterministic host gatekeeper between them) as the **first step of v2** (owner decision, 2026-10-29).
 12. Orchestrator triggered by labels instead of a manual command.
 13. Generating project-specific dev containers through a skill.
 14. Custom dashboard.
@@ -99,7 +100,7 @@ A future private project needs a paid plan (a GitHub organization on Team) for e
 ### Container lifecycle
 
 - One dev container per project. The human starts it with the project's start script (`scripts/up.sh`) when working on the project and stops it afterwards.
-- Each story gets its own git worktree inside the container from step 3. In step 2 the spec phase works on the story branch in `/workspace`; step 3 decides how worktree sessions load factory definitions only from the read-only paths.
+- Stories run one at a time on their branch in `/workspace`. V1 has no story worktrees: the read-only paths exist only in `/workspace`, and v1 is not optimised for parallel stories. Parallel stories come with the fresh container per story (backlog item 11).
 - The workspace is a clone of the project repo in a Docker volume, not the host clone. The container is recreated on every start, and the volumes persist. The workspace is never deleted automatically: `scripts/up.sh reset-workspace` archives it before replacing it.
 - Agents cannot start, stop or control containers. The container has no access to the Docker socket.
 - Inside the container, Claude Code runs without per-command permission prompts. Limits come from the container boundary, the network allowlist, read-only mounts, managed settings in the image and role tool restrictions.
@@ -134,8 +135,11 @@ docs/
   glossary.md        domain terms                                      (researcher)
   research/          answers to research requests, per story          (researcher)
 specs/               refined spec per story                            (spec writer)
-tests/acceptance/    acceptance tests                                  (test writer)
-src/, tests/unit/    production code and unit tests                    (implementer)
+tests/acceptance/    acceptance tests, their own npm package           (test writer)
+src/, public/,       production code, static files, unit tests, and    (implementer)
+tests/unit/          the root project files (package.json, lockfile,
+                     tsconfig, Vite and lint configuration, index.html)
+.gitignore                                                             (human)
 ```
 
 `.factory/` is a Claude Code plugin named `factory`, loaded from the read-only `/workspace/.factory` through managed settings, so its commands are `/factory:<name>` and its roles `factory:<role>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
@@ -155,6 +159,9 @@ roles:
   test-writer:   { model: sonnet }
   implementer:   { model: opus }
   code-reviewer: { model: opus }
+acceptance:                         # how acceptance tests start the app
+  start: "npm run dev -- --strictPort"   # run at the repository root
+  url: "http://localhost:5173"
 disputes:
   max_rounds: 4
   escalate_when_no_progress_for: 2   # consecutive rounds repeating the same findings
@@ -162,6 +169,8 @@ disputes:
 light_path:
   allowed_for_labels: [trivial]      # skip spec review and acceptance tests
 ```
+
+The acceptance tests are written before the app exists, so the `acceptance` contract tells the test writer and the implementer how the app is started. The browsers come with the container image, pinned to one Playwright version, and the acceptance package pins `@playwright/test` to the same version.
 
 Model choices are initial guesses and will be tuned after the first stories. The config is owned by the human.
 
@@ -193,7 +202,7 @@ Model choices are initial guesses and will be tuned after the first stories. The
 | Waiting for human | Human: answers questions, approves spec | Label `spec-approved` |
 | Tests | Test writer, then code reviewer checks coverage | Acceptance tests committed |
 | Implementation | Implementer and code reviewer, may debate | Reviewer approves and gates pass |
-| Dispute | Human: decides | Decision recorded in the PR |
+| Dispute | Human: decides | Decision recorded in the issue |
 | Preview | Human: evaluates preview against the story | Human approves PR |
 | Done | Merged | - |
 
@@ -230,13 +239,14 @@ Both the factory repo and project repos follow these. Agents follow them too.
 
 ### Spec to merge
 
-1. The test writer turns the approved acceptance criteria into automated acceptance tests.
-2. The implementer works in the story's worktree and opens a draft PR.
+1. The test writer turns the approved acceptance criteria into automated acceptance tests. The orchestrator runs them: they must fail because the behaviour is missing. The code reviewer checks coverage; the same review loop rules apply.
+2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
-4. Implementer and reviewer may debate. On escalation the PR gets `dispute` and a short summary: the disagreement, both positions, what each option costs.
-5. When the reviewer approves and gates pass, the PR is marked ready and the preview link is posted to the issue.
-6. The PR description contains a **"Where to look"** section for the human: restricted-list hits, deviations from the spec, assumptions made, and places where the reviewer is uncertain. The human reads this section and the preview, not the whole diff.
-7. The human merges, or comments with changes, which restarts implementation.
+4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.
+5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once; after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.
+6. When the reviewer approves and the tests (from step 4: the gates) pass, the orchestrator writes the PR description, marks the PR ready, and posts to the issue (from step 4: with the preview link).
+7. The PR description contains a **"Where to look"** section for the human: restricted-list hits, deviations from the spec, assumptions made, and places where the reviewer is uncertain. The human reads this section and the preview, not the whole diff.
+8. The human merges, or comments with changes, which restarts implementation.
 
 ## 6. Roles
 
@@ -244,13 +254,13 @@ Each role is an Agent Skill plus a thin role definition stating model, tools and
 
 | Role | Input | Output | Writes to | Must not |
 |---|---|---|---|---|
-| Orchestrator | Issue | Path choice, role order, labels, status comment, questions, ready comment | Labels, comments | Write code, specs or tests |
+| Orchestrator | Issue | Path choice, role order, test runs, labels, status comment, questions, ready comment, PR and its description | Labels, comments, PR | Write code, specs or tests |
 | Researcher | Human interview, research, existing material; research requests | Project context, glossary; research answers | `docs/` | Present guesses or memory as facts |
 | Spec writer | Issue, context, research answers, codebase | Spec, research requests, questions | `specs/` | Guess silently, research itself, or write a spec it cannot justify |
 | Spec reviewer | Spec, issue, context | Findings | Comments only | Edit files |
 | Test writer | Approved spec | Acceptance tests | `tests/acceptance/` | Write production code |
-| Implementer | Spec, tests | Code, unit tests, draft PR | `src/`, `tests/unit/` | Touch acceptance tests, specs or anything outside the story |
-| Code reviewer | PR, spec | Findings, approval, "Where to look" | Comments, PR description | Edit files |
+| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, root project files | Touch acceptance tests, specs or anything outside the story |
+| Code reviewer | Tests or PR diff, spec, test results | Findings, approval, "Where to look" | Nothing: the orchestrator posts its output | Edit files |
 
 In v1 the orchestrator is a Claude Code command (`/factory:run <issue>`) run in the main session, which delegates to role subagents. The researcher's interview runs in the main session through `/factory:context`, because subagents cannot ask the human questions; its research-request mode is a subagent. Each producing role commits its own work; the orchestrator pushes.
 

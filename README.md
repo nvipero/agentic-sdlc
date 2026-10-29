@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: step 2 (context and spec chain) of five, in progress. `/factory:context` and `/factory:run` (spec phase) are in place; tests and implementation come in step 3.
+Status: step 3 (implementation chain) of five, in progress. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation and code review.
 
 ## What is here
 
@@ -10,7 +10,7 @@ Status: step 2 (context and spec chain) of five, in progress. `/factory:context`
 |---|---|
 | `templates/project/` | Everything copied into a new project repository |
 | `scripts/setup-github.sh` | Sets up GitHub protections, labels and the Projects board (six issue-only views, default view removed) for a repository |
-| `scripts/exit-check.sh`, `scripts/redact.sh` | Step 1 exit check, and redaction of its output before publishing |
+| `scripts/exit-check.sh`, `scripts/redact.sh` | Exit check for steps 1 to 3, and redaction of its output before publishing |
 | `skills/`, `agents/`, `commands/` | Role knowledge, role definitions and commands (later steps) |
 | `specs/`, `docs/` | Specification, plans and verification evidence |
 
@@ -21,6 +21,7 @@ Status: step 2 (context and spec chain) of five, in progress. `/factory:context`
 - **Read-only from the host:** `.factory/`, `.claude/`, `.github/`, `.devcontainer/` and `CLAUDE.md` are mounted read-only from your host clone of `main`.
 - **Not visible in the container:** your host `.git` and `scripts/up.sh`.
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
+- **Browser for acceptance tests:** Playwright's Chromium is installed in the image at build time, pinned with `PLAYWRIGHT_VERSION` in the Dockerfile, so no browser download passes the firewall. A project's `tests/acceptance/package.json` pins `@playwright/test` to the same version; changing it means changing the Dockerfile, which rebuilds the image.
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands. Sessions start in bypass mode, and the deny rules still apply.
 - **Factory definitions as a plugin:** `.factory/` loads as the Claude Code plugin `factory` from the read-only `/workspace/.factory`, so its commands are `/factory:<name>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
 - **Token:** `up.sh` passes the token to the container by name (`docker exec -e GH_TOKEN`), so it never appears in a process's argument list on your Mac.
