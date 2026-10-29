@@ -42,12 +42,10 @@ Make the smallest change that resolves each finding, and nothing unrelated. Repo
 ## Commit
 
 - Stage only your files by name. Never `git add -A` or `git add .`, and never ignored files.
-- Conventional Commits, ending with one trailer paragraph: `Factory-Role` and any other trailer in the **same last paragraph with no blank line between them**:
+- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run:
 
   ```
-  feat(tasks): add and move tasks between statuses (#<issue>)
-
-  Factory-Role: implementer
+  git commit -m "feat(tasks): add and move tasks between statuses (#<issue>)" --trailer "Factory-Role: implementer"
   ```
 
 - Commit, do not push. Do not comment on issues, change labels or call `gh`.
