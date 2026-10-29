@@ -278,11 +278,11 @@ for role in test-writer implementer; do
   [ "$t" = "Read, Grep, Glob, Write, Edit, Bash, Skill" ] && pass "$role tools" "$t" || fail "$role tools" "$t"
 done
 t="$(tools_of code-reviewer)"
-echo "$t" | grep -qE '(^|, )(Write|Edit|Bash|NotebookEdit|WebSearch|WebFetch)(,|$)' \
+{ [ -z "$t" ] || echo "$t" | grep -qE '(^|, )(Write|Edit|Bash|NotebookEdit|WebSearch|WebFetch)(,|$)'; } \
   && fail "code reviewer has no write or web tool" "$t" || pass "code reviewer has no write or web tool" "$t"
 expect_fail "node cannot write to the browsers path" "touch /ms-playwright/exit-check" "Permission denied"
 # A throwaway package as node: the pinned @playwright/test from the registry, Chromium from the image.
-expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -e; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
+expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -eo pipefail; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
   echo "{\"private\":true}" > package.json
   npm i -D --save-exact --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION" >/dev/null 2>&1
   printf "%s\n" "import { test, expect } from \"@playwright/test\";" "test(\"browser\", async ({ page }) => { await page.setContent(\"<h1>ok</h1>\"); await expect(page.getByRole(\"heading\")).toHaveText(\"ok\"); });" > b.spec.ts

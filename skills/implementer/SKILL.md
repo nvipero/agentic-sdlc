@@ -18,13 +18,13 @@ Read the spec, `docs/product-context.md`, `docs/glossary.md`, `.factory/config.y
 
 ## Rules
 
-- **Never change `tests/acceptance/`.** If you believe a test is wrong (it contradicts the spec, or cannot pass with any reasonable implementation), stop and return `test_problem` with the test name and your reason. Do not work around a test.
+- **Never change `tests/acceptance/`.** If you believe a test is wrong (it contradicts the spec, or cannot pass with any reasonable implementation), commit your work in progress (see Commit), stop, and return `test_problem` with the test name and your reason. Do not work around a test.
 - **Follow the spec,** including its assumptions. Do not add behaviour the spec does not ask for; scope creep is a review finding.
 - **Build the UI to the tests' names.** The tests find elements by role and accessible name taken from the spec's words: use those exact names on real, accessible elements (a `<button>` for a button, a `<label>` for an input).
 - **Stack** (spec section 9): TypeScript, React with Vite, Vitest for unit tests. Choose current stable versions, check them with `npm view <package> version`, and pin them with a lockfile. Read library documentation in `node_modules/<package>/README.md`, with `npm view`, or on GitHub. A library question you cannot settle goes into your return as an uncertainty, not into the code as a guess.
 - **The `acceptance` contract** in `config.yaml` must work: `start`, run at the repository root, serves the app at `url`.
 - **Unit tests** in `tests/unit/` for logic you write (storage, state changes), not for what the acceptance tests already cover.
-- **Your paths:** `src/`, `public/` (static files), `tests/unit/`, and the root project files: `package.json`, `package-lock.json`, `tsconfig*.json`, Vite, Vitest and lint configuration, `index.html`. Not `.gitignore`, not `docs/`, not `specs/`, not the factory paths.
+- **Your paths:** `src/`, `public/` (static files), `tests/unit/`, and the root project files: `package.json`, `package-lock.json`, `tsconfig*.json`, Vite, Vitest and lint configuration, `index.html`. Configuration files at the root must not start with a dot: use `eslint.config.js`, not `.eslintrc`. Not `.gitignore`, not `docs/`, not `specs/`, not the factory paths.
 
 ## First story
 
@@ -56,7 +56,7 @@ Make the smallest change that resolves each finding, and nothing unrelated. Repo
 
 ```
 status: implemented | fixed | test_problem
-commit: <short sha>            (absent for test_problem)
+commit: <short sha>            (for test_problem: the work in progress, if any)
 tests: unit <passed>/<total>, acceptance <passed>/<total>
 choices:                       (first story, or a new dependency)
   - <choice and why>

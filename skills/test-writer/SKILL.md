@@ -20,7 +20,7 @@ Read the spec, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` cont
 
 `tests/acceptance/` is its own npm package, separate from the app:
 - `package.json` with `@playwright/test` pinned **exactly** to the image's version: `npm i -D --save-exact "@playwright/test@$PLAYWRIGHT_VERSION"`. Never another version, and never `npx playwright install`: the browsers are in the image, and the install hangs as `node`.
-- `playwright.config.ts` with `testDir: '.'`, Chromium only, and a `webServer` that runs the contract's `start` command at the repository root (`cwd: '../..'`), waits for the contract's `url`, and sets `reuseExistingServer: false`. Use `baseURL` from the contract.
+- `playwright.config.ts` with `testDir: '.'`, Chromium only, and a `webServer` that runs the contract's `start` command at the repository root (`cwd: '../..'`), waits for the contract's `url`, and sets `reuseExistingServer: false`. Use `baseURL` from the contract, and `reporter: 'list'`: the HTML reporter waits for a key press after a failure.
 - One spec file per story: `<issue>-<slug>.spec.ts`, matching the spec's file name.
 
 Create the package only if it does not exist yet. Change its configuration only when a story needs it, and say why.
@@ -66,4 +66,6 @@ tests:
 findings:                       (for fixed)
   - <finding id>: fixed | disagree: <reason>
 test_problem: <what you decided and why>   (for test-problem)
+uncertain:                      (optional)
+  - <a library or configuration question you could not settle>
 ```
