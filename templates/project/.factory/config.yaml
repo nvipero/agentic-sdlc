@@ -1,4 +1,7 @@
 # Factory configuration for this project. Owned by the human; read-only for agents.
+language:
+  conversation: fi   # the session with the owner: interview, questions in the session, command output
+  repository: en     # everything written to the repository and GitHub: context, specs, research, issue comments
 roles:
   researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }

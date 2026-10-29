@@ -219,6 +219,8 @@ The step 1 rule was to fix only blocking findings. These touch files that step 2
 
 ## 10. Spec changes (revision 7)
 
+Done on 2026-10-29, together with the changes that the real run caused (principles 10 and 13, languages, status comment).
+
 - Section 5: naming conventions (section 2 of this plan).
 - Section 6: `/factory:run` and `/factory:context` instead of `/factory-run`. The researcher runs in the main session.
 - Section 4: `.factory/` is a Claude Code plugin.

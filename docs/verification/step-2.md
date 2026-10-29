@@ -70,6 +70,20 @@ Host details in the outputs below are redacted: home path â†’ `~`, private IPs â
 
 The owner decided that observations 10 to 12 refine spec principles 10 (visible handoff chain) and 13 (TL;DR for human output).
 
+### Fixes (factory commit after the real run)
+
+| # | Fix |
+|---|---|
+| 1, 3, 5 | `config.yaml` gets `language.conversation` (default `fi`) and `language.repository` (default `en`). The researcher talks in the first and writes files in the second, and never asks about factory settings or puts the factory or the pilot's purpose into the product context |
+| 2 | Open questions are plain text; options only for real choices; no "type your answer" options; read-backs ask only for confirmation |
+| 4 | Tags `standard` (published normative), `docs` (official documentation) and `practice`; a draft is unconfirmed unless the published version was read. Reviewer checks the distinction |
+| 7 | Role commits put `Factory-Role` in the same last paragraph as other trailers; the orchestrator and `/factory:context` check it with `git log --format=%(trailers:key=Factory-Role)` |
+| 8, 10 | A question comment carries only the question. Where the story settles something the context leaves open, the spec traces it to the issue and the ready comment notes it (`context_update`) |
+| 9 | Every `/factory:run` starts from `gh` and `git`, never from memory of earlier runs in the session |
+| 11, 12 | No TL;DR in comments. One status comment per issue, edited in place, holds the state and the chain; new comments only for a question, a dispute or a ready spec. Spec principles 10 and 13 updated (revision 7) |
+
+These fixes are not yet tested in a real run.
+
 ## Deviations from the plan
 
 - **Managed `enabledPlugins` is not used.** The review suggested force-enabling the plugin; a test showed it locks out the `CLAUDE_CODE_PLUGIN_DIRS` copy ("--plugin-dir copy of "factory" ignored: plugin is locked by managed settings"). `strictPluginOnlyCustomization` and an empty marketplace allowlist are used instead.

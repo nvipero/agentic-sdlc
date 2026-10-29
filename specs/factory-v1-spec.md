@@ -4,7 +4,7 @@ Status: approved by owner, 2026-10-21
 Owner: Niko (human decision maker)  
 Author: Claude (claude.ai planning session, 2026-10-13, revision 5)  
 Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)  
-Revision 7, 2026-10-23, in progress with step 2: naming conventions
+Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)
 
 ## TL;DR
 
@@ -29,10 +29,10 @@ Fixed for v1. Changing one requires an owner decision.
 7. **Deterministic gates are not replaced by agents.** Lint, type checks, tests and security scans decide whether a change can merge. Agents cannot change gates.
 8. **Acceptance tests are written before implementation** by a different agent than the implementer. The implementer cannot change them.
 9. **Code is persistent and layered.** Changes are scoped to the story. Regenerating large parts of the codebase is a separate, human-approved decision.
-10. **Work can move upstream as well as downstream.** Any role may return work to an earlier role with a reason. All handoffs go through the orchestrator and are recorded as comments in the issue or PR, so the full chain is visible when the human steps in.
+10. **Work can move upstream as well as downstream.** Any role may return work to an earlier role with a reason. All handoffs go through the orchestrator and are recorded in the issue or PR, so the full chain is visible when the human steps in. The chain lives in one status comment that is edited in place; new comments are posted only when they have value to the human or another agent (questions, disputes, a result ready for review), because every comment is a notification.
 11. **Disputes escalate on lack of progress,** not on a fixed round count alone.
 12. **The human's attention is the scarcest resource.** Humans are pulled in only at defined points. When they are, they get a focused list of what deserves their judgement, not everything.
-13. **Text is sized for its reader.** Output for humans starts with a TL;DR and is short enough to actually read. Output for agents may be as detailed as needed.
+13. **Text is sized for its reader.** Output for humans is short enough to actually read, and a question to the human carries only the question. Pull request descriptions and long documents start with a TL;DR; issue comments do not need one. Output for agents may be as detailed as needed.
 14. **Role knowledge is portable.** Each role's know-how lives in an Agent Skill (agentskills.io format). Role definitions are thin wrappers that choose the model, tools and skill, so a role can move to another model or tool later.
 
 ## 3. Scope
@@ -99,7 +99,7 @@ A future private project needs a paid plan (a GitHub organization on Team) for e
 ### Container lifecycle
 
 - One dev container per project. The human starts it with the project's start script (`scripts/up.sh`) when working on the project and stops it afterwards.
-- Each story gets its own git worktree inside the container.
+- Each story gets its own git worktree inside the container from step 3. In step 2 the spec phase works on the story branch in `/workspace`; step 3 decides how worktree sessions load factory definitions only from the read-only paths.
 - The workspace is a clone of the project repo in a Docker volume, not the host clone. The container is recreated on every start, and the volumes persist. The workspace is never deleted automatically: `scripts/up.sh reset-workspace` archives it before replacing it.
 - Agents cannot start, stop or control containers. The container has no access to the Docker socket.
 - Inside the container, Claude Code runs without per-command permission prompts. Limits come from the container boundary, the network allowlist, read-only mounts, managed settings in the image and role tool restrictions.
@@ -111,7 +111,7 @@ The factory repo follows the same layout conventions as project repos (specs in 
 ```
 skills/              one Agent Skill per role (SKILL.md + references)
 agents/              thin role definitions: model, tools, skill
-commands/            factory-run and other factory commands
+commands/            factory commands such as /factory:run and /factory:context
 templates/project/   everything copied into a new project repo
 specs/
   factory-v1-spec.md this document
@@ -123,7 +123,7 @@ README.md            how to start a new project with the factory
 ### Project repository (created from the template)
 
 ```
-.factory/            config.yaml and copied skills, agents, commands   (read-only for agents)
+.factory/            factory plugin: config.yaml, copied skills, agents, commands   (read-only for agents)
 .claude/             Claude Code settings                              (read-only for agents)
 .github/             workflows, issue templates, PR template           (read-only for agents)
 .devcontainer/       container definition and network allowlist        (read-only for agents)
@@ -132,18 +132,24 @@ scripts/up.sh        container start script                            (not in t
 docs/
   product-context.md goal, users, constraints, non-goals               (researcher)
   glossary.md        domain terms                                      (researcher)
+  research/          answers to research requests, per story          (researcher)
 specs/               refined spec per story                            (spec writer)
 tests/acceptance/    acceptance tests                                  (test writer)
 src/, tests/unit/    production code and unit tests                    (implementer)
 ```
+
+`.factory/` is a Claude Code plugin named `factory`, loaded from the read-only `/workspace/.factory` through managed settings, so its commands are `/factory:<name>` and its roles `factory:<role>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
 
 `.factory/`, `.claude/`, `.github/`, `.devcontainer/` and `CLAUDE.md` are mounted read-only from the owner's host clone of `main`, so no command inside the container can change them. `scripts/up.sh` is not in the container at all. Agents can still create commits that change these paths; the factory definitions guard in step 4 rejects them.
 
 ### Configuration (`.factory/config.yaml`)
 
 ```yaml
+language:
+  conversation: fi   # the session with the owner
+  repository: en     # everything written to the repository and GitHub
 roles:
-  researcher:    { model: opus }
+  researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }
   spec-reviewer: { model: sonnet }
   test-writer:   { model: sonnet }
@@ -152,6 +158,7 @@ roles:
 disputes:
   max_rounds: 4
   escalate_when_no_progress_for: 2   # consecutive rounds repeating the same findings
+  rework_resets: 1                   # a rework restarts the round count this many times, then escalates
 light_path:
   allowed_for_labels: [trivial]      # skip spec review and acceptance tests
 ```
@@ -192,8 +199,8 @@ Model choices are initial guesses and will be tuned after the first stories. The
 
 ### Project context (once per project, updated as needed)
 
-1. The researcher interviews the human: purpose, users, domain terms, constraints, non-goals. It may read material and code the human points to.
-2. The researcher writes `docs/product-context.md` and `docs/glossary.md`, listing uncertainties as open questions.
+1. The researcher researches and interviews the human (`/factory:context`, in the main session): purpose and users are required; domain terms, constraints and non-goals are asked once, and "not decided yet" is a valid answer. It researches before it asks, and asks only what only the human can answer.
+2. The researcher writes `docs/product-context.md` and `docs/glossary.md`. Every claim carries a source tag: the human, material the human pointed to, a published standard, official documentation, or best practice that two independent sources agree on. Anything else, including the model's own memory, goes to a separate "not confirmed" section that specs may not rely on.
 3. The human corrects and approves the context. Stories are not accepted before this.
 4. When a story reveals the context is wrong or incomplete, the context is updated through a PR the human approves.
 
@@ -208,16 +215,18 @@ Both the factory repo and project repos follow these. Agents follow them too.
 - **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/), `type(scope): description`. Types: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
 - **Branches:** [Conventional Branch 1.1.0](https://conventionalbranch.org/), `<type>/<description>` in lowercase letters, digits and hyphens. `main` takes no prefix.
 - **Story branches:** `feat/issue-<n>-<slug>` for a user story, `fix/issue-<n>-<slug>` for a bug, `chore/issue-<n>-<slug>` for a chore.
+- **Role commits** carry a `Factory-Role: <role>` git trailer.
 - **Enforcement:** instructions until step 4, then a commit message check among the gates.
 
 ### Story to spec
 
 1. The human writes a story with the issue template: goal, user value, acceptance criteria in plain language, priority.
-2. **Understanding check.** The spec writer first writes a "Problem and why" section in its own words, traced to the project context. If it cannot, it asks in the issue or returns the story to the researcher.
+2. **Understanding check.** The spec writer first writes a "Problem and why" section in its own words, traced to the project context or to the story itself. Where the story settles something the context leaves open, the spec traces it to the story and the ready comment says so; the human may update the context later. If neither supports the problem, the spec writer asks.
 3. The spec writer produces `specs/<issue>-<slug>.md`: problem and why, scope, out of scope, testable acceptance criteria, assumptions, open questions.
-4. The spec writer never guesses silently. Assumptions are listed. Questions are posted to the issue, which gets `needs-human`.
-5. The spec reviewer checks ambiguity, missing edge cases, testability and consistency with the project context.
-6. The human answers questions in the issue and adds `spec-approved`.
+4. **Research, then ask, then assume.** For an open point that changes the scope or an acceptance criterion, the spec writer first requests research: the orchestrator runs the researcher, which answers in `docs/research/<issue>-<topic>.md` with the same source rules (one research round per task). Only a product decision that only the human can make becomes a question. Everything else is an assumption with a reason. A question is posted to the issue on its own, and the issue gets `needs-human`.
+5. The spec reviewer checks ambiguity, missing edge cases, testability, sources and consistency with the project context.
+6. **Review loop.** A loop ends only when the reviewer approves the latest version or the work escalates to the human with `dispute`. Fixes are targeted. A change that alters the scope or the acceptance criteria is a rework: it is reviewed in full and restarts the round count, at most `rework_resets` times. `max_rounds` and `escalate_when_no_progress_for` apply per version.
+7. When the reviewer approves, the ready comment links the spec and lists its assumptions. The human answers questions in the issue and adds `spec-approved`.
 
 ### Spec to merge
 
@@ -235,15 +244,15 @@ Each role is an Agent Skill plus a thin role definition stating model, tools and
 
 | Role | Input | Output | Writes to | Must not |
 |---|---|---|---|---|
-| Orchestrator | Issue | Path choice, role order, labels, handoff comments | Labels, comments | Write code, specs or tests |
-| Researcher | Human interview, existing material | Project context, glossary | `docs/` | Present guesses as facts |
-| Spec writer | Issue, context, codebase | Spec, questions | `specs/` | Guess silently, or write a spec it cannot justify |
+| Orchestrator | Issue | Path choice, role order, labels, status comment, questions, ready comment | Labels, comments | Write code, specs or tests |
+| Researcher | Human interview, research, existing material; research requests | Project context, glossary; research answers | `docs/` | Present guesses or memory as facts |
+| Spec writer | Issue, context, research answers, codebase | Spec, research requests, questions | `specs/` | Guess silently, research itself, or write a spec it cannot justify |
 | Spec reviewer | Spec, issue, context | Findings | Comments only | Edit files |
 | Test writer | Approved spec | Acceptance tests | `tests/acceptance/` | Write production code |
 | Implementer | Spec, tests | Code, unit tests, draft PR | `src/`, `tests/unit/` | Touch acceptance tests, specs or anything outside the story |
 | Code reviewer | PR, spec | Findings, approval, "Where to look" | Comments, PR description | Edit files |
 
-In v1 the orchestrator is a Claude Code command (`/factory-run <issue>`) run in the main session, which delegates to role subagents.
+In v1 the orchestrator is a Claude Code command (`/factory:run <issue>`) run in the main session, which delegates to role subagents. The researcher's interview runs in the main session through `/factory:context`, because subagents cannot ask the human questions; its research-request mode is a subagent. Each producing role commits its own work; the orchestrator pushes.
 
 ## 7. Restricted list
 
@@ -269,7 +278,7 @@ Exact static analysis tools are chosen in step 4 and checked for current availab
 - Vitest for unit tests, Playwright for acceptance tests
 - Vercel for preview deployments
 
-The topic is chosen by the owner. Small, disposable and justifiable as work.
+The topic is a Todo-app (owner decision, 2026-10-23): generic and disposable, because the point is to test the factory.
 
 ## 10. Build steps
 
@@ -277,7 +286,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 
 1. **Foundations.** Factory repo, project template, test project repo, repository protections (including GitHub Actions disabled until step 4), dev container with network allowlist and read-only mounts, start script with token from 1Password and protection checks, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, cannot see anything outside the project workspace, and cannot push directly to `main`.
 2. **Context and spec chain.** Researcher, spec writer with understanding check, spec reviewer, question flow. Exit: approved project context, and one story with an approved spec where at least one question was answered through the issue.
-3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory-run`. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
+3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory:run` extended to tests and implementation. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
 4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a machine user or a GitHub App, chosen when step 4 is planned) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR gets a preview link, and the agent identity cannot merge a PR without the owner's approval. Step 4 re-enables GitHub Actions, which is disabled in steps 1 to 3, with restrictions, and updates the `up.sh` check to match.
 5. **First full run.** A new story from idea to merge without manual code edits. Exit: definition of done met and problems recorded.
 
@@ -305,5 +314,4 @@ Each step ends with an exit check, and the next starts only after the owner has 
 
 ## 13. Open questions for the owner
 
-- Test project topic.
 - Vercel account for previews.
