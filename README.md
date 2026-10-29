@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in later steps.
+Status: step 2 (context and spec chain) of five, in progress. `/factory:context` and `/factory:run` (spec phase) are in place; tests and implementation come in step 3.
 
 ## What is here
 
@@ -21,7 +21,8 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 - **Read-only from the host:** `.factory/`, `.claude/`, `.github/`, `.devcontainer/` and `CLAUDE.md` are mounted read-only from your host clone of `main`.
 - **Not visible in the container:** your host `.git` and `scripts/up.sh`.
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
-- **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands.
+- **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands. Sessions start in bypass mode, and the deny rules still apply.
+- **Factory definitions as a plugin:** `.factory/` loads as the Claude Code plugin `factory` from the read-only `/workspace/.factory`, so its commands are `/factory:<name>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
 - **Token:** `up.sh` passes the token to the container by name (`docker exec -e GH_TOKEN`), so it never appears in a process's argument list on your Mac.
 - **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, secret scanning with push protection, and GitHub Actions disabled until step 4.
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
@@ -35,6 +36,12 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 - **The host clone is never updated automatically.** If it is behind `origin/main`, `up.sh` refuses to start. Review the new commits with `git log -p HEAD..origin/main`, then pull with `git pull --ff-only`.
 
 **Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it. A merged change is never executed on your Mac until you review and pull it yourself.
+
+## Conventions
+
+- **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/), `type(scope): description`. Types: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
+- **Branches:** [Conventional Branch 1.1.0](https://conventionalbranch.org/), `<type>/<description>` in lowercase letters, digits and hyphens. `feat/` and `fix/` are allowed short forms.
+- The same conventions apply in project repos, including agents' story branches (spec section 5, "Naming conventions").
 
 ## Starting a new project
 
@@ -50,6 +57,7 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
 3. **Copy the template and push the first commit:**
    ```sh
    rsync -a templates/project/ ../<repo-name>/
+   rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
    cd ../<repo-name> && git add -A && git commit -m "chore: initialize project from factory template" && git push -u origin main
    ```
 4. **Apply the GitHub setup from this repo.** Run the ruleset after the first push, because it blocks direct pushes to `main`:
@@ -76,6 +84,20 @@ Status: step 1 (foundations) of five. Roles, skills and `/factory-run` come in l
      5. Only then replaces the workspace with a fresh clone.
 
      Nothing is deleted: the archive stays until you remove it with `docker volume rm`. An archive is complete only if it contains the file `.factory-archive-complete`, which is written after the copy has been checked. An interrupted or failed copy removes its own incomplete archive.
+
+**The factory repository itself** gets the same `ruleset`, `interaction-limit`, `secret-scanning` and `actions` setup. The exit check verifies both repositories.
+
+## Updating a project's factory definitions
+
+A project's `.factory/` is a copy of this repository's `skills/`, `agents/` and `commands/`, plus the template's `.factory/`. After a change here, copy it into the project on a branch, open a PR there, merge it, and pull the project's host clone:
+
+```sh
+rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
+```
+
+Claude Code loads the plugin when a session starts, so after the PR is merged and the host clone pulled, start a new session (`scripts/up.sh claude`) before the next `/factory:run`.
+
+`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way.
 
 ## Renewing protections
 

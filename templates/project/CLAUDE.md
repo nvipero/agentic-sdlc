@@ -18,8 +18,14 @@ stories are issues, specs are Markdown files in `specs/`, and work happens in pu
 from the owner's clone of `main`. Changes to them go through the factory repository,
 never through this project. Do not try to work around this.
 
+## Naming
+
+- Commits follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/): `type(scope): description`, with the types `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
+- Branches follow [Conventional Branch 1.1.0](https://conventionalbranch.org/): `<type>/<description>` in lowercase letters, digits and hyphens.
+- Story branches: `feat/issue-<n>-<slug>` for a user story, `fix/issue-<n>-<slug>` for a bug, `chore/issue-<n>-<slug>` for a chore.
+
 ## Rules
 
 - Never merge a pull request. The human merges.
 - Never push to `main`. Work on a branch and open a pull request.
-- Output for humans starts with a TL;DR.
+- Text for humans is short enough to read, and a question carries only the question. Pull request descriptions start with a TL;DR; messages and issue comments do not need one.

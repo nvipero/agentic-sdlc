@@ -12,7 +12,7 @@
   "workspaceMount": "source=${localWorkspaceFolderBasename}-workspace,target=/workspace,type=volume",
   "workspaceFolder": "/workspace",
   "mounts": [
-    // Factory definitions, read-only from the host clone (always equal to origin/main).
+    // Factory definitions, read-only from the host clone: what the owner pulled (up.sh refuses to start when it is behind origin/main).
     "source=${localWorkspaceFolder}/.factory,target=/workspace/.factory,type=bind,readonly",
     "source=${localWorkspaceFolder}/.claude,target=/workspace/.claude,type=bind,readonly",
     "source=${localWorkspaceFolder}/.github,target=/workspace/.github,type=bind,readonly",

@@ -1,6 +1,9 @@
 # Factory configuration for this project. Owned by the human; read-only for agents.
+language:
+  conversation: fi   # the session with the owner: interview, questions in the session, command output
+  repository: en     # everything written to the repository and GitHub: context, specs, research, issue comments
 roles:
-  researcher:    { model: opus }
+  researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }
   spec-reviewer: { model: sonnet }
   test-writer:   { model: sonnet }
@@ -9,5 +12,6 @@ roles:
 disputes:
   max_rounds: 4
   escalate_when_no_progress_for: 2   # consecutive rounds repeating the same findings
+  rework_resets: 1                   # a rework restarts the round count this many times, then escalates
 light_path:
   allowed_for_labels: [trivial]      # skip spec review and acceptance tests
