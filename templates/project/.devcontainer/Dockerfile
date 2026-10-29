@@ -37,6 +37,15 @@ RUN curl -fsSL https://downloads.claude.ai/keys/claude-code.asc -o /etc/apt/keyr
  && apt-mark hold claude-code \
  && rm -rf /var/lib/apt/lists/*
 
+# Playwright's Chromium and its system packages, installed at build time so the
+# firewall never has to open Microsoft's download CDN. Root-owned; the project
+# pins @playwright/test to exactly PLAYWRIGHT_VERSION (checked by /factory:run).
+ARG PLAYWRIGHT_VERSION=1.64.1
+ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION} \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
+ && rm -rf /root/.npm /var/lib/apt/lists/*
+
 # Policy files: root-owned, read-only for the node user. The directories are
 # created first: COPY --chmod would otherwise give them mode 0644 as well,
 # and Claude Code would skip unreadable managed settings.
