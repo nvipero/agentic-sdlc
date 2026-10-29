@@ -5,7 +5,7 @@ Owner: Niko (human decision maker)
 Author: Claude (claude.ai planning session, 2026-10-13, revision 5)  
 Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)  
 Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)  
-Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, and the layered sandbox as the first step of v2 (owner decision)
+Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, acceptance tests named by feature with per-criterion tags, test-driven unit tests by the implementer, and the layered sandbox as the first step of v2 (owner decision)
 
 ## TL;DR
 
@@ -65,6 +65,7 @@ Fixed for v1. Changing one requires an owner decision.
 13. Generating project-specific dev containers through a skill.
 14. Custom dashboard.
 15. Using the factory to develop the factory itself.
+16. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
 16. Optional spec-first pull request merged before implementation.
 17. 1Password service account limited to the factory vault only, so that even the start script cannot read other vaults (availability and cost to be checked).
 18. Private project support through a GitHub organization on the Team plan, with the step 1 exit check repeated in a private repository.
@@ -135,7 +136,8 @@ docs/
   glossary.md        domain terms                                      (researcher)
   research/          answers to research requests, per story          (researcher)
 specs/               refined spec per story                            (spec writer)
-tests/acceptance/    acceptance tests, their own npm package           (test writer)
+tests/acceptance/    acceptance tests by feature, tagged per story     (test writer)
+                     criterion; their own npm package
 src/, public/,       production code, static files, unit tests, and    (implementer)
 tests/unit/          the root project files (package.json, lockfile,
                      tsconfig, Vite and lint configuration, index.html)
@@ -239,7 +241,7 @@ Both the factory repo and project repos follow these. Agents follow them too.
 
 ### Spec to merge
 
-1. The test writer turns the approved acceptance criteria into automated acceptance tests. The orchestrator runs them: they must fail because the behaviour is missing. The code reviewer checks coverage; the same review loop rules apply.
+1. The test writer turns the approved acceptance criteria into automated acceptance tests, in files named by feature and tagged with the story's criteria (`@issue-<n>-ac-<k>`), and updates existing tests whose behaviour the story changes. The orchestrator runs them: they must fail because the behaviour is missing. The code reviewer checks coverage; the same review loop rules apply.
 2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
 4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.

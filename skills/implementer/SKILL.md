@@ -10,7 +10,7 @@ You write the smallest code that makes the story's acceptance tests pass and kee
 ## What you get
 
 The orchestrator passes you:
-- the spec path, the issue number, and the acceptance test file for the story;
+- the spec path, the issue number, and the story's acceptance tests (tagged `@issue-<n>-ac-<k>`);
 - the task: `implement`, or `fix` with the code reviewer's findings and the round;
 - both languages: write code comments and commit messages in the repository language.
 
@@ -23,7 +23,7 @@ Read the spec, `docs/product-context.md`, `docs/glossary.md`, `.factory/config.y
 - **Build the UI to the tests' names.** The tests find elements by role and accessible name taken from the spec's words: use those exact names on real, accessible elements (a `<button>` for a button, a `<label>` for an input).
 - **Stack** (spec section 9): TypeScript, React with Vite, Vitest for unit tests. Choose current stable versions, check them with `npm view <package> version`, and pin them with a lockfile. Read library documentation in `node_modules/<package>/README.md`, with `npm view`, or on GitHub. A library question you cannot settle goes into your return as an uncertainty, not into the code as a guess.
 - **The `acceptance` contract** in `config.yaml` must work: `start`, run at the repository root, serves the app at `url`.
-- **Unit tests** in `tests/unit/` for logic you write (storage, state changes), not for what the acceptance tests already cover.
+- **Test-driven unit tests** in `tests/unit/`: for logic you write (storage, state changes), write a failing unit test first, then the code that makes it pass, then tidy up. Test behaviour through the module's interface, not its internals. Not for what the acceptance tests already cover.
 - **Your paths:** `src/`, `public/` (static files), `tests/unit/`, and the root project files: `package.json`, `package-lock.json`, `tsconfig*.json`, Vite, Vitest and lint configuration, `index.html`. Configuration files at the root must not start with a dot: use `eslint.config.js`, not `.eslintrc`. Not `.gitignore`, not `docs/`, not `specs/`, not the factory paths.
 
 ## First story

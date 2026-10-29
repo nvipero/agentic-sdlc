@@ -21,13 +21,14 @@ Read the spec, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` cont
 `tests/acceptance/` is its own npm package, separate from the app:
 - `package.json` with `@playwright/test` pinned **exactly** to the image's version: `npm i -D --save-exact "@playwright/test@$PLAYWRIGHT_VERSION"`. Never another version, and never `npx playwright install`: the browsers are in the image, and the install hangs as `node`.
 - `playwright.config.ts` with `testDir: '.'`, Chromium only, and a `webServer` that runs the contract's `start` command at the repository root (`cwd: '../..'`), waits for the contract's `url`, and sets `reuseExistingServer: false`. Use `baseURL` from the contract, and `reporter: 'list'`: the HTML reporter waits for a key press after a failure.
-- One spec file per story: `<issue>-<slug>.spec.ts`, matching the spec's file name.
+- **Files by feature, not by story:** name each file after the feature it tests, in the glossary's words (`task-board.spec.ts`), so the name stays true when a later story changes the feature. A story may add tests to existing files or create several files, whatever keeps each file about one feature.
 
 Create the package only if it does not exist yet. Change its configuration only when a story needs it, and say why.
 
 ## Tests
 
-- **One or more tests per acceptance criterion**, each named with the criterion's id and words: `test('AC-3: a moved task appears in its new swimlane', …)`. Every criterion has a test; no test exists without a criterion.
+- **One or more tests per acceptance criterion.** The test's name describes the behaviour; a tag links it to the criterion: `test('a moved task appears in its new swimlane', { tag: '@issue-28-ac-3' }, …)`. A test that covers several criteria carries several tags. Every criterion of the story has a tagged test, and every test carries at least one tag.
+- **Existing tests:** read the tests the spec's behaviour touches. If the story changes behaviour an existing test checks, update that test and add the story's tag next to the old ones; never delete an old tag. If the story removes a behaviour, remove its test and say so in your return.
 - **Find elements by role and accessible name** (`getByRole`, `getByLabel`, `getByText` for visible messages), with names taken from the spec's and the glossary's words. Never CSS selectors, test ids or implementation details: the UI does not exist yet, and the implementer builds it to match your names.
 - **Start from a clean state** in each test (for example clear `localStorage` before the page loads) so tests do not depend on each other.
 - **Observable behaviour only:** what the user sees and does, as the criterion says. Reloading the page, timing and storage failures are fine when a criterion is about them.
@@ -35,7 +36,7 @@ Create the package only if it does not exist yet. Change its configuration only 
 
 ## Before you commit
 
-Run the tests: `cd tests/acceptance && npm ci && npx playwright test`. They must fail because the behaviour is missing, not because a test is broken (a syntax error, a wrong import, a typo in the configuration). Say which kind of failure you saw. For the first story the app does not exist, so the web server cannot start: that is the expected failure.
+Run the story's tests: `cd tests/acceptance && npm ci && npx playwright test --grep @issue-<n>-`. They must fail because the behaviour is missing, not because a test is broken (a syntax error, a wrong import, a typo in the configuration). Say which kind of failure you saw. For the first story the app does not exist, so the web server cannot start: that is the expected failure.
 
 ## Fixing
 
@@ -62,7 +63,9 @@ status: written | fixed | kept
 commit: <short sha>             (absent for kept)
 failure: missing behaviour | app does not start | broken test: <what>
 tests:
-  - AC-<n>: <test name>
+  - <tag>: <file>: <test name>
+changed_existing:               (tests of earlier stories you changed or removed)
+  - <file>: <test name>: <what and why>
 findings:                       (for fixed)
   - <finding id>: fixed | disagree: <reason>
 test_problem: <what you decided and why>   (for test-problem)

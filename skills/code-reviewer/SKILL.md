@@ -20,16 +20,17 @@ Read the spec, `docs/glossary.md`, `.factory/config.yaml`, and the files the dif
 
 ## Gate `tests`: coverage
 
-1. Every acceptance criterion has at least one test, named with its id, and no test exists without a criterion.
-2. Each test checks what its criterion says, observable to the user, and would fail if the behaviour were missing or wrong.
-3. Elements are found by role and accessible name taken from the spec's words: no CSS selectors, test ids or implementation details.
-4. Tests start from a clean state, use waiting assertions, and do not depend on each other.
-5. The package pins `@playwright/test` exactly, and the configuration follows the `acceptance` contract.
+1. Every acceptance criterion has at least one test tagged `@issue-<n>-ac-<k>`, and every test has a tag. Files are named after features, not stories.
+2. Existing tests the story's behaviour touches were updated (with the story's tag added next to the old ones), and no old tag or test was dropped without the spec saying the behaviour goes away.
+3. Each test checks what its criterion says, observable to the user, and would fail if the behaviour were missing or wrong.
+4. Elements are found by role and accessible name taken from the spec's words: no CSS selectors, test ids or implementation details.
+5. Tests start from a clean state, use waiting assertions, and do not depend on each other.
+6. The package pins `@playwright/test` exactly, and the configuration follows the `acceptance` contract.
 
 ## Gate `implementation`
 
 1. **Spec:** every acceptance criterion is met, the spec's assumptions are followed, nothing beyond the spec was added (scope creep is a finding).
-2. **Tests:** the orchestrator's run passed. Unit tests cover the logic the implementer wrote. `tests/acceptance/` is unchanged.
+2. **Tests:** the orchestrator's run passed. Unit tests cover the logic the implementer wrote and test behaviour, not internals; a test that would pass with the logic broken is a finding. `tests/acceptance/` is unchanged.
 3. **Conventions:** the stack in spec section 9, the naming conventions, readable code a later story can extend, no dead code.
 4. **Architecture:** clear boundaries (UI, state, storage), no logic hidden in components that a later story would have to untangle.
 5. **Security checklist:** user input rendered safely (no `dangerouslySetInnerHTML` or equivalent), stored data validated when read back, no secrets in code, every new dependency justified and pinned, nothing calls the network unless the spec asks.

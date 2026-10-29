@@ -93,11 +93,11 @@ Stop with a one-line reason to the owner, without changing anything, if any of t
 - **Done:** a spec exists, your last owner-facing comment is a `ready` comment, and no trusted comment is newer. Stop: the spec waits for the owner's approval.
 - **Review:** a spec exists and nothing above applies (for example a run that stopped half way). Start with the spec reviewer, continuing the `spec` gate.
 
-**Implementation phase** (`spec-approved`). The story's test file is `tests/acceptance/<n>-*.spec.ts`; "implementer commits" are commits in `origin/main..HEAD` with `Factory-Role: implementer`. Before any row below that runs a role or a review, check every commit in `origin/main..HEAD` against the paths of the role in its `Factory-Role` trailer (section 10): a commit from a run that stopped half way has not been checked yet. Commits that touch only `specs/` or `docs/research/` belong to the spec the owner approved: check their paths, not their trailer (older factory versions wrote it in a separate paragraph).
+**Implementation phase** (`spec-approved`). The story's tests are those tagged `@issue-<n>-ac-<k>` (select them with `--grep @issue-<n>-`); "implementer commits" are commits in `origin/main..HEAD` with `Factory-Role: implementer`. Before any row below that runs a role or a review, check every commit in `origin/main..HEAD` against the paths of the role in its `Factory-Role` trailer (section 10): a commit from a run that stopped half way has not been checked yet. Commits that touch only `specs/` or `docs/research/` belong to the spec the owner approved: check their paths, not their trailer (older factory versions wrote it in a separate paragraph).
 - **Change request:** `pr` is set, you have posted a ready comment for it, and there are trusted comments newer than that comment. If the pull request is not a draft, convert it back (`gh pr ready <pr> --undo`). The task is the implementer's `fix`, with those comments as findings; the `impl` gate continues.
 - **Done:** your last owner-facing comment is the pull request's ready comment, and no trusted comment is newer. Stop: the pull request waits for the owner's review.
-- **Write tests:** no story test file exists on the branch. Phase `tests`; the test writer's task is `write` (section 7).
-- **Review tests:** the story test file exists and `approved_tests` is `-`, or `tests/acceptance/` differs between `approved_tests` and `HEAD`. Phase `tests`: run the tests (section 7), then the code reviewer at gate `tests`, continuing the `tests` gate.
+- **Write tests:** no test on the branch carries a tag `@issue-<n>-` (`npx playwright test --list --grep @issue-<n>-` in `tests/acceptance/` lists none, or the package does not exist). Phase `tests`; the test writer's task is `write` (section 7).
+- **Review tests:** the story's tests exist and `approved_tests` is `-`, or `tests/acceptance/` differs between `approved_tests` and `HEAD`. Phase `tests`: run the tests (section 7), then the code reviewer at gate `tests`, continuing the `tests` gate.
 - **Implement:** `approved_tests` is set and there are no implementer commits. Phase `implementation`; the implementer's task is `implement` (section 8).
 - **Review implementation:** there are implementer commits. Phase `implementation`: the implementation checks, the test run and the pull request (section 8), then the code reviewer at gate `implementation`, continuing the `impl` gate.
 
@@ -144,8 +144,8 @@ Note `before="$(git rev-parse HEAD)"`. Call `factory:test-writer` with: the spec
 If the repository root has a `package.json`, run `npm ci` there first, so the app can start. Then, in `tests/acceptance/`:
 1. **Version:** the `@playwright/test` version in `package.json` equals `$PLAYWRIGHT_VERSION`. If not, skip the rest of the run: the tests cannot run with the image's browsers. Send it to the test writer as a finding; it counts as a round.
 2. `npm ci`, then `npx playwright test --list`. It must succeed: a failure here is a broken test, which goes back to the test writer as a finding without a review.
-3. **Names:** every acceptance criterion id in the spec (`AC-<n>`) appears in at least one listed test name in the story file, and every test in that file starts with an `AC-<n>` that exists in the spec. A mismatch goes back to the test writer as a finding.
-4. `npx playwright test --reporter=line <story test file>`. Record the summary line, and whether the web server started.
+3. **Tags:** `npx playwright test --list --reporter=json | jq -r '[.. | objects | select(has("tags") and has("title")) | .tags[]] | unique | .[]'` lists the tags (without `@`). Every acceptance criterion id in the spec (`AC-<k>`) has a tag `issue-<n>-ac-<k>`, every `issue-<n>-ac-<k>` tag names a criterion in the spec, and every test has at least one tag. A mismatch goes back to the test writer as a finding.
+4. `npx playwright test --reporter=line --grep @issue-<n>-`. Record the summary line, and whether the web server started.
    - **Without implementer commits** the tests must **fail** because the behaviour does not exist yet. If they pass, send it to the test writer as a finding: the tests do not test the new behaviour. If the root has a `package.json`, the web server must have started: otherwise the failure says nothing, and it goes to the test writer as a broken test.
    - **With implementer commits** (a test gate reopened by a test problem), only record the result: the code may already meet the corrected test.
 
@@ -153,7 +153,7 @@ Add a chain line with the result.
 
 ### Code reviewer, gate `tests`
 
-Call `factory:code-reviewer` with: gate `tests`, the spec path, the issue number, the diff `git diff origin/main...HEAD -- tests/acceptance ':(exclude)*package-lock.json'`, your test run's result, the test writer's `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
+Call `factory:code-reviewer` with: gate `tests`, the spec path, the issue number, the diff `git diff origin/main...HEAD -- tests/acceptance ':(exclude)*package-lock.json'`, your test run's result, the test writer's `changed_existing` and `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
 
 Record the review (section 10), then apply the review loop rules with the test writer as the writer. On `approve`: set `approved_tests` to `git rev-parse --short HEAD` and the phase to `implementation`, push, and continue in section 8: with no implementer commits, the implementer's `implement`; otherwise the implementation checks and the test run, where a failure goes to the implementer as `fix` with the changed tests.
 
@@ -161,7 +161,7 @@ Record the review (section 10), then apply the review loop rules with the test w
 
 ### Implementer
 
-Note `before="$(git rev-parse HEAD)"`. Call `factory:implementer` with: the spec path, the issue number, the story test file, the task (`implement`, or `fix` with the findings or the owner's comments, and the round), and both languages.
+Note `before="$(git rev-parse HEAD)"`. Call `factory:implementer` with: the spec path, the issue number, the story's tag `@issue-<n>-`, the task (`implement`, or `fix` with the findings or the owner's comments, and the round), and both languages.
 
 - **`implemented` or `fixed`:** run the implementation checks and the tests, then the code reviewer.
 - **`test_problem`:** check its work-in-progress commit like any other (commit check and implementation checks), then see "Test problem" below.
@@ -178,7 +178,7 @@ If one fails, record it, tell the owner in this session, push, and stop. Do not 
 ### Test run, phase `implementation`
 
 1. At the root: `npm ci`, `npm test`, `npm run build --if-present`.
-2. In `tests/acceptance/`: the version check from section 7, `npm ci` (it replaces any existing `node_modules`), then `npx playwright test --reporter=line`, all story files.
+2. In `tests/acceptance/`: the version check from section 7, `npm ci` (it replaces any existing `node_modules`), then `npx playwright test --reporter=line`, all tests.
 
 Everything must pass. Record the summary lines in a chain line. A failure goes back to the implementer as a finding without a review; it counts as a round.
 
