@@ -14,7 +14,7 @@ If `$ARGUMENTS` is not a single issue number, stop and say how to call the comma
 
 - **Start from GitHub and git, never from memory.** Every run reads the issue, its comments and its labels again with `gh`, and fetches again with `git`, even if this session ran `/factory:run` before. What you remember from an earlier run is not state.
 - **Roles:** `factory:spec-writer`, `factory:spec-reviewer` and `factory:researcher` are subagents. Start each with the Agent tool and pass `model` from `.factory/config.yaml` (`roles.<role>.model`) on every call.
-- **Language:** read `language` from `.factory/config.yaml`. Everything you write to GitHub is in `language.repository`. What you tell the owner in this session is in `language.conversation`. Pass both to every role.
+- **Language:** read `language` from `.factory/config.yaml`. Everything you write to GitHub is in `language.repository`. Everything you write to the owner in this session is in `language.conversation`, including short progress notes. Pass both to every role.
 - **Your own writes:** the status comment, the three owner-facing comments below, the labels `needs-human` and `dispute`, branches and pushes. Nothing else. If you think a spec must change, send it back to the spec writer with a reason.
 - **Push at every stop:** questions, dispute, ready, or an error. Nothing waits unpushed.
 - **Never:** merge, close the issue, add `spec-approved`, or remove a label you did not set.
@@ -28,14 +28,14 @@ Every comment notifies the owner, so post one only when it has value to the owne
 ```
 Factory status: <one line: what the issue waits for now>
 
-- <time> <role>: <result in a few words> (<short sha or ->)
+- <role>: <result in a few words> (<short sha or ->)
 - ...
 
 <!-- factory:status round=<n> reworks=<k> reviewed=<short sha or -> task=<write|answer|fix|review|done> -->
 ```
 
 - Create it on the first run with `gh issue comment`. Find it later as the comment containing `<!-- factory:status`, and update it with `gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -f body=...`.
-- Add one chain line per role call. Keep the last 15 lines; drop the oldest.
+- Add one chain line per role call, without times: GitHub shows when the comment was edited. Keep the last 15 lines; drop the oldest.
 - The values in its last line are the state: always write all four.
 
 **Owner-facing comments**, each ending with `<!-- factory:run kind=<kind> -->`:

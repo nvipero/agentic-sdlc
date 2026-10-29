@@ -82,7 +82,20 @@ The owner decided that observations 10 to 12 refine spec principles 10 (visible 
 | 9 | Every `/factory:run` starts from `gh` and `git`, never from memory of earlier runs in the session |
 | 11, 12 | No TL;DR in comments. One status comment per issue, edited in place, holds the state and the chain; new comments only for a question, a dispute or a ready spec. Spec principles 10 and 13 updated (revision 7) |
 
-These fixes are not yet tested in a real run.
+### Test of the fixes (issue #31, 2026-10-29)
+
+- **First attempt invalid:** the owner's Claude session had started before the fixes were merged. The overlay updated at once, but Claude Code loads plugins at session start, so the run used the previous commands (four comments, each with a TL;DR). Lesson, now in the README: start a new session after a factory update.
+- **Second run** (new session; the owner commented a change request on #31):
+  - One status comment, created once and edited in place (created 13:50:07, updated 13:51:40 UTC), holding the chain and the state `round=1 reworks=1 reviewed=7e3d6b8 task=done`.
+  - One notifying comment: the ready comment with the spec link, assumptions and the context gap in one line. No TL;DR.
+  - The change request went to the spec writer. The reviewer classified it as a rework (acceptance criteria changed), the rework count rose to 1, and the whole spec was reviewed.
+  - Both commits parse `Factory-Role: spec-writer` with git's trailer parser and touch only the spec.
+  - The orchestrator answered the owner in Finnish, but short progress notes were in English.
+  - No question was asked: the spec writer settled the open product decision with an assumption listed in the ready comment, which matches the owner's direction that agents assume and ask only what is necessary.
+- **Observations from this run:**
+  13. The chain lines carried times, in UTC and partly invented. Fixed: no times in the chain; GitHub shows when the comment was edited, in the owner's time zone.
+  14. Progress notes in the session were in English. Fixed: everything written to the owner in the session uses `language.conversation`.
+  15. The session's messages started with "TL;DR", from the template's `CLAUDE.md`. Fixed together with spec principle 13.
 
 ## Deviations from the plan
 
