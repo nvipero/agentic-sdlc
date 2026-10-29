@@ -15,7 +15,7 @@ If `$ARGUMENTS` is not a single issue number, stop and say how to call the comma
 - **Start from GitHub and git, never from memory.** Every run reads the issue, its comments and its labels again with `gh`, and fetches again with `git`, even if this session ran `/factory:run` before. What you remember from an earlier run is not state.
 - **Roles:** `factory:spec-writer`, `factory:spec-reviewer`, `factory:researcher`, `factory:test-writer`, `factory:implementer` and `factory:code-reviewer` are subagents. Start each with the Agent tool and pass `model` from `.factory/config.yaml` (`roles.<role>.model`) on every call.
 - **Language:** read `language` from `.factory/config.yaml`. Everything you write to GitHub is in `language.repository`. Everything you write to the owner in this session is in `language.conversation`, including short progress notes. Pass both to every role.
-- **Your own writes:** the status comment, the owner-facing comments below, the labels `needs-human` and `dispute`, branches, pushes, and the pull request (create, description, ready). Nothing else. If you think a spec, test or code must change, send it back to its role with a reason.
+- **Your own writes:** the status comment, the owner-facing comments below, the labels `needs-human` and `dispute`, branches, merges of `origin/main` into the story branch (section 3), pushes, and the pull request (create, description, ready). Nothing else. If you think a spec, test or code must change, send it back to its role with a reason.
 - **Push at every stop:** questions, dispute, ready, or an error. Nothing waits unpushed.
 - **Never:** merge, close the issue, add `spec-approved` or `tests-change-approved`, or remove a label you did not set.
 
@@ -75,6 +75,7 @@ Stop with a one-line reason to the owner, without changing anything, if any of t
 
 - Prefix from the type label: `user-story` → `feat`, `bug` → `fix`, `chore` → `chore`.
 - If a remote branch `origin/<prefix>/issue-<n>-*` exists, use it: `git switch <branch>`, then `git merge --ff-only origin/<branch>`.
+- If `origin/main` has commits the branch lacks (for example a factory update after the spec), merge it in: `git merge --no-edit origin/main`. Never rebase or force-push a story branch: the owner approved its commits by their hashes. On a conflict, `git merge --abort`, tell the owner, and stop. Merge commits are yours; the commit checks skip them (`--no-merges`).
 - Otherwise the slug is 2 to 5 lowercase words from the title, joined with hyphens: `git switch -c <prefix>/issue-<n>-<slug> origin/main`.
 
 ## 4. Decide the task
@@ -191,7 +192,7 @@ After the first implementer commit that passes the checks, if `pr` is `-`:
 
 ### Code reviewer, gate `implementation`
 
-Call `factory:code-reviewer` with: gate `implementation`, the spec path, the issue number, `git diff --stat origin/main...HEAD`, the diff `git diff origin/main...HEAD -- . ':(exclude)specs' ':(exclude)tests/acceptance' ':(exclude)*package-lock.json'`, your test run's result, the implementer's `choices` and `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
+Call `factory:code-reviewer` with: gate `implementation`, the spec path, the issue number, `git diff --stat origin/main...HEAD`, the diff `git diff origin/main...HEAD -- . ':(exclude)specs' ':(exclude)tests/acceptance' ':(exclude)*package-lock.json'`, your test run's result, the results of the implementation checks, the implementer's `choices` and `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
 
 Record the review (section 10), then apply the review loop rules with the implementer as the writer. On `approve`, with your last test run passing, go to section 9.
 
@@ -221,13 +222,13 @@ When the code reviewer approves and your last test run passed:
 
 ### Commit check (after every role that commits)
 
-Check **every** commit the role made, not only the one it reported: `git log --stat --format='%H%n%B' "$before"..HEAD`.
+Check **every** commit the role made, not only the one it reported: `git log --no-merges --stat --format='%H%n%B' "$before"..HEAD`.
 - There is at least one commit (an implementer's `test_problem` may have none), and each one touches only the role's own paths:
   - spec writer: only `specs/`;
   - researcher: only `docs/research/`;
   - test writer: only `tests/acceptance/`;
   - implementer: only `src/`, `public/`, `tests/unit/`, and files at the repository root whose names do not start with a dot, other than `CLAUDE.md` and `README.md`.
-- Git parses the role as a trailer on each commit: `git log --format='%h %(trailers:key=Factory-Role,valueonly,separator=)' "$before"..HEAD` shows the role's name on every line.
+- Git parses the role as a trailer on each commit: `git log --no-merges --format='%h %(trailers:key=Factory-Role,valueonly,separator=)' "$before"..HEAD` shows the role's name on every line.
 - `git status --porcelain` is empty afterwards.
 
 If not, record the problem in the status comment, tell the owner in this session, push, and stop. Do not repair it yourself.
