@@ -1,6 +1,6 @@
 # Step 3 plan: Implementation chain
 
-Status: draft 2 (after Fable review), waiting for owner approval
+Status: approved by owner, 2026-10-29 (draft 2, after Fable review)
 Spec: `specs/factory-v1-spec.md` revision 7, section 10, step 3
 Date: 2026-10-29
 
