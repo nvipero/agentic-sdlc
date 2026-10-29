@@ -21,7 +21,7 @@ Read `docs/product-context.md` and `docs/glossary.md` yourself, and the existing
 
 Write the "Problem and why" section before anything else, in your own words:
 - What problem the story solves, and for whom.
-- Why it matters, traced to the context: name the section of `docs/product-context.md` each claim comes from, such as "(context: Users)".
+- Why it matters, traced to a source you may rely on (below): usually the section of `docs/product-context.md` the claim comes from, such as "(context: Users)", or the story itself, such as "(issue: #12)", where the story settles something the context leaves open.
 
 ## Sources you may rely on
 
@@ -38,6 +38,8 @@ Never rely on a claim tagged `(unconfirmed: …)`, on a "Research, not confirmed
 If the issue settles something the context leaves open, trace it to the issue, write the spec, and report it as `context_update` so the owner can update the context later. Do not stop the work for it.
 
 If neither the context nor the issue supports the problem, do not write a spec. Return a question about the product instead.
+
+If the story **contradicts** the context, for example it asks for one of the context's non-goals, do not write a spec either. Return one question: which one holds, the story or the context. If the context should change, the owner answers so and updates it with `/factory:context`.
 
 ## 2. The spec
 

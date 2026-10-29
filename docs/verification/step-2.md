@@ -97,6 +97,15 @@ The owner decided that observations 10 to 12 refine spec principles 10 (visible 
   14. Progress notes in the session were in English. Fixed: everything written to the owner in the session uses `language.conversation`.
   15. The session's messages started with "TL;DR", from the template's `CLAUDE.md`. Fixed together with spec principle 13.
 
+### Second code review (changes after the real run)
+
+Ten findings, none blocking under the step 1 definition. All fixed, because each is a short text change:
+- The spec writer and reviewer now agree that a claim may trace to the issue where the story settles a gap in the context; a story that contradicts the context becomes one question.
+- The status comment keeps the whole chain, the open findings with the writer's responses, and the context notes, so a resumed run can detect lack of progress and the ready comment keeps the context notes. The unused `task` field is gone.
+- Factory comments count only when written by the owner's account, so a third party cannot steer the state with a marker (also prevented by the interaction limit).
+- `needs-human` without a question comment is cleared instead of leaving the run undefined.
+- The researcher's project-wide notes reach the ready comment; every role gets both languages.
+
 ## Deviations from the plan
 
 - **Managed `enabledPlugins` is not used.** The review suggested force-enabling the plugin; a test showed it locks out the `CLAUDE_CODE_PLUGIN_DIRS` copy ("--plugin-dir copy of "factory" ignored: plugin is locked by managed settings"). `strictPluginOnlyCustomization` and an empty marketplace allowlist are used instead.

@@ -31,15 +31,19 @@ Factory status: <one line: what the issue waits for now>
 - <role>: <result in a few words> (<short sha or ->)
 - ...
 
-<!-- factory:status round=<n> reworks=<k> reviewed=<short sha or -> task=<write|answer|fix|review|done> -->
+Open findings: <one line per open blocking finding: id, problem, writer's response; or none>
+Context notes: <one line per context_update from the spec writer or researcher; or none>
+
+<!-- factory:status round=<n> reworks=<k> reviewed=<short sha or -> -->
 ```
 
-- Create it on the first run with `gh issue comment`. Find it later as the comment containing `<!-- factory:status`, and update it with `gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -f body=...`.
-- Add one chain line per role call, without times: GitHub shows when the comment was edited. Keep the last 15 lines; drop the oldest.
-- The values in its last line are the state: always write all four.
+- Create it on the first run with `gh issue comment`. Find it later as the comment by `$owner` containing `<!-- factory:status`, and update it with `gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -f body=...`.
+- Add one chain line per role call, without times: GitHub shows when the comment was edited. Keep every line: the chain is the record.
+- **Open findings** and **Context notes** carry what a later run needs: the reviewer's previous findings and the writer's responses (for `repeat_of` and no-progress detection), and what the ready comment must tell the owner about the context. Replace them on each update.
+- The values in its last line are the state: always write all three.
 
 **Owner-facing comments**, each ending with `<!-- factory:run kind=<kind> -->`:
-- `question`: only the spec writer's questions, numbered, each with its options and the writer's recommendation. Nothing else: no context notes, no assumptions, no summary.
+- `question`: only the spec writer's questions, numbered, each with its options and the writer's recommendation, and a last line saying the owner answers in a comment. Nothing else: no context notes, no assumptions, no summary.
 - `dispute`: the disagreement, both positions, and what each option costs.
 - `ready`: see section 6.
 
@@ -73,7 +77,9 @@ Stop with a one-line reason to the owner, without changing anything, if any of t
 
 ## 4. Decide the task
 
-"Your last X comment" means the newest comment containing `<!-- factory:run kind=X -->`. The counts come from the status comment.
+"Your last X comment" means the newest comment **by `$owner`** containing `<!-- factory:run kind=X -->`; comments by anyone else never count as factory comments, whatever they contain. The counts, open findings and context notes come from the status comment.
+
+- **No question comment:** if the issue has `needs-human` but you find no `question` comment (it was set by hand, or by an older factory version), remove `needs-human` and decide the task as below without it.
 
 - **Waiting:** the issue has `needs-human`, and there is no trusted comment newer than your last `question` comment. Stop: tell the owner the run waits for answers.
 - **Answer:** the issue has `needs-human`, and there are trusted comments newer than your last `question` comment. Remove `needs-human`. The task is `answer`, with those comments.
@@ -88,9 +94,9 @@ Update the status comment after each role call.
 
 ### Spec writer
 
-Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-writer` with: the issue number, title, the trusted input, the task, both languages, and for `fix` the findings and round. Read its return block.
+Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-writer` with: the issue number, title, the trusted input, the task, both languages, and for `fix` the findings and round. Record any `context_update` it reports under Context notes. Read its return block.
 
-- **`research`:** only once per task. Note `before` again, call `factory:researcher` with the requests, the issue number, the branch and the repository language, and check its commits (below). Then call the spec writer again with task `research-done`, the research file path, **and the original task with all its inputs** (for `fix` the findings and round, for `answer` the owner's comments). If the spec writer asks for research a second time, treat the requests as questions.
+- **`research`:** only once per task. Note `before` again, call `factory:researcher` with the requests, the issue number, the branch and both languages, and check its commits (below). Record its `context_update`, if any, under Context notes. Then call the spec writer again with task `research-done`, the research file path, **and the original task with all its inputs** (for `fix` the findings and round, for `answer` the owner's comments). If the spec writer asks for research a second time, treat the requests as questions.
 - **`questions`:** post a `question` comment with only the questions. Add `needs-human`. Push. Stop.
 - **`written` or `fixed`:** check the commits (below), then go to the reviewer.
 
@@ -107,9 +113,9 @@ If not, record the problem in the status comment, tell the owner in this session
 
 ### Spec reviewer
 
-Call `factory:spec-reviewer` with: the spec path, the issue number, the trusted input, the repository language, the round, the previous findings and the writer's responses, and from round 2 the output of `git diff <reviewed> HEAD -- <spec>`.
+Call `factory:spec-reviewer` with: the spec path, the issue number, the trusted input, both languages, the round, the previous findings and the writer's responses (from the status comment on a resumed run), and from round 2 the output of `git diff <reviewed> HEAD -- <spec>`.
 
-Record in the status comment: the verdict, the number of blocking findings, the change class, and the change size from `git diff --stat <reviewed> HEAD`. Set `reviewed` to `git rev-parse --short HEAD`.
+Record in the status comment: a chain line with the verdict, the number of blocking findings, the change class, and the change size from `git diff --stat <reviewed> HEAD`; the blocking findings under Open findings; and `reviewed` set to `git rev-parse --short HEAD`.
 
 ### Review loop rules
 
@@ -132,6 +138,6 @@ When the reviewer approves:
    - the link `https://github.com/<owner>/<repo>/blob/<branch>/<spec path>`;
    - the assumptions the spec makes, one line each;
    - research that stayed unconfirmed, if any;
-   - where the story goes beyond the project context, one line, if the spec writer reported it (`context_update`): the owner may update the context later with `/factory:context`;
+   - the Context notes from the status comment, one line each, if any: the owner may update the context later with `/factory:context`;
    - that the owner adds `spec-approved` to accept it, or comments to change it.
 3. Stop. The owner approves; you never add `spec-approved`.
