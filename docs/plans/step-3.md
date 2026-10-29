@@ -79,7 +79,7 @@ The run continues from `spec-approved`. Each run still reads GitHub and git firs
 ## 4. Test environment in the container
 
 - **Image:** Node 24 stays. The Dockerfile sets `ARG PLAYWRIGHT_VERSION` and `ENV PLAYWRIGHT_VERSION=… PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` (as image environment, so plain shells and the exit check see them), and installs Chromium with its system packages at build (`npx playwright@$PLAYWRIGHT_VERSION install --with-deps chromium`, as root). It then clears root's npm cache. Firefox and WebKit are left out until a story needs them. Debian 13 is supported from Playwright 1.55 (playwright.dev/docs/intro).
-- **Browsers path not writable by `node`:** not documented either way. Checked at build time; if Playwright needs to write there at run time, the path follows the official image's mode instead, and the exit check drops that item. It is not a boundary: `node` cannot download a browser through the firewall anyway.
+- **Browsers path not writable by `node`:** tested on 2026-10-29 with Playwright 1.64.1: Chromium starts headless as `node` from the root-owned `/ms-playwright` (a one-line test passed in 604 ms). No change to the official image's mode is needed.
 - **Project:** `tests/acceptance/package.json` pins `@playwright/test` to `$PLAYWRIGHT_VERSION` exactly. The orchestrator refuses to run the tests when the two differ, with that message.
 - **`.gitignore`:** the template ships one (owner-owned, like the other factory files outside the overlays), covering `node_modules/`, `test-results/`, `playwright-report/` and the build output.
 - **npm:** `registry.npmjs.org` is already allowlisted. Packages' install scripts run inside the sandbox, which is what the sandbox is for.
@@ -96,7 +96,7 @@ The run continues from `spec-approved`. Each run still reads GitHub and git firs
 ## 6. Exit check and evidence
 
 **Scripted (added to `scripts/exit-check.sh`):**
-- As `node`, in a temporary directory: `npm i @playwright/test@"$PLAYWRIGHT_VERSION"` and a one-line test that starts Chromium headless. `npx playwright install` as `node` fails.
+- As `node`, in a temporary directory: `npm i @playwright/test@"$PLAYWRIGHT_VERSION"` and a one-line test that starts Chromium headless. `node` cannot write to `/ms-playwright`. (Tested while building: `npx playwright install` as `node` does not fail, it hangs without changing anything, so the check is the write, and the test writer's skill forbids running `playwright install`.)
 - `PLAYWRIGHT_VERSION` in the image equals the pin in `tests/acceptance/package.json` on `main`, once that file exists.
 - The three new role definitions have the tools in section 2; the code reviewer has no write tool and no web tool.
 - The step 1 and 2 checks still pass.
