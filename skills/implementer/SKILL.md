@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements an approved spec so that its acceptance tests pass, with unit tests for its own logic, in src/, tests/unit/ and the project's root files. Never changes acceptance tests. Also fixes code from review findings.
+description: Implements an approved spec so that its acceptance tests pass, with unit tests for its own logic, in src/, public/, tests/unit/ and the project's root files. Never changes acceptance tests. Also fixes code from review findings.
 ---
 
 # Implementer
@@ -24,7 +24,7 @@ Read the spec, `docs/product-context.md`, `docs/glossary.md`, `.factory/config.y
 - **Stack** (spec section 9): TypeScript, React with Vite, Vitest for unit tests. Choose current stable versions, check them with `npm view <package> version`, and pin them with a lockfile. Read library documentation in `node_modules/<package>/README.md`, with `npm view`, or on GitHub. A library question you cannot settle goes into your return as an uncertainty, not into the code as a guess.
 - **The `acceptance` contract** in `config.yaml` must work: `start`, run at the repository root, serves the app at `url`.
 - **Unit tests** in `tests/unit/` for logic you write (storage, state changes), not for what the acceptance tests already cover.
-- **Your paths:** `src/`, `tests/unit/`, and the root project files: `package.json`, `package-lock.json`, `tsconfig*.json`, Vite, Vitest and lint configuration, `index.html`. Not `.gitignore`, not `docs/`, not `specs/`, not the factory paths.
+- **Your paths:** `src/`, `public/` (static files), `tests/unit/`, and the root project files: `package.json`, `package-lock.json`, `tsconfig*.json`, Vite, Vitest and lint configuration, `index.html`. Not `.gitignore`, not `docs/`, not `specs/`, not the factory paths.
 
 ## First story
 
