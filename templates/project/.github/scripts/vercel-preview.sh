@@ -28,7 +28,7 @@ case "${1:-}" in
     vapi POST "/v2/deployments/$url/aliases" "{\"alias\":\"$host\"}" | jq -r '"alias \(.alias) set"'
     ;;
   prune)
-    pr="$2" keep="${3#https://}"
+    pr="$2" keep="${3:-}"; keep="${keep#https://}"
     [[ "$pr" =~ ^[0-9]+$ ]] || { echo "bad PR number" >&2; exit 1; }
     vapi GET "/v7/deployments?projectId=$VERCEL_PROJECT_ID&limit=100" \
       | jq -r --arg pr "$pr" --arg keep "$keep" \
