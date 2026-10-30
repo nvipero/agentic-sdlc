@@ -141,3 +141,7 @@ CodeQL and dependency review passed on all ten.
 | Cleanup of #70 and #71 | both `success`; #70's address 404 |
 
 **Found on the way:** a PR opened ready got no preview until its next push (fixed: the `opened` event); `vercel project add` is deprecated (`project create`); the first `preview-deploy` after a fix waited about five minutes in `waiting` with no protection rule set and then ran (not explained; not seen again).
+
+**Deployments panel (owner, 2026-10-30; sdlc-pilot #72, probe #74):** the deploy job records a GitHub deployment of the PR's head in environment `pr-preview` (no secrets) instead of a link comment: `env=pr-preview creator=github-actions[bot] payload={"pr":74}`, status `success https://nvipero-sdlc-pilot-pr-74.vercel.app`. After the PR closed, cleanup marked it `inactive` and the address answered 404.
+
+**Commit author (found 2026-10-30):** since step 1 the container's git email was `factory-agent@users.noreply.github.com`, which GitHub links to an unrelated real account `factory-agent` (created 2026-04-12). Agent commits on `main` show that account as author; they are not rewritten. From step 4 the email is the App's bot address `350329028+nvipero-factory-orchestrator[bot]@users.noreply.github.com`; probe #74 shows `author: nvipero-factory-orchestrator[bot]`.
