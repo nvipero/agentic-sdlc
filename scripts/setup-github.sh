@@ -5,7 +5,9 @@
 #   scripts/setup-github.sh ruleset           <owner/repo>
 #   scripts/setup-github.sh interaction-limit <owner/repo>
 #   scripts/setup-github.sh secret-scanning   <owner/repo>
-#   scripts/setup-github.sh actions           <owner/repo>   (disables Actions until step 4)
+#   scripts/setup-github.sh actions           <owner/repo>   (project: restricted Actions, step 4)
+#   scripts/setup-github.sh actions-off       <owner/repo>   (the factory repo: no workflows)
+#   scripts/setup-github.sh code-scanning     <owner/repo>   (CodeQL default setup)
 #   scripts/setup-github.sh labels            <owner/repo>
 #   scripts/setup-github.sh board             <owner/repo>
 #   scripts/setup-github.sh status            <owner/repo>   (read-only)
@@ -51,12 +53,49 @@ secret_scanning() {
 EOF
 }
 
-# Off until step 4, which re-enables Actions with restrictions: a workflow
-# pushed by an agent would otherwise run outside the sandbox.
+# A project's Actions (step 4, plan decision 11): only GitHub-owned actions,
+# pinned to a full SHA; a read-only GITHUB_TOKEN that cannot approve or create
+# pull requests; approval for every outside contributor's run; and
+# pull_request_target allowed for guards.yml only (GitHub blocks it on public
+# repositories by default from 2026-12-02). The App cannot push workflow files.
+GUARDS_POLICY_NAME="factory-guards-pull-request-target"
 actions() {
+  local nwo="$1" id body
+  gh api -X PUT "repos/$nwo/actions/permissions" -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true
+  gh api -X PUT "repos/$nwo/actions/permissions/selected-actions" --input - <<'EOF'
+{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":[]}
+EOF
+  gh api -X PUT "repos/$nwo/actions/permissions/workflow" \
+    -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
+  gh api -X PUT "repos/$nwo/actions/permissions/fork-pr-contributor-approval" -f approval_policy=all_external_contributors
+  body="$(cat <<EOF
+{"name":"$GUARDS_POLICY_NAME","enforcement":"active",
+ "conditions":{"workflow_path":{"include":[".github/workflows/guards.yml"],"exclude":[]}},
+ "rules":[{"type":"restrict_action_events","parameters":{"allowed_events":["pull_request_target"]}}]}
+EOF
+)"
+  id="$(gh api "repos/$nwo/actions/policies" --jq ".policies[] | select(.name == \"$GUARDS_POLICY_NAME\") | .id")"
+  if [ -n "$id" ]; then
+    echo "$body" | gh api -X PUT "repos/$nwo/actions/policies/$id" --input - >/dev/null
+    say "policy $id updated on $nwo"
+  else
+    echo "$body" | gh api -X POST "repos/$nwo/actions/policies" --input - >/dev/null
+    say "policy created on $nwo"
+  fi
+  status "$nwo"
+}
+
+# The factory repository runs no workflows.
+actions_off() {
   local nwo="$1"
   gh api -X PUT "repos/$nwo/actions/permissions" -F enabled=false
   gh api "repos/$nwo/actions/permissions" --jq '"actions enabled: \(.enabled)"'
+}
+
+code_scanning() {
+  local nwo="$1"
+  gh api -X PATCH "repos/$nwo/code-scanning/default-setup" -f state=configured -f query_suite=default
+  gh api "repos/$nwo/code-scanning/default-setup" --jq '"code scanning: \(.state), languages \(.languages)"'
 }
 
 labels() {
@@ -73,7 +112,6 @@ ready-for-factory|0e8a16|State: story is ready for the factory to pick up
 needs-human|fbca04|State: waiting for the human (questions or approval)
 spec-approved|5319e7|State: the human approved the spec
 dispute|b60205|State: agents disagree; the human decides
-gate-change|e99695|State: PR changes gate configuration; justification required
 tests-change-approved|f9d0c4|State: the human allows implementation to change acceptance tests
 EOF
 }
@@ -158,16 +196,25 @@ status() {
       '"ruleset \(.name): enforcement=\(.enforcement) bypass_actors=\(.bypass_actors | length) target=\(.conditions.ref_name.include) rules=\([.rules[].type])"'
   done
   gh api "repos/$nwo/interaction-limits" --jq '"interaction limit: \(.limit // "none") until \(.expires_at // "-")"'
-  gh api "repos/$nwo/actions/permissions" --jq '"actions enabled: \(.enabled)"'
+  gh api "repos/$nwo/actions/permissions" --jq '"actions: enabled=\(.enabled) allowed=\(.allowed_actions // "-") sha_pinning=\(.sha_pinning_required // "-")"'
+  if [ "$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" = "true" ]; then
+    gh api "repos/$nwo/actions/permissions/selected-actions" --jq '"selected actions: github_owned=\(.github_owned_allowed) verified=\(.verified_allowed) patterns=\(.patterns_allowed)"'
+    gh api "repos/$nwo/actions/permissions/workflow" --jq '"workflow token: \(.default_workflow_permissions), can approve PRs: \(.can_approve_pull_request_reviews)"'
+    gh api "repos/$nwo/actions/permissions/fork-pr-contributor-approval" --jq '"fork PR approval: \(.approval_policy)"'
+    gh api "repos/$nwo/actions/policies" --jq '.policies[] | "policy: \(.)"'
+    gh api "repos/$nwo/actions/secrets" --jq '"repository secrets: \(.total_count)"'
+  fi
   gh api "repos/$nwo" --jq '.security_and_analysis | "secret scanning: \(.secret_scanning.status), push protection: \(.secret_scanning_push_protection.status)"'
 }
 
-[ "$#" -eq 2 ] || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|labels|board|status> <owner/repo>"
+[ "$#" -eq 2 ] || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|actions-off|code-scanning|labels|board|status> <owner/repo>"
 case "$1" in
   ruleset) ruleset "$2" ;;
   interaction-limit) interaction_limit "$2" ;;
   secret-scanning) secret_scanning "$2" ;;
   actions) actions "$2" ;;
+  actions-off) actions_off "$2" ;;
+  code-scanning) code_scanning "$2" ;;
   labels) labels "$2" ;;
   board) board "$2" ;;
   status) status "$2" ;;

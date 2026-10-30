@@ -1,0 +1,42 @@
+# "Trust, but verify" for labels: GitHub permissions are not per label, so an
+# owner-only label added by anyone but the owner is removed, and any change to
+# label definitions by anyone but the owner fails loudly (renaming a label could
+# otherwise make an old owner event look like an approval).
+name: label-audit
+on:
+  issues:
+    types: [labeled]
+  label:
+    types: [created, edited, deleted]
+permissions:
+  issues: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          SENDER: ${{ github.event.sender.login }}
+          LABEL: ${{ github.event.label.name }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          if [ "$SENDER" = "$OWNER" ]; then echo "by the owner: nothing to do"; exit 0; fi
+          if [ "$EVENT" = label ]; then
+            echo "::error::label definition $ACTION by $SENDER (only the owner changes labels)"
+            exit 1
+          fi
+          case "$LABEL" in
+            spec-approved|tests-change-approved)
+              [[ "$ISSUE" =~ ^[0-9]+$ ]] || exit 1
+              gh api -X DELETE "repos/$REPO/issues/$ISSUE/labels/$LABEL" >/dev/null
+              echo "::error::owner-only label '$LABEL' added to #$ISSUE by $SENDER; removed"
+              exit 1 ;;
+            *) echo "label '$LABEL' by $SENDER: not owner-only" ;;
+          esac

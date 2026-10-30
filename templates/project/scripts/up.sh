@@ -67,6 +67,34 @@ remove_containers() {
   done
 }
 
+# Actions as setup-github.sh sets them (step 4, plan decision 11). Prints the
+# first mismatch and returns non-zero; prints nothing when they match.
+actions_settings_problem() {
+  local nwo="$1" got
+  got="$(gh api "repos/$nwo/actions/permissions" --jq '"\(.enabled) \(.allowed_actions) \(.sha_pinning_required)"')" \
+    || { echo "cannot read GitHub Actions settings"; return 1; }
+  [ "$got" = "true selected true" ] \
+    || { echo "Actions is '$got', expected enabled, selected actions, SHA pinning required"; return 1; }
+  got="$(gh api "repos/$nwo/actions/permissions/selected-actions" \
+    --jq '"\(.github_owned_allowed) \(.verified_allowed) \(.patterns_allowed | length)"')" \
+    || { echo "cannot read allowed actions"; return 1; }
+  [ "$got" = "true false 0" ] || { echo "allowed actions are '$got', expected GitHub-owned only"; return 1; }
+  got="$(gh api "repos/$nwo/actions/permissions/workflow" \
+    --jq '"\(.default_workflow_permissions) \(.can_approve_pull_request_reviews)"')" \
+    || { echo "cannot read workflow token settings"; return 1; }
+  [ "$got" = "read false" ] || { echo "workflow token is '$got', expected read-only, cannot approve"; return 1; }
+  got="$(gh api "repos/$nwo/actions/permissions/fork-pr-contributor-approval" --jq .approval_policy)" \
+    || { echo "cannot read fork PR approval"; return 1; }
+  [ "$got" = "all_external_contributors" ] || { echo "fork PR approval is '$got'"; return 1; }
+  got="$(gh api "repos/$nwo/actions/policies" --jq '[.policies[] | select(.enforcement == "active")
+      | {p: .conditions.workflow_path.include, e: [.rules[] | select(.type == "restrict_action_events") | .parameters.allowed_events]}]
+      | tostring')" || { echo "cannot read Actions policies"; return 1; }
+  [ "$got" = '[{"p":[".github/workflows/guards.yml"],"e":[["pull_request_target"]]}]' ] \
+    || { echo "Actions policies are '$got', expected one allowing pull_request_target for guards.yml only"; return 1; }
+  got="$(gh api "repos/$nwo/actions/secrets" --jq .total_count)" || { echo "cannot read repository secrets"; return 1; }
+  [ "$got" = "0" ] || { echo "$got repository-level secret(s); secrets belong to environments only"; return 1; }
+}
+
 # --- 1. Preflight: GitHub protections (host, owner's gh login) ---------------
 preflight() {
   local nwo repo visibility branch_rules rules ruleset_ids id ok limit days scanning
@@ -107,12 +135,10 @@ preflight() {
   if [ "$days" -lt "$WARN_DAYS" ]; then
     say "WARNING: interaction limit expires in $days days; renew it with scripts/setup-github.sh in the factory repo"
   fi
-  # Actions stays off until step 4: a workflow run would execute outside the sandbox.
-  local actions
-  actions="$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" || die "cannot read GitHub Actions settings"
-  [ "$actions" = "false" ] \
-    || die "GitHub Actions is not disabled (enabled=$actions); run scripts/setup-github.sh actions in the factory repo"
-  say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, Actions disabled, interaction limit $days days left"
+  local mismatch
+  mismatch="$(actions_settings_problem "$nwo")" \
+    || die "$mismatch; run scripts/setup-github.sh actions $nwo in the factory repo"
+  say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, Actions restricted, interaction limit $days days left"
 }
 
 # --- 2. Host clone: clean main, equal to origin/main -------------------------

@@ -25,14 +25,19 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands. Sessions start in bypass mode, and the deny rules still apply.
 - **Factory definitions as a plugin:** `.factory/` loads as the Claude Code plugin `factory` from the read-only `/workspace/.factory`, so its commands are `/factory:<name>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
 - **Agent identity and token:** agents act on GitHub as the GitHub App `nvipero-factory-orchestrator`. Its private key is a 1Password document that never enters the container. `up.sh` reads it once per start, mints a one-hour installation token for the one repository, and leaves a refresher running on your Mac that mints a new one every 45 minutes and within a minute of waking from sleep. The token is written to `~/.factory-run/<repo-name>/token/`, which is mounted read-only into the container; `gh` (a wrapper) and git read it on every call. No key, JWT or token appears in a process's argument list or the container's environment. `up.sh stop` ends the refresher and removes the token.
-- **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, secret scanning with push protection, and GitHub Actions disabled until step 4.
+- **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, and secret scanning with push protection.
+- **GitHub Actions (step 4):** restricted to GitHub-owned actions pinned to a full SHA. The workflow token is read-only and cannot approve pull requests. Every outside contributor's run needs approval, and there are no repository-level secrets. `pull_request_target` is allowed for `guards.yml` only. The agents' App has no Workflows permission, so agents cannot change what runs.
+- **Gates (step 4):**
+  - `guards` runs `main`'s definition on `pull_request_target` and reads the PR as data. It checks commit messages, role trailers and paths, clean merges of `main`, factory definitions, and acceptance-test changes after approval.
+  - `tests` runs fixed commands on `pull_request`: type check, unit tests, build, acceptance tests and dependency review.
+  - `label-audit` removes an owner-only label that anyone else added.
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
   - an active ruleset without bypass actors
   - the interaction limit
   - secret scanning
   - push protection
-  - GitHub Actions is disabled
+  - the Actions settings above
   - the host clone is clean, on `main` and equal to `origin/main`
 - **The host clone is never updated automatically.** If it is behind `origin/main`, `up.sh` refuses to start. Review the new commits with `git log -p HEAD..origin/main`, then pull with `git pull --ff-only`.
 
@@ -67,6 +72,7 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
    scripts/setup-github.sh interaction-limit <owner>/<repo-name>
    scripts/setup-github.sh secret-scanning <owner>/<repo-name>
    scripts/setup-github.sh actions <owner>/<repo-name>
+   scripts/setup-github.sh code-scanning <owner>/<repo-name>
    scripts/setup-github.sh labels <owner>/<repo-name>
    scripts/setup-github.sh board <owner>/<repo-name>
    ```

@@ -248,7 +248,7 @@ expect_fail "agent token cannot change repository settings" \
   "gh api -X PATCH repos/$NWO --input - <<< '{}'" "HTTP 403|HTTP 404"
 # A commit that adds a workflow file, built with plumbing (the .github overlay is read-only):
 # GitHub must refuse it, because the token has no Workflows permission. On an unexpected
-# success the branch is deleted again; Actions is disabled, so it would not run.
+# success the branch is deleted again at once.
 WF_BR="chore/exit-check-workflow-$(date +%s)"
 out="$(in_box "cd /workspace && git fetch -q origin main && idx=\$(mktemp) && export GIT_INDEX_FILE=\$idx && git read-tree origin/main && blob=\$(printf 'on: push\njobs:\n  probe:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo probe\n' | git hash-object -w --stdin) && git update-index --add --cacheinfo 100644,\$blob,.github/workflows/exit-check-probe.yml && tree=\$(git write-tree) && rm -f \$idx && unset GIT_INDEX_FILE && c=\$(git commit-tree \$tree -p origin/main -m 'chore: exit check workflow probe') && git push origin \$c:refs/heads/$WF_BR")"; rc=$?
 if [ "$rc" -ne 0 ] && echo "$out" | grep -qiE "workflow.*(scope|permission)|refusing to allow"; then
@@ -342,8 +342,15 @@ for r in "$NWO" "$FACTORY_NWO"; do
   [ "$ok" = "true" ] && pass "$r: pull_request, non_fast_forward, deletion active on main" || fail "$r: rules on main"
   ok="$(gh api "repos/$r/rulesets" --jq '.[].id' | while read -r id; do gh api "repos/$r/rulesets/$id" --jq 'has("bypass_actors") and (.bypass_actors|length==0)'; done | sort -u)"
   [ "$ok" = "true" ] && pass "$r: no bypass actors" || fail "$r: bypass actors" "$ok"
-  ok="$(gh api "repos/$r/actions/permissions" --jq .enabled)"
-  [ "$ok" = "false" ] && pass "$r: GitHub Actions disabled" || fail "$r: GitHub Actions" "enabled=$ok"
+  if [ "$r" = "$FACTORY_NWO" ]; then
+    ok="$(gh api "repos/$r/actions/permissions" --jq .enabled)"
+    [ "$ok" = "false" ] && pass "$r: GitHub Actions disabled (the factory repo runs no workflows)" || fail "$r: GitHub Actions" "enabled=$ok"
+  else
+    # actions_settings_problem comes from up.sh, so the preflight and this check agree.
+    problem="$(actions_settings_problem "$r")" \
+      && pass "$r: Actions restricted (GitHub-owned actions pinned by SHA, read-only token, pull_request_target for guards.yml only, no repository secrets)" \
+      || fail "$r: Actions settings" "$problem"
+  fi
 done
 
 section "Image is rebuilt when .devcontainer/ changes"
