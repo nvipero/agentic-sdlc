@@ -29,7 +29,7 @@ Technical choices I made, with the reason. Each one can be overruled.
 
 | # | Decision | Reason |
 |---|---|---|
-| 1 | **The agent identity is a GitHub App** ("factory agent"), registered under your account and installed only on project repositories. Permissions: Contents, Issues and Pull requests read and write; Metadata read. No Workflows, no Administration, no Checks | Least privilege by construction. A machine user cannot be limited below collaborator rights, needs a classic token for a repository it does not own, and uses up the only free machine account |
+| 1 | **The agent identity is one GitHub App** named `factory-orchestrator` (shown as `factory-orchestrator[bot]`; App names are unique across GitHub, so if it is taken the fallback is `nvipero-factory-orchestrator`), registered under your account and installed only on project repositories. Permissions: Contents, Issues and Pull requests read and write; Metadata read. No Workflows, no Administration, no Checks | Least privilege by construction. A machine user cannot be limited below collaborator rights, needs a classic token for a repository it does not own, and uses up the only free machine account |
 | 2 | **The App's private key never enters the container.** It is stored in 1Password. `up.sh` signs a JWT on the host with `openssl` and mints an installation token for this one repository | The same separation as step 1: the container gets a short-lived, narrow credential, never the means to make more |
 | 3 | **A host-side refresher** started by `up.sh` mints a new token every 45 minutes, and at once after the Mac wakes if the token is older than that. `up.sh` reads the key from 1Password once (one confirmation per session); the refresher keeps it in memory, never on disk. The token is written to a temporary file and renamed into a host directory that is mounted read-only into the container; the directory is mounted, not the file, because a single-file mount keeps the old file after a rename. In the image, a root-owned `gh` wrapper and a git credential helper read the token from that file on every call | Sessions last longer than an hour, and an environment variable cannot be updated in a running process. A one-hour token in a read-only file is a smaller exposure than the 30–90-day token it replaces. Spec change: the "never a file on the container's disk" rule becomes "never a long-lived credential" |
 | 4 | **Ruleset on `main`:** pull request required, 1 approval, **review from code owners required**, stale approvals dismissed on a new push, the gate checks required, no bypass actors. `.github/CODEOWNERS` names only you, for every path | Code owner review makes your approval the only one that counts, even if another identity could approve. With no bypass actor, the App cannot merge before you approve |
@@ -97,7 +97,7 @@ Each piece is tested on the pilot before the next starts.
 - The App cannot merge an approved-less PR (a positive test PR, cleaned up afterwards, as in step 1).
 - The step 1 to 3 checks still pass, with "Actions disabled" replaced.
 
-**From the real run (`docs/verification/step-4.md`):** the broken PRs and their blocked checks, the preview link, the App as the author of every factory commit and comment, your approval as the only one the merge accepted.
+**From the real run (`docs/verification/step-4.md`):** the broken PRs and their blocked checks, the preview link, the App as the pusher of every factory commit and the author of every factory comment, each commit's author name showing its role, your approval as the only one the merge accepted.
 
 ## 8. Spec changes (revision 9)
 
@@ -117,7 +117,7 @@ Each piece is tested on the pilot before the next starts.
 ## 10. Known limitations in step 4
 
 - **After you approve,** the App could technically merge; only the deny rule in the container prevents it. Your approval is the decision that matters, so this is accepted.
-- **Roles share the App identity.** The container has one token, so the orchestrator and the roles cannot be told apart on GitHub; the commit trailers and the guards do that. Separate identities per role are backlog item 9.
+- **Roles share the App identity.** The container has one token, so the orchestrator and the roles cannot be told apart by GitHub permissions. Only the orchestrator acts on GitHub (comments, labels, PRs), which is why the App carries its name. Each role commits with its own author name (`factory <role>`, e.g. `factory test-writer`) next to the `Factory-Role` trailer, so the commit list shows who wrote what; the trailers and the guards are what the checks rely on, since an author name is not authenticated. Separate Apps per role give real separation only once roles run in separate sandboxes: backlog item 9, after the V2 layered sandbox (owner decision, 2026-10-30: one App for now).
 - **Tests on `pull_request` run the PR's code.** They are trustworthy because the guards protect what they run, not on their own.
 - **The token refresher depends on `up.sh` running** on your Mac. If it stops, the token expires within an hour and the agents lose GitHub access: failing closed.
 
