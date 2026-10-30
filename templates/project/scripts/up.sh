@@ -11,6 +11,7 @@
 # Needs on the host: gh (logged in as the repo owner), git, op, openssl, curl, jq,
 # devcontainer, docker.
 set -euo pipefail
+export GH_PAGER=cat
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$(basename "$REPO_DIR")"
@@ -86,10 +87,13 @@ actions_settings_problem() {
   got="$(gh api "repos/$nwo/actions/permissions/fork-pr-contributor-approval" --jq .approval_policy)" \
     || { echo "cannot read fork PR approval"; return 1; }
   [ "$got" = "all_external_contributors" ] || { echo "fork PR approval is '$got'"; return 1; }
-  got="$(gh api "repos/$nwo/actions/policies" --jq '[.policies[] | select(.enforcement == "active")
-      | {p: .conditions.workflow_path.include, e: [.rules[] | select(.type == "restrict_action_events") | .parameters.allowed_events]}]
-      | tostring')" || { echo "cannot read Actions policies"; return 1; }
-  [ "$got" = '[{"p":[".github/workflows/guards.yml"],"e":[["pull_request_target"]]}]' ] \
+  # The list omits conditions and rules, so each policy is read by id.
+  local ids id
+  ids="$(gh api "repos/$nwo/actions/policies" --jq '.policies[].id')" || { echo "cannot read Actions policies"; return 1; }
+  got="$(for id in $ids; do gh api "repos/$nwo/actions/policies/$id" --jq 'select(.enforcement == "active")
+      | {p: .conditions.workflow_path.include, e: [.rules[] | select(.type == "restrict_action_events") | .parameters.allowed_events]}'
+    done | jq -scS .)" || { echo "cannot read an Actions policy"; return 1; }
+  [ "$got" = '[{"e":[["pull_request_target"]],"p":[".github/workflows/guards.yml"]}]' ] \
     || { echo "Actions policies are '$got', expected one allowing pull_request_target for guards.yml only"; return 1; }
   got="$(gh api "repos/$nwo/actions/secrets" --jq .total_count)" || { echo "cannot read repository secrets"; return 1; }
   [ "$got" = "0" ] || { echo "$got repository-level secret(s); secrets belong to environments only"; return 1; }
