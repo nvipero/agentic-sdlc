@@ -1,6 +1,6 @@
 # Step 4 plan: Gates, preview and human-only merge
 
-Status: draft 2, for the owner's review (draft 1 reviewed by a second model; findings in section 12)
+Status: approved by the owner on 2026-10-30 (draft 2; draft 1 reviewed by a second model, findings in section 12)
 Spec: `specs/factory-v1-spec.md` revision 8, section 10, step 4
 Date: 2026-10-30
 
