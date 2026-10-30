@@ -31,6 +31,7 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
   - `guards` runs `main`'s definition on `pull_request_target` and reads the PR as data. It checks commit messages, role trailers and paths, clean merges of `main`, factory definitions, and acceptance-test changes after approval.
   - `tests` runs fixed commands on `pull_request`: type check, unit tests, build, acceptance tests and dependency review.
   - `label-audit` removes an owner-only label that anyone else added.
+  - `preview-build` and `preview-deploy` put a Vercel preview link on every PR marked ready. The build has no secrets. The deploy runs `main`'s definition in environment `preview` and copies only the build's static files, so no PR code runs where the token is.
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
   - an active ruleset without bypass actors
@@ -77,6 +78,21 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
    scripts/setup-github.sh board <owner>/<repo-name>
    ```
    Then turn on the dependency graph by hand (no API): **Settings → Advanced Security → Dependency graph → Enable**. The dependency review gate needs it, and `up.sh` checks it.
+   Then the Vercel preview. Do these steps yourself, so nobody else sees the secrets. Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
+   ```sh
+   mkdir -p /tmp/vercel-link && cd /tmp/vercel-link
+   npx vercel@64.3.1 login
+   npx vercel@64.3.1 project create <repo-name>
+   npx vercel@64.3.1 link --yes --project <repo-name> && cat .vercel/project.json   # orgId, projectId
+   npx vercel@64.3.1 logout && cd / && rm -rf /tmp/vercel-link
+   ```
+   Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Then:
+   ```sh
+   scripts/setup-github.sh preview-env <owner>/<repo-name>
+   gh secret set VERCEL_TOKEN --env preview --repo <owner>/<repo-name>
+   gh secret set VERCEL_ORG_ID --env preview --repo <owner>/<repo-name>
+   gh secret set VERCEL_PROJECT_ID --env preview --repo <owner>/<repo-name>
+   ```
 5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:
    - **Auto-add to project:** select the repository, set the filter to `is:issue`, and turn it on. The board shows issues only, because a story is an issue and its PR is linked to it. All six saved views also filter on `is:issue`.
    - **Turn off the workflows that change the Status field:** "Item added to project", "Item closed", "Pull request linked to issue", "Pull request merged" and "Auto-close issue". The factory uses labels as status, so a second status that GitHub changes by itself would be misleading.
