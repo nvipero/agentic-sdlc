@@ -12,6 +12,7 @@
 #   scripts/setup-github.sh board             <owner/repo>
 #   scripts/setup-github.sh status            <owner/repo>   (read-only)
 set -euo pipefail
+export GH_PAGER=cat   # gh would open a pager for every call in a terminal
 
 die() { echo "setup-github: $*" >&2; exit 1; }
 say() { echo "setup-github: $*" >&2; }
