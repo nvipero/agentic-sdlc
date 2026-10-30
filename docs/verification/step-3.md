@@ -71,6 +71,19 @@ The status comment's chain, as the orchestrator left it:
 
 #28's own test file keeps its issue name; it is renamed and tagged when a later story touches the feature.
 
+## Second run: issue #29 "Remove a task I no longer need" (sdlc-pilot #39, merged 2026-10-30)
+
+A story on an existing codebase, run with the fixes above (pilot #37).
+
+- **Merge instead of rebase** worked twice: the orchestrator merged `origin/main` into the story branch (538543d, c94cc97) and the commit checks skipped the merge commits.
+- **Tags:** the tag check failed on #28's untagged tests, and the test writer tagged them (1668c0d). The rule "every test has a tag" migrated the old tests in this story, not when a story first changed them.
+- **Tests before code on an existing app:** the web server started, and the 25 tests tagged `@issue-29-` failed; the others passed. After the implementation: unit 13/13, acceptance 44/44.
+- **Trailer, again:** 1668c0d had `Factory-Role` in its own paragraph. The owner accepted it in the session. Fixed with `git commit --trailer` in every role (agentic-sdlc #4, pilot #38).
+- **Owner change request on the ready PR:** rename `28-add-task-move-statuses.spec.ts`. The rules sent every change request to the implementer, which may not touch tests; the orchestrator routed it to the test writer, reopened the test gate, and skipped a new implementation review because the code had not changed. Written down in agentic-sdlc #5 (pilot #40), with two owner decisions: a test change always needs `tests-change-approved`, a comment is never enough; the label covers one change and the orchestrator removes it after the test gate approves.
+- **Context note:** the product context still lists task deletion as an open question; #29 answered it. The owner can update it with `/factory:context`.
+
+Not exercised in either run: a test problem from the implementer, a dispute and its decision, and a resumed run with open findings.
+
 ## Before the pilot PR
 
 - **Second-model review** of the step 3 diff: no blocking findings, fifteen non-blocking, all fixed (3a6bd87). Among them: Playwright's HTML reporter waits for a key press after failures, which would have hung every failing run; a test problem left uncommitted work that would have stopped the next run; the dispute-decision row would have captured later owner comments.
