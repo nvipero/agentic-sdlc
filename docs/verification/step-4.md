@@ -8,7 +8,7 @@ Plan: [docs/plans/step-4.md](../plans/step-4.md), approved 2026-10-30. Filled in
 - **Scripted exit check:** all checks pass, none skipped, 2026-10-30T22:29Z, against sdlc-pilot main with all step 4 PRs and the real story #31 merged.
 - **Real story:** #31 ran end to end under the App: 15 acceptance tests, implementation, both reviews approved in round 1, GitHub checks green before ready, preview at `nvipero-sdlc-pilot-pr-78.vercel.app`; the owner approved and merged PR #78.
 - **Changed on the way** (owner decisions): the preview builds once in `tests` and deploys only after tests and guards pass, one per PR at a stable address, in the deployments panel; the Vercel token stays scoped to one project, so alias and cleanup use the REST API; merged branches are deleted; no transition rules for factory comments written as the owner (#31 cleaned by hand).
-- **Found:** the agents' git email since step 1 belonged to an unrelated GitHub account (fixed: the App's bot address); a prebuilt Vercel deploy without a production deployment becomes production (fixed: placeholder).
+- **Fixed or found:** the agents' git email since step 1 belonged to an unrelated GitHub account (known since step 2 and deferred to step 4; now the App's bot address); a prebuilt Vercel deploy without a production deployment becomes production (fixed: placeholder).
 
 ## Build step 1: App and token (2026-10-30)
 
@@ -152,7 +152,7 @@ CodeQL and dependency review passed on all ten.
 
 **Deployments panel (owner, 2026-10-30; sdlc-pilot #72, probe #74):** the deploy job records a GitHub deployment of the PR's head in environment `pr-preview` (no secrets) instead of a link comment: `env=pr-preview creator=github-actions[bot] payload={"pr":74}`, status `success https://nvipero-sdlc-pilot-pr-74.vercel.app`. After the PR closed, cleanup marked it `inactive` and the address answered 404.
 
-**Commit author (found 2026-10-30):** since step 1 the container's git email was `factory-agent@users.noreply.github.com`, which GitHub links to an unrelated real account `factory-agent` (created 2026-04-12). Agent commits on `main` show that account as author; they are not rewritten. From step 4 the email is the App's bot address `350329028+nvipero-factory-orchestrator[bot]@users.noreply.github.com`; probe #74 shows `author: nvipero-factory-orchestrator[bot]`.
+**Commit author (known since step 2, deferred to step 4 by the owner on 2026-10-29):** since step 1 the container's git email was `factory-agent@users.noreply.github.com`, which GitHub links to an unrelated real account `factory-agent` (created 2026-04-12). Agent commits on `main` show that account as author; they are not rewritten. From step 4 the email is the App's bot address `350329028+nvipero-factory-orchestrator[bot]@users.noreply.github.com`; probe #74 shows `author: nvipero-factory-orchestrator[bot]`.
 
 ## Build step 6: orchestrator and a real story (2026-10-30 to 31)
 
