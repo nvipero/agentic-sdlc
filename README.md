@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: step 3 (implementation chain) of five, in progress. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation and code review.
+Status: step 4 (gates, preview and human-only merge) of five, done. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, and every PR marked ready gets a Vercel preview.
 
 ## What is here
 
@@ -42,7 +42,7 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
   - the host clone is clean, on `main` and equal to `origin/main`
 - **The host clone is never updated automatically.** If it is behind `origin/main`, `up.sh` refuses to start. Review the new commits with `git log -p HEAD..origin/main`, then pull with `git pull --ff-only`.
 
-**Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it. A merged change is never executed on your Mac until you review and pull it yourself.
+**Known limitation:** after you approve a pull request, the agents' App could technically merge it; only the deny rule in the container prevents that. Your approval is the decision that matters.
 
 ## Conventions
 
