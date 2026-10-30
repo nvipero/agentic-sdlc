@@ -84,6 +84,11 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
    npx vercel@64.3.1 login
    npx vercel@64.3.1 project create <repo-name>
    npx vercel@64.3.1 link --yes --project <repo-name> && cat .vercel/project.json   # orgId, projectId
+   # Vercel makes a project's first deployment its production one, even when a preview
+   # is asked for. A placeholder takes that place, so every PR deployment is a preview.
+   mkdir -p .vercel/output/static && printf '{"version":3}\n' > .vercel/output/config.json
+   printf '<!doctype html><meta charset="utf-8"><title>Previews only</title><p>This project has no production deployment.</p>\n' > .vercel/output/static/index.html
+   npx vercel@64.3.1 deploy --prebuilt --prod
    npx vercel@64.3.1 logout && cd / && rm -rf /tmp/vercel-link
    ```
    Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Then:
