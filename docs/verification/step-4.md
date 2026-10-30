@@ -2,6 +2,14 @@
 
 Plan: [docs/plans/step-4.md](../plans/step-4.md), approved 2026-10-30. Filled in build step by build step (plan section 6).
 
+## TL;DR
+
+- **Exit criterion met** (spec section 10): a PR that breaks any gate cannot be merged (probes #48–#56), every PR marked ready gets a preview link (one per PR, in its deployments panel), and the agent identity cannot merge a PR without the owner's approval (#57, exit check #79).
+- **Scripted exit check:** all checks pass, none skipped, 2026-10-30T22:29Z, against sdlc-pilot main with all step 4 PRs and the real story #31 merged.
+- **Real story:** #31 ran end to end under the App: 15 acceptance tests, implementation, both reviews approved in round 1, GitHub checks green before ready, preview at `nvipero-sdlc-pilot-pr-78.vercel.app`; the owner approved and merged PR #78.
+- **Changed on the way** (owner decisions): the preview builds once in `tests` and deploys only after tests and guards pass, one per PR at a stable address, in the deployments panel; the Vercel token stays scoped to one project, so alias and cleanup use the REST API; merged branches are deleted; no transition rules for factory comments written as the owner (#31 cleaned by hand).
+- **Found:** the agents' git email since step 1 belonged to an unrelated GitHub account (fixed: the App's bot address); a prebuilt Vercel deploy without a production deployment becomes production (fixed: placeholder).
+
 ## Build step 1: App and token (2026-10-30)
 
 **Result:** the scripted exit check passes in full (all checks, none failed) against sdlc-pilot main with #41 (App token) and #43 (refresher fix) merged.
@@ -145,3 +153,45 @@ CodeQL and dependency review passed on all ten.
 **Deployments panel (owner, 2026-10-30; sdlc-pilot #72, probe #74):** the deploy job records a GitHub deployment of the PR's head in environment `pr-preview` (no secrets) instead of a link comment: `env=pr-preview creator=github-actions[bot] payload={"pr":74}`, status `success https://nvipero-sdlc-pilot-pr-74.vercel.app`. After the PR closed, cleanup marked it `inactive` and the address answered 404.
 
 **Commit author (found 2026-10-30):** since step 1 the container's git email was `factory-agent@users.noreply.github.com`, which GitHub links to an unrelated real account `factory-agent` (created 2026-04-12). Agent commits on `main` show that account as author; they are not rewritten. From step 4 the email is the App's bot address `350329028+nvipero-factory-orchestrator[bot]@users.noreply.github.com`; probe #74 shows `author: nvipero-factory-orchestrator[bot]`.
+
+## Build step 6: orchestrator and a real story (2026-10-30 to 31)
+
+sdlc-pilot #75 and #77 (orchestrator and roles as the App); issue #31 "Tell me when my tasks cannot be saved", spec approved before step 4.
+
+- The status, ready comment and PR are by `nvipero-factory-orchestrator`; `spec-approved` counted as the owner's from the issue events.
+- Chain: `test-writer: wrote 15 tests for AC-1..AC-11` → test run 14 failed, 1 passed (AC-10 has no failure path) → coverage review approve, 0 blocking → implementer → implementation checks pass → `unit 20/20, build ok, acceptance 59/59` → code review approve, 0 blocking → `GitHub checks: guards, unit-and-build, acceptance, dependency-review pass; PR marked ready`.
+- Commits on PR #78: the merge of main by `nvipero-factory-orchestrator[bot]`; `factory test-writer` and `factory implementer` as author names under the App. The two spec commits from before step 4 show `factory-agent`.
+- PR #78 was `REVIEW_REQUIRED`/`BLOCKED` until the owner approved; the owner merged it. Preview `success https://nvipero-sdlc-pilot-pr-78.vercel.app`.
+- Before the run, #31's six factory comments written as the owner were removed by hand (the factory keeps no transition rules for them; #76 closed unmerged).
+
+## Exit check (2026-10-30T22:29:36Z)
+
+All checks pass. Step 4 sections (the rest as in build step 1, all PASS):
+
+```text
+## Step 4: gates on main
+PASS  nvipero/sdlc-pilot main: .github/ matches the factory template, no other workflows
+PASS  CODEOWNERS on main names only the owner — @nvipero
+PASS  workflow triggers: guards on pull_request_target, preview-deploy and preview-cleanup on workflow_run, tests on pull_request
+PASS  no ${{ }} expression inside any run: block (event data only through env:)
+PASS  environment preview deploys from main only
+PASS  Vercel secrets only in environment preview — VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN
+PASS  merged branches are deleted automatically
+
+## Protections through the API (owner login)
+PASS  nvipero/sdlc-pilot: ruleset requires code owner review (dismissed on push), the gate checks from GitHub Actions and CodeQL; only bypass: admin role, pull requests
+PASS  nvipero/sdlc-pilot: Actions restricted (GitHub-owned actions pinned by SHA, read-only token, pull_request_target for guards.yml only, no repository secrets)
+PASS  nvipero/agentic-sdlc: no bypass actors
+PASS  nvipero/agentic-sdlc: GitHub Actions disabled (the factory repo runs no workflows)
+
+## Agent token reach (observed behaviour)
+PASS  agent token cannot merge a PR without the owner's approval (ruleset) — ✓ Pull request nvipero/sdlc-pilot#79 is marked as "ready for review"
+PASS  probe branch and PR cleaned up (closed, not merged)
+
+## Token never in a host process's arguments
+PASS  no token, JWT, key or GH_TOKEN= in a host process list during mint, start and session — 84 samples
+
+RESULT: all checks passed
+```
+
+**Correction after the run:** the merge check's pattern also matched the "ready for review" line, so its PASS line does not show the refusal itself. PR #79 is confirmed `CLOSED merged=null`, and `main` has no commit from it. The pattern now matches only the merge refusal (cad134e); the refusal message itself was shown in build steps 2 to 4 (`the base branch policy prohibits the merge`).
