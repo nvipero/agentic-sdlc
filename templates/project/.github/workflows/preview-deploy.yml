@@ -59,8 +59,11 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --non-interactive | tail -1)"
-          [[ "$url" =~ ^https://[a-z0-9.-]+\.vercel\.app$ ]] || { echo "::error::unexpected deploy output"; exit 1; }
+          # Always a preview: without --target, a prebuilt deploy goes to production.
+          vercel deploy --prebuilt --target=preview --non-interactive --no-color > "$RUNNER_TEMP/deploy.out"
+          # stdout carries the deployment URL; take the first one.
+          url="$(grep -oE 'https://[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/deploy.out" | head -1 || true)"
+          [ -n "$url" ] || { echo "::error::no deployment URL in the output"; cat "$RUNNER_TEMP/deploy.out"; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - name: Link on the PR
         env:
