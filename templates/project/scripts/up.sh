@@ -97,6 +97,12 @@ actions_settings_problem() {
     || { echo "Actions policies are '$got', expected one allowing pull_request_target for guards.yml only"; return 1; }
   got="$(gh api "repos/$nwo/actions/secrets" --jq .total_count)" || { echo "cannot read repository secrets"; return 1; }
   [ "$got" = "0" ] || { echo "$got repository-level secret(s); secrets belong to environments only"; return 1; }
+  # The dependency review gate needs the dependency graph, which has no API switch:
+  # its SBOM answers only when it is on (Settings, Advanced Security).
+  gh api "repos/$nwo/dependency-graph/sbom" --silent 2>/dev/null \
+    || { echo "the dependency graph is off (enable it in Settings, Advanced Security)"; return 1; }
+  got="$(gh api "repos/$nwo/code-scanning/default-setup" --jq .state)" || { echo "cannot read code scanning"; return 1; }
+  [ "$got" = "configured" ] || { echo "CodeQL default setup is '$got'"; return 1; }
 }
 
 # --- 1. Preflight: GitHub protections (host, owner's gh login) ---------------
