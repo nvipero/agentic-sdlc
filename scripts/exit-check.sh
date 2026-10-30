@@ -259,6 +259,9 @@ else
 fi
 expect_fail "agent token cannot push to the factory repo" \
   "cd /workspace && git push --dry-run https://github.com/$FACTORY_NWO.git HEAD:refs/heads/exit-check-probe" "403|denied|not found"
+# The probe PR marked ready has no approval: the ruleset must refuse the App's merge.
+expect_fail "agent token cannot merge a PR without the owner's approval (ruleset)" \
+  "cd /workspace && gh pr ready $BR >/dev/null && gh pr merge $BR --merge" "prohibits the merge|not mergeable|review|protected"
 in_box "cd /workspace && gh pr close $BR --delete-branch --comment 'Exit check finished; closing without merge.' >/dev/null 2>&1; git switch -q main; git branch -q -D $BR" >/dev/null
 gh api "repos/$NWO/branches/$BR" >/dev/null 2>&1 && fail "probe branch cleaned up" || pass "probe branch and PR cleaned up (closed, not merged)"
 expect_ok "merge deny rule active in bypass mode (claude -p, permission_denials)" \
@@ -359,6 +362,41 @@ for r in "$NWO" "$FACTORY_NWO"; do
       || fail "$r: Actions settings" "$problem"
   fi
 done
+
+section "Step 4: gates on main"
+# The project's .github/ on main must match the factory template, so the gates are the reviewed ones.
+drift=""
+for f in CODEOWNERS scripts/guards.sh scripts/vercel-preview.sh workflows/guards.yml workflows/tests.yml workflows/label-audit.yml \
+         workflows/preview-deploy.yml workflows/preview-closed.yml workflows/preview-cleanup.yml; do
+  [ "$(git -C "$REPO" show "origin/main:.github/$f" 2>/dev/null | shasum -a 256)" = "$(shasum -a 256 < "$FACTORY_DIR/templates/project/.github/$f")" ] || drift="$drift $f"
+done
+extra="$(git -C "$REPO" ls-tree --name-only origin/main .github/workflows/ | sed 's|.github/workflows/||' | grep -vxE 'guards.yml|tests.yml|label-audit.yml|preview-deploy.yml|preview-closed.yml|preview-cleanup.yml' | tr '\n' ' ')"
+[ -z "$drift" ] && [ -z "$extra" ] && pass "$NWO main: .github/ matches the factory template, no other workflows" \
+  || fail "$NWO main: .github/ drift" "differs:${drift:- none}; extra: ${extra:-none}"
+owners="$(git -C "$REPO" show origin/main:.github/CODEOWNERS 2>/dev/null | grep -v '^#' | grep -oE '@[A-Za-z0-9_-]+' | sort -u | tr '\n' ' ')"
+[ "$owners" = "@$(gh api user --jq .login) " ] && pass "CODEOWNERS on main names only the owner" "$owners" || fail "CODEOWNERS owners" "$owners"
+# Triggers, and no expression with event data inside a run: block (it would be interpolated into the script).
+# Read from the template: the drift check above shows main has the same files.
+wf_check="$(ruby -ryaml -e '
+    bad = []; trig = {}
+    Dir.glob(ARGV[0] + "/*.yml").each do |f|
+      w = YAML.load_file(f); n = File.basename(f, ".yml")
+      trig[n] = (w["on"] || w[true]).keys.sort.join(",")
+      (w["jobs"] || {}).each { |j, job| (job["steps"] || []).each { |st| bad << "#{n}/#{j}" if st["run"].to_s.include?("${{") } }
+    end
+    puts "triggers=" + trig.sort.map { |k, v| "#{k}:#{v}" }.join(" ")
+    puts "interpolated=" + bad.uniq.join(" ")' "$FACTORY_DIR/templates/project/.github/workflows")"
+echo "$wf_check" | grep -qx "triggers=guards:pull_request_target label-audit:issues,label preview-cleanup:workflow_run preview-closed:pull_request preview-deploy:workflow_run tests:pull_request" \
+  && pass "workflow triggers: guards on pull_request_target, preview-deploy and preview-cleanup on workflow_run, tests on pull_request" \
+  || fail "workflow triggers" "$(echo "$wf_check" | head -1)"
+echo "$wf_check" | grep -qx "interpolated=" && pass "no \${{ }} expression inside any run: block (event data only through env:)" \
+  || fail "expressions in run: blocks" "$(echo "$wf_check" | tail -1)"
+env_branches="$(gh api "repos/$NWO/environments/preview/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"
+[ "$env_branches" = "branch:main" ] && pass "environment preview deploys from main only" || fail "preview environment branches" "$env_branches"
+env_secrets="$(gh api "repos/$NWO/environments/preview/secrets" --jq '[.secrets[].name] | sort | join(" ")')"
+[ "$env_secrets" = "VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN" ] && pass "Vercel secrets only in environment preview" "$env_secrets" || fail "preview secrets" "$env_secrets"
+delete_merged="$(gh api "repos/$NWO" --jq .delete_branch_on_merge)"
+[ "$delete_merged" = true ] && pass "merged branches are deleted automatically" || fail "delete branch on merge" "$delete_merged"
 
 section "Image is rebuilt when .devcontainer/ changes"
 # Leftovers from an aborted run: the worktree that has the branch checked out, then the branch.
