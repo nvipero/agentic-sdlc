@@ -16,7 +16,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$(basename "$REPO_DIR")"
 # The agents' GitHub identity: a GitHub App. Its client id is not secret; its
 # private key is a 1Password document that never leaves this machine.
-APP_CLIENT_ID="${FACTORY_APP_CLIENT_ID:-}"
+APP_CLIENT_ID="${FACTORY_APP_CLIENT_ID:-Iv23liljNpUlSNsNl3wU}"
 APP_KEY_VAULT="${FACTORY_APP_KEY_VAULT:-Agent Factory}"
 APP_KEY_DOC="${FACTORY_APP_KEY_DOC:-nvipero-factory-orchestrator-key}"
 # Per-project host state, outside the clone. token/ is mounted read-only into
