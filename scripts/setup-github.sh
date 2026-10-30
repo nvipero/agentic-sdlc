@@ -2,7 +2,7 @@
 # Sets up GitHub for a factory project (or the factory repo itself).
 # Runs on the host with the owner's gh login. Every subcommand is idempotent.
 #
-#   scripts/setup-github.sh ruleset           <owner/repo>
+#   scripts/setup-github.sh ruleset           <owner/repo> [factory]
 #   scripts/setup-github.sh interaction-limit <owner/repo>
 #   scripts/setup-github.sh secret-scanning   <owner/repo>
 #   scripts/setup-github.sh actions           <owner/repo>   (project: restricted Actions, step 4)
@@ -19,17 +19,31 @@ say() { echo "setup-github: $*" >&2; }
 
 RULESET_NAME="protect-main"
 
+# A project's ruleset (step 4, plan decision 5): every change through a pull
+# request with the code owner's (the owner's) approval, dismissed by a new push;
+# the gate checks required from GitHub Actions (app 15368) and CodeQL alerts
+# blocking. One bypass actor: the admin role, in pull request mode, so the
+# owner's own PRs can merge without a second reviewer, never by direct push.
+# The agents' App is not an admin. With "factory" as the third argument
+# (the factory repo, which runs no workflows): no checks, no bypass.
 ruleset() {
-  local nwo="$1" id body
-  body="$(cat <<'EOF'
-{"name":"protect-main","target":"branch","enforcement":"active","bypass_actors":[],
- "conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},
- "rules":[{"type":"pull_request","parameters":{"required_approving_review_count":0,
-   "dismiss_stale_reviews_on_push":false,"require_code_owner_review":false,
-   "require_last_push_approval":false,"required_review_thread_resolution":false}},
-  {"type":"non_fast_forward"},{"type":"deletion"}]}
-EOF
-)"
+  local nwo="$1" kind="${2:-project}" id body bypass checks
+  bypass='[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"pull_request"}]'
+  checks=',{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,
+   "do_not_enforce_on_create":false,"required_status_checks":[
+    {"context":"guards","integration_id":15368},{"context":"unit-and-build","integration_id":15368},
+    {"context":"acceptance","integration_id":15368},{"context":"dependency-review","integration_id":15368}]}},
+  {"type":"code_scanning","parameters":{"code_scanning_tools":[
+    {"tool":"CodeQL","security_alerts_threshold":"high_or_higher","alerts_threshold":"errors"}]}}'
+  local approvals=1 owner_review=true
+  if [ "$kind" = factory ]; then bypass='[]'; checks=''; approvals=0; owner_review=false; fi
+  body="{\"name\":\"protect-main\",\"target\":\"branch\",\"enforcement\":\"active\",\"bypass_actors\":$bypass,
+ \"conditions\":{\"ref_name\":{\"include\":[\"~DEFAULT_BRANCH\"],\"exclude\":[]}},
+ \"rules\":[{\"type\":\"pull_request\",\"parameters\":{\"required_approving_review_count\":$approvals,
+   \"dismiss_stale_reviews_on_push\":$owner_review,\"require_code_owner_review\":$owner_review,
+   \"require_last_push_approval\":false,\"required_review_thread_resolution\":false}},
+  {\"type\":\"non_fast_forward\"},{\"type\":\"deletion\"}$checks]}"
+  echo "$body" | jq -e . >/dev/null || die "ruleset body is not valid JSON"
   id="$(gh api "repos/$nwo/rulesets" --jq ".[] | select(.name == \"$RULESET_NAME\") | .id")"
   if [ -n "$id" ]; then
     echo "$body" | gh api -X PUT "repos/$nwo/rulesets/$id" --input - >/dev/null
@@ -194,7 +208,10 @@ status() {
   gh repo view "$nwo" --json visibility --jq '"visibility: \(.visibility)"'
   for id in $(gh api "repos/$nwo/rulesets" --jq '.[].id'); do
     gh api "repos/$nwo/rulesets/$id" --jq \
-      '"ruleset \(.name): enforcement=\(.enforcement) bypass_actors=\(.bypass_actors | length) target=\(.conditions.ref_name.include) rules=\([.rules[].type])"'
+      '"ruleset \(.name): enforcement=\(.enforcement) bypass_actors=\([.bypass_actors[] | "\(.actor_type):\(.actor_id):\(.bypass_mode)"]) target=\(.conditions.ref_name.include) rules=\([.rules[].type])",
+       (.rules[] | select(.type == "pull_request") | "  pull_request: \(.parameters | {required_approving_review_count, require_code_owner_review, dismiss_stale_reviews_on_push})"),
+       (.rules[] | select(.type == "required_status_checks") | "  required checks: \([.parameters.required_status_checks[] | "\(.context)@\(.integration_id)"])"),
+       (.rules[] | select(.type == "code_scanning") | "  code scanning: \(.parameters.code_scanning_tools)")'
   done
   gh api "repos/$nwo/interaction-limits" --jq '"interaction limit: \(.limit // "none") until \(.expires_at // "-")"'
   gh api "repos/$nwo/actions/permissions" --jq '"actions: enabled=\(.enabled) allowed=\(.allowed_actions // "-") sha_pinning=\(.sha_pinning_required // "-")"'
@@ -208,9 +225,9 @@ status() {
   gh api "repos/$nwo" --jq '.security_and_analysis | "secret scanning: \(.secret_scanning.status), push protection: \(.secret_scanning_push_protection.status)"'
 }
 
-[ "$#" -eq 2 ] || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|actions-off|code-scanning|labels|board|status> <owner/repo>"
+[ "$#" -ge 2 ] && { [ "$#" -eq 2 ] || [ "$1" = ruleset ]; } || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|actions-off|code-scanning|labels|board|status> <owner/repo>"
 case "$1" in
-  ruleset) ruleset "$2" ;;
+  ruleset) ruleset "$2" "${3:-project}" ;;
   interaction-limit) interaction_limit "$2" ;;
   secret-scanning) secret_scanning "$2" ;;
   actions) actions "$2" ;;

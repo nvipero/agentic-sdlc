@@ -340,8 +340,15 @@ for r in "$NWO" "$FACTORY_NWO"; do
   echo '```'
   ok="$(gh api "repos/$r/rules/branches/main" --jq '[.[].type] | (index("pull_request") != null and index("non_fast_forward") != null and index("deletion") != null)')"
   [ "$ok" = "true" ] && pass "$r: pull_request, non_fast_forward, deletion active on main" || fail "$r: rules on main"
-  ok="$(gh api "repos/$r/rulesets" --jq '.[].id' | while read -r id; do gh api "repos/$r/rulesets/$id" --jq 'has("bypass_actors") and (.bypass_actors|length==0)'; done | sort -u)"
-  [ "$ok" = "true" ] && pass "$r: no bypass actors" || fail "$r: bypass actors" "$ok"
+  if [ "$r" = "$FACTORY_NWO" ]; then
+    ok="$(gh api "repos/$r/rulesets" --jq '.[].id' | while read -r id; do gh api "repos/$r/rulesets/$id" --jq 'has("bypass_actors") and (.bypass_actors|length==0)'; done | sort -u)"
+    [ "$ok" = "true" ] && pass "$r: no bypass actors" || fail "$r: bypass actors" "$ok"
+  else
+    # ruleset_problem comes from up.sh, so the preflight and this check agree.
+    problem="$(ruleset_problem "$r" "$(gh api "repos/$r/rules/branches/main" --jq '[.[].ruleset_id] | unique | .[]')")" \
+      && pass "$r: ruleset requires code owner review (dismissed on push), the gate checks from GitHub Actions and CodeQL; only bypass: admin role, pull requests" \
+      || fail "$r: ruleset" "$problem"
+  fi
   if [ "$r" = "$FACTORY_NWO" ]; then
     ok="$(gh api "repos/$r/actions/permissions" --jq .enabled)"
     [ "$ok" = "false" ] && pass "$r: GitHub Actions disabled (the factory repo runs no workflows)" || fail "$r: GitHub Actions" "enabled=$ok"
