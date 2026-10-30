@@ -8,17 +8,34 @@
 #                            show the workspace content, ask for confirmation,
 #                            archive the workspace volume and clone a fresh one
 #
-# Needs on the host: gh (logged in as the repo owner), git, op, devcontainer, docker.
+# Needs on the host: gh (logged in as the repo owner), git, op, openssl, curl, jq,
+# devcontainer, docker.
 set -euo pipefail
+export GH_PAGER=cat
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$(basename "$REPO_DIR")"
-TOKEN_REF="${FACTORY_TOKEN_REF:-op://Agent Factory/${PROJECT}-github/credential}"
+# The agents' GitHub identity: a GitHub App. Its client id is not secret; its
+# private key is a 1Password document that never leaves this machine.
+APP_CLIENT_ID="${FACTORY_APP_CLIENT_ID:-Iv23liljNpUlSNsNl3wU}"
+APP_KEY_VAULT="${FACTORY_APP_KEY_VAULT:-Agent Factory}"
+APP_KEY_DOC="${FACTORY_APP_KEY_DOC:-nvipero-factory-orchestrator-key}"
+# Per-project host state, outside the clone. token/ is mounted read-only into
+# the container (devcontainer.json) and holds only the current one-hour token.
+RUN_DIR="$HOME/.factory-run/$PROJECT"
+export FACTORY_TOKEN_DIR="$RUN_DIR/token"
+REFRESH_AGE=2700      # mint a new token when the current one is 45 minutes old
+REFRESH_MARGIN=900    # or expires within 15 minutes
 EXPECTED_VISIBILITY="${FACTORY_EXPECTED_VISIBILITY:-PUBLIC}"
 WARN_DAYS=14
 VOLUME="${PROJECT}-workspace"   # matches workspaceMount in devcontainer.json
 
-die() { echo "up.sh: REFUSING TO START: $*" >&2; exit 1; }
+# After this start has taken over the token (TOKEN_OWNED), a refusal removes it.
+die() {
+  echo "up.sh: REFUSING TO START: $*" >&2
+  if [ -n "${TOKEN_OWNED:-}" ]; then remove_token; fi
+  exit 1
+}
 say() { echo "up.sh: $*" >&2; }
 
 container_id() {
@@ -31,17 +48,16 @@ stop_container() {
   if [ -n "$cid" ]; then docker stop "$cid" >/dev/null; fi
 }
 
-# Runs a command in the container ($CID) as the agent user. The token is passed
-# by name only (-e GH_TOKEN): the docker client reads the value from its own
-# environment, so it never appears in any process's argument list. Leading
-# "-e NAME" arguments pass more variables by name. A terminal (-t) is used only
-# when both stdin and stdout are one; give non-interactive execs </dev/null so
-# they do not consume the caller's stdin.
+# Runs a command in the container ($CID) as the agent user. No credential is
+# passed: gh and git in the container read the token from the read-only token
+# mount on every call. Leading "-e NAME" arguments pass variables by name. A
+# terminal (-t) is used only when both stdin and stdout are one; give
+# non-interactive execs </dev/null so they do not consume the caller's stdin.
 box_exec() {
-  local tty= envs=(-e GH_TOKEN)
+  local tty= envs=()
   while [ "${1:-}" = "-e" ]; do envs+=(-e "$2"); shift 2; done
   if [ -t 0 ] && [ -t 1 ]; then tty=1; fi
-  GH_TOKEN="$FACTORY_GH_TOKEN" docker exec -i ${tty:+-t} -u node -w /workspace "${envs[@]}" "$CID" "$@"
+  docker exec -i ${tty:+-t} -u node -w /workspace ${envs[@]+"${envs[@]}"} "$CID" "$@"
 }
 
 # Removes the project's containers, running or stopped (they are recreated on every start).
@@ -50,6 +66,70 @@ remove_containers() {
   for cid in $(docker ps -aq --filter "label=devcontainer.local_folder=$REPO_DIR"); do
     docker rm -f "$cid" >/dev/null
   done
+}
+
+# The ruleset as setup-github.sh sets it (step 4, plan decision 5): every
+# ruleset active, the only bypass the admin role in pull request mode, and one
+# requiring the code owner's approval (dismissed on push), the gate checks from
+# GitHub Actions and CodeQL. Prints the first mismatch and returns non-zero.
+REQUIRED_CHECKS='["acceptance@15368","dependency-review@15368","guards@15368","unit-and-build@15368"]'
+ruleset_problem() {
+  local nwo="$1" ids="$2" id got full=
+  for id in $ids; do
+    got="$(gh api "repos/$nwo/rulesets/$id" --jq '[.enforcement,
+        ([.bypass_actors[] | "\(.actor_type):\(.actor_id):\(.bypass_mode)"] | tostring)] | join(" ")')" \
+      || { echo "cannot read ruleset $id"; return 1; }
+    case "$got" in
+      'active []'|'active ["RepositoryRole:5:pull_request"]') ;;
+      *) echo "ruleset $id is '$got', expected active with no bypass but the admin role for pull requests"; return 1 ;;
+    esac
+    got="$(gh api "repos/$nwo/rulesets/$id" --jq '[
+        (.rules[] | select(.type == "pull_request") | .parameters
+          | (.required_approving_review_count >= 1 and .require_code_owner_review and .dismiss_stale_reviews_on_push)),
+        (.rules[] | select(.type == "required_status_checks")
+          | [.parameters.required_status_checks[] | "\(.context)@\(.integration_id)"] | sort | tostring),
+        ([.rules[] | select(.type == "code_scanning") | .parameters.code_scanning_tools[] | select(.tool == "CodeQL")] | length > 0)
+      ] | map(tostring) | join(" ")')" || { echo "cannot read ruleset $id"; return 1; }
+    [ "$got" = "true $REQUIRED_CHECKS true" ] && full=1
+  done
+  [ -n "$full" ] || { echo "no ruleset requires code owner review, the gate checks ($REQUIRED_CHECKS) and CodeQL"; return 1; }
+}
+
+# Actions as setup-github.sh sets them (step 4, plan decision 11). Prints the
+# first mismatch and returns non-zero; prints nothing when they match.
+actions_settings_problem() {
+  local nwo="$1" got
+  got="$(gh api "repos/$nwo/actions/permissions" --jq '"\(.enabled) \(.allowed_actions) \(.sha_pinning_required)"')" \
+    || { echo "cannot read GitHub Actions settings"; return 1; }
+  [ "$got" = "true selected true" ] \
+    || { echo "Actions is '$got', expected enabled, selected actions, SHA pinning required"; return 1; }
+  got="$(gh api "repos/$nwo/actions/permissions/selected-actions" \
+    --jq '"\(.github_owned_allowed) \(.verified_allowed) \(.patterns_allowed | length)"')" \
+    || { echo "cannot read allowed actions"; return 1; }
+  [ "$got" = "true false 0" ] || { echo "allowed actions are '$got', expected GitHub-owned only"; return 1; }
+  got="$(gh api "repos/$nwo/actions/permissions/workflow" \
+    --jq '"\(.default_workflow_permissions) \(.can_approve_pull_request_reviews)"')" \
+    || { echo "cannot read workflow token settings"; return 1; }
+  [ "$got" = "read false" ] || { echo "workflow token is '$got', expected read-only, cannot approve"; return 1; }
+  got="$(gh api "repos/$nwo/actions/permissions/fork-pr-contributor-approval" --jq .approval_policy)" \
+    || { echo "cannot read fork PR approval"; return 1; }
+  [ "$got" = "all_external_contributors" ] || { echo "fork PR approval is '$got'"; return 1; }
+  # The list omits conditions and rules, so each policy is read by id.
+  local ids id
+  ids="$(gh api "repos/$nwo/actions/policies" --jq '.policies[].id')" || { echo "cannot read Actions policies"; return 1; }
+  got="$(for id in $ids; do gh api "repos/$nwo/actions/policies/$id" --jq 'select(.enforcement == "active")
+      | {p: .conditions.workflow_path.include, e: [.rules[] | select(.type == "restrict_action_events") | .parameters.allowed_events]}'
+    done | jq -scS .)" || { echo "cannot read an Actions policy"; return 1; }
+  [ "$got" = '[{"e":[["pull_request_target"]],"p":[".github/workflows/guards.yml"]}]' ] \
+    || { echo "Actions policies are '$got', expected one allowing pull_request_target for guards.yml only"; return 1; }
+  got="$(gh api "repos/$nwo/actions/secrets" --jq .total_count)" || { echo "cannot read repository secrets"; return 1; }
+  [ "$got" = "0" ] || { echo "$got repository-level secret(s); secrets belong to environments only"; return 1; }
+  # The dependency review gate needs the dependency graph, which has no API switch:
+  # its SBOM answers only when it is on (Settings, Advanced Security).
+  gh api "repos/$nwo/dependency-graph/sbom" --silent 2>/dev/null \
+    || { echo "the dependency graph is off (enable it in Settings, Advanced Security)"; return 1; }
+  got="$(gh api "repos/$nwo/code-scanning/default-setup" --jq .state)" || { echo "cannot read code scanning"; return 1; }
+  [ "$got" = "configured" ] || { echo "CodeQL default setup is '$got'"; return 1; }
 }
 
 # --- 1. Preflight: GitHub protections (host, owner's gh login) ---------------
@@ -73,12 +153,8 @@ preflight() {
 
   ruleset_ids="$(echo "$branch_rules" | jq -r '[.[].ruleset_id] | unique | .[]')"
   [ -n "$ruleset_ids" ] || die "no ruleset applies to main"
-  for id in $ruleset_ids; do
-    ok="$(gh api "repos/$nwo/rulesets/$id" \
-      --jq '.enforcement == "active" and has("bypass_actors") and (.bypass_actors | length == 0)')" \
-      || die "cannot read ruleset $id"
-    [ "$ok" = "true" ] || die "ruleset $id is not active or has bypass actors"
-  done
+  local problem
+  problem="$(ruleset_problem "$nwo" "$ruleset_ids")" || die "$problem; run scripts/setup-github.sh ruleset $nwo in the factory repo"
 
   scanning="$(echo "$repo" | jq -r '.security_and_analysis | "\(.secret_scanning.status) \(.secret_scanning_push_protection.status)"')"
   [ "$scanning" = "enabled enabled" ] || die "secret scanning or push protection is not enabled ($scanning)"
@@ -92,12 +168,10 @@ preflight() {
   if [ "$days" -lt "$WARN_DAYS" ]; then
     say "WARNING: interaction limit expires in $days days; renew it with scripts/setup-github.sh in the factory repo"
   fi
-  # Actions stays off until step 4: a workflow run would execute outside the sandbox.
-  local actions
-  actions="$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" || die "cannot read GitHub Actions settings"
-  [ "$actions" = "false" ] \
-    || die "GitHub Actions is not disabled (enabled=$actions); run scripts/setup-github.sh actions in the factory repo"
-  say "preflight OK: $nwo is $visibility, ruleset active without bypass, secret scanning and push protection on, Actions disabled, interaction limit $days days left"
+  local mismatch
+  mismatch="$(actions_settings_problem "$nwo")" \
+    || die "$mismatch; run scripts/setup-github.sh actions $nwo in the factory repo"
+  say "preflight OK: $nwo is $visibility, ruleset requires your review and the gates (bypass: admin, PRs only), secret scanning and push protection on, Actions restricted, interaction limit $days days left"
 }
 
 # --- 2. Host clone: clean main, equal to origin/main -------------------------
@@ -120,10 +194,98 @@ check_clone() {
 }
 
 # --- 3. Token: the only secret source step ----------------------------------
-read_token() {
-  # Not exported: only box_exec hands it to the docker client, by name.
-  FACTORY_GH_TOKEN="$(op read "$TOKEN_REF")" || die "cannot read token from 1Password"
-  [ -n "$FACTORY_GH_TOKEN" ] || die "empty token"
+# The App key is read once per start and kept in this shell's memory (not
+# exported, never on disk). No secret ever reaches a process's arguments: the
+# key goes to openssl through a file descriptor, the JWT to curl through a
+# config on stdin, and jq reads responses from a pipe.
+read_app_key() {
+  [ -n "$APP_CLIENT_ID" ] || die "FACTORY_APP_CLIENT_ID is not set"
+  APP_KEY="$(op document get "$APP_KEY_DOC" --vault "$APP_KEY_VAULT")" \
+    || die "cannot read the GitHub App key from 1Password"
+  case "$APP_KEY" in *"PRIVATE KEY"*) ;; *) die "the 1Password document is not a private key" ;; esac
+}
+
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+# A JWT for the App, valid 9 minutes; issued 60 seconds in the past against clock skew.
+app_jwt() {
+  local now unsigned sig
+  now="$(date +%s)"
+  unsigned="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' \
+    $((now - 60)) $((now + 540)) "$APP_CLIENT_ID" | b64url)"
+  sig="$(printf '%s' "$unsigned" | openssl dgst -sha256 -binary -sign <(printf '%s\n' "$APP_KEY") | b64url)" \
+    || return 1
+  [ -n "$sig" ] || return 1
+  printf '%s.%s' "$unsigned" "$sig"
+}
+
+# app_api <jwt> <method> <path> [json body]: the JWT goes in a curl config on stdin.
+app_api() {
+  printf 'header = "Authorization: Bearer %s"\n' "$1" \
+    | curl -fsS --max-time 20 -K - -X "$2" -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" ${4:+--data "$4"} "https://api.github.com$3"
+}
+
+# Mints an installation token for this one repository with only the permissions
+# the agents use, and replaces the token file atomically (write, then rename:
+# the directory is mounted, so the container sees the new file).
+mint_token() {
+  local jwt inst resp tmp
+  jwt="$(app_jwt)" || { echo "cannot sign the App JWT" >&2; return 1; }
+  inst="$(app_api "$jwt" GET "/repos/$NWO/installation" | jq -r '.id // empty')"
+  [ -n "$inst" ] || { echo "the App is not installed on $NWO" >&2; return 1; }
+  resp="$(app_api "$jwt" POST "/app/installations/$inst/access_tokens" \
+    "{\"repositories\":[\"${NWO#*/}\"],\"permissions\":{\"contents\":\"write\",\"issues\":\"write\",\"pull_requests\":\"write\",\"metadata\":\"read\"}}")" \
+    || { echo "minting the installation token failed" >&2; return 1; }
+  mkdir -p "$FACTORY_TOKEN_DIR" && chmod 0700 "$RUN_DIR" "$FACTORY_TOKEN_DIR"
+  tmp="$(mktemp "$FACTORY_TOKEN_DIR/.token.XXXXXX")"
+  printf '%s' "$resp" | jq -j '.token // empty' > "$tmp"
+  [ -s "$tmp" ] || { rm -f "$tmp"; echo "the mint response has no token" >&2; return 1; }
+  printf '%s' "$resp" | jq -r '.expires_at | fromdateiso8601' > "$RUN_DIR/expires_at"
+  mv -f "$tmp" "$FACTORY_TOKEN_DIR/token"
+}
+
+token_needs_refresh() {
+  local now exp mtime
+  [ -s "$FACTORY_TOKEN_DIR/token" ] && [ -s "$RUN_DIR/expires_at" ] || return 0
+  now="$(date +%s)"; exp="$(cat "$RUN_DIR/expires_at")"
+  mtime="$(stat -f %m "$FACTORY_TOKEN_DIR/token")"
+  [ $((now - mtime)) -ge "$REFRESH_AGE" ] || [ $((exp - now)) -le "$REFRESH_MARGIN" ]
+}
+
+# Removes the token, so a stopped container leaves no credential behind.
+remove_token() { rm -f "$FACTORY_TOKEN_DIR/token" "$RUN_DIR/expires_at"; }
+
+stop_refresher() {
+  local pid
+  pid="$(cat "$RUN_DIR/refresher.pid" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null || true; fi
+  rm -f "$RUN_DIR/refresher.pid"
+}
+
+# Runs in the background while container $CID runs, checking every minute, so a
+# Mac waking from sleep gets a new token within a minute. It survives the
+# terminal closing; up.sh stop or the next start ends it. Exits with the
+# container and removes the token. It closes every inherited descriptor above
+# stderr, so a caller reading up.sh's output through a pipe is not kept waiting.
+start_refresher() {
+  (
+    for fd in /dev/fd/*; do
+      fd="${fd##*/}"
+      if [ "$fd" -gt 2 ] 2>/dev/null; then eval "exec $fd>&-" 2>/dev/null || true; fi
+    done
+    trap '' HUP
+    trap 'remove_token; exit 0' TERM
+    while [ "$(docker inspect -f '{{.State.Running}}' "$CID" 2>/dev/null)" = "true" ]; do
+      if token_needs_refresh; then
+        mint_token && echo "$(date -u +%FT%TZ) refreshed" || echo "$(date -u +%FT%TZ) refresh FAILED"
+      fi
+      sleep 60 & wait $!
+    done
+    remove_token
+  ) >>"$RUN_DIR/refresher.log" 2>&1 </dev/null &
+  echo $! > "$RUN_DIR/refresher.pid"
+  disown
 }
 
 # --- 4. Image: always built from the current .devcontainer/ tree -------------
@@ -274,19 +436,29 @@ reset_workspace() {
 }
 
 main() {
-  if [ "${1:-}" = "stop" ]; then stop_container; say "stopped"; exit 0; fi
-  for c in gh git jq op devcontainer docker; do
+  if [ "${1:-}" = "stop" ]; then
+    if [ -z "$(container_id)" ] && [ ! -e "$RUN_DIR/refresher.pid" ] && [ ! -e "$FACTORY_TOKEN_DIR/token" ]; then
+      say "nothing to stop: no container, refresher or token"; exit 0
+    fi
+    stop_refresher; stop_container; remove_token; say "stopped"; exit 0
+  fi
+  for c in gh git jq op openssl curl devcontainer docker; do
     command -v "$c" >/dev/null || die "'$c' is not installed"
   done
   preflight
   check_clone
-  read_token
+  read_app_key
+  # The next start recreates the container, so the old refresher goes now.
+  stop_refresher
+  TOKEN_OWNED=1
+  mint_token || die "cannot mint a GitHub App token"
   build_image "$REPO_DIR"
   if [ "${1:-}" = "reset-workspace" ]; then
     reset_workspace
     set -- true
   fi
   start_container
+  start_refresher
   probe_network
   box_exec /usr/local/bin/factory-exec "$@"
 }

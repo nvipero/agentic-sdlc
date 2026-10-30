@@ -5,7 +5,8 @@ Owner: Niko (human decision maker)
 Author: Claude (claude.ai planning session, 2026-10-13, revision 5)  
 Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)  
 Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)  
-Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, acceptance tests named by feature with per-criterion tags, test-driven unit tests by the implementer, and the layered sandbox as the first step of v2 (owner decision)
+Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, acceptance tests named by feature with per-criterion tags, test-driven unit tests by the implementer, and the layered sandbox as the first step of v2 (owner decision)  
+Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHub App as the agents' identity with host-minted one-hour tokens, owner-only labels and trusted input checked by account, the ruleset with code owner review and required gates, restricted GitHub Actions, the gates as built, the Vercel preview, feature-removal stories, and backlog items 21 and 22 (owner decisions)
 
 ## TL;DR
 
@@ -33,8 +34,9 @@ Fixed for v1. Changing one requires an owner decision.
 10. **Work can move upstream as well as downstream.** Any role may return work to an earlier role with a reason. All handoffs go through the orchestrator and are recorded in the issue or PR, so the full chain is visible when the human steps in. The chain lives in one status comment that is edited in place; new comments are posted only when they have value to the human or another agent (questions, disputes, a result ready for review), because every comment is a notification.
 11. **Disputes escalate on lack of progress,** not on a fixed round count alone.
 12. **The human's attention is the scarcest resource.** Humans are pulled in only at defined points. When they are, they get a focused list of what deserves their judgement, not everything.
-13. **Text is sized for its reader.** Output for humans is short enough to actually read, and a question to the human carries only the question. Pull request descriptions and long documents start with a TL;DR; issue comments do not need one. Output for agents may be as detailed as needed.
+13. **Text is sized for its reader.** Output for humans is short enough to actually read, and a question to the human carries only the question. Pull request descriptions and long documents start with a TL;DR as a quote block (`> **TL;DR:** ...`, owner, 2026-10-31); issue comments do not need one. Output for agents may be as detailed as needed.
 14. **Role knowledge is portable.** Each role's know-how lives in an Agent Skill (agentskills.io format). Role definitions are thin wrappers that choose the model, tools and skill, so a role can move to another model or tool later.
+15. **Trust, but verify.** When a check after the fact is cheap, it is added even if an earlier control (permissions, rules, gates) should already be enough. Controls are layered, not either-or (owner decision, 2026-10-30).
 
 ## 3. Scope
 
@@ -65,11 +67,13 @@ Fixed for v1. Changing one requires an owner decision.
 13. Generating project-specific dev containers through a skill.
 14. Custom dashboard.
 15. Using the factory to develop the factory itself.
-16. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
 16. Optional spec-first pull request merged before implementation.
 17. 1Password service account limited to the factory vault only, so that even the start script cannot read other vaults (availability and cost to be checked).
 18. Private project support through a GitHub organization on the Team plan, with the step 1 exit check repeated in a private repository.
 19. Inspection mode: attach VS Code to the container only while agents are stopped, with credential forwarding disabled and VS Code hosts allowlisted only for that mode.
+20. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
+21. Dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository; the guards then let `dependabot[bot]` change only manifests and lock files. The Claude Code and Playwright pins stay a manual monthly check (owner decision, 2026-10-30).
+22. Production deployment of `main` through the pipeline, when a project needs one. Until then a project's production deployment is a placeholder page and every PR deployment is a preview (owner decision, 2026-10-30).
 
 ## 4. Architecture
 
@@ -89,12 +93,15 @@ Both repositories are public. On a free GitHub account, rulesets and branch prot
 
 Applied to both `agentic-sdlc` and `sdlc-pilot`:
 
-- **Ruleset on `main`:** pull request required, force pushes and deletion blocked, **no bypass actors** (agents and Claude Code on the host act with the owner's credentials, and the owner is admin). No required approvals, because there is a single maintainer. Required status checks are added in step 4.
+- **Ruleset on `main`:** pull request required, force pushes and deletion blocked.
+  - **Project repositories (from step 4):** one approval, **review from code owners required** (`.github/CODEOWNERS` names only the owner), approvals dismissed by a new push, the gate checks required with GitHub Actions as their source, and CodeQL alerts of high severity blocking. One bypass actor: the admin role, in pull request mode, so the owner's own PRs (factory updates) merge without a second reviewer but never by direct push. The agents' App is not an admin and cannot bypass.
+  - **The factory repository:** no required approvals (single maintainer), no checks (it runs no workflows), no bypass actors.
+- **A merged branch is deleted automatically.**
 - **Interaction limit "repository collaborators only":** outsiders cannot open issues or PRs, comment, react or edit. This keeps outside text out of agent input. The limit expires after at most six months.
 - **Secret scanning and push protection** enabled.
-- **GitHub Actions disabled** until step 4. A workflow pushed by an agent would otherwise run outside the sandbox.
+- **GitHub Actions (projects, from step 4):** only GitHub-owned actions, pinned to a full commit SHA; a read-only `GITHUB_TOKEN` that cannot approve or create pull requests; approval required for every outside contributor's run; no repository-level secrets (the Vercel token is in the `preview` environment, deployable from `main` only); `pull_request_target` allowed by an Actions policy for `guards.yml` only, ahead of GitHub's default block on public repositories. The agents' App has no Workflows permission, so agents cannot change what runs. The dependency graph (needed by dependency review, turned on by hand) and CodeQL default setup are on. The factory repository keeps Actions disabled.
 
-`scripts/up.sh` verifies on the host, before starting the container, that the repository visibility is as expected, the ruleset is active with no bypass actors, the interaction limit is active, secret scanning and push protection are on, and GitHub Actions is disabled. It also checks that the host clone is clean, on `main` and equal to `origin/main`; it never updates the host clone itself. If any check fails, it refuses to start agents. Protections that can lapse silently (expiring limits, plan changes) are checked on every run instead of trusted.
+`scripts/up.sh` verifies on the host, before starting the container, that the repository visibility is as expected, every ruleset is active and the project ruleset is as above, the interaction limit is active, secret scanning and push protection are on, and the Actions settings, policy, dependency graph and CodeQL are as above. It also checks that the host clone is clean, on `main` and equal to `origin/main`; it never updates the host clone itself. If any check fails, it refuses to start agents. Protections that can lapse silently (expiring limits, plan changes) are checked on every run instead of trusted.
 
 A future private project needs a paid plan (a GitHub organization on Team) for enforced rulesets. The same exit check is then repeated in that environment.
 
@@ -127,7 +134,8 @@ README.md            how to start a new project with the factory
 ```
 .factory/            factory plugin: config.yaml, copied skills, agents, commands   (read-only for agents)
 .claude/             Claude Code settings                              (read-only for agents)
-.github/             workflows, issue templates, PR template           (read-only for agents)
+.github/             workflows and their scripts, CODEOWNERS,          (read-only for agents)
+                     issue templates
 .devcontainer/       container definition and network allowlist        (read-only for agents)
 CLAUDE.md            entry point for agent sessions                    (read-only for agents)
 scripts/up.sh        container start script                            (not in the container)
@@ -178,22 +186,22 @@ Model choices are initial guesses and will be tuned after the first stories. The
 
 ### Credentials
 
-- **One fine-grained GitHub token per project,** scoped to that project's repo only. Permissions: contents, issues and pull requests (read and write). No workflow permission, so the token cannot change GitHub Actions files. No admin rights. Expiry 30 to 90 days, then rotated.
-- **Storage:** tokens live in a dedicated 1Password vault ("Agent Factory"), separate from personal and client credentials. A token is never stored as a file in a repository or on the container's disk.
-- **Delivery, with clear separation of responsibilities:**
-  - 1Password only stores and returns secrets.
-  - The devcontainer CLI only builds and starts the container. Sessions are opened by the start script with `docker exec`.
-  - The project's start script `scripts/up.sh` connects them: it reads the token with `op read` into a shell variable that it does not export, and starts the container without the token. It passes the token only to its own `docker exec` calls, by name (`-e GH_TOKEN`), so the value never appears in a process's argument list. `devcontainer.json` does not reference the token.
-  - The secret source is a replaceable step in the script. Switching to Keychain or another manager changes only that step.
+- **The agents' GitHub identity is a GitHub App** (`nvipero-factory-orchestrator`), registered under the owner's account and installed only on project repositories, with Contents, Issues and Pull requests read and write and Metadata read. No Workflows, Administration, Checks or Commit statuses permission. A machine user was rejected: it cannot be limited below collaborator rights, needs a classic token for a repository it does not own, and uses up the one free machine account. Everything the factory writes on GitHub appears as the App; the owner's approval is the only one the ruleset accepts.
+- **One-hour tokens minted on the host.** The App's private key is a document in the 1Password vault "Agent Factory" and never enters the container. `scripts/up.sh` reads it once per start (one confirmation), signs a JWT with `openssl`, and mints an installation token narrowed to the one repository and those permissions. A refresher started by `up.sh` keeps the key in memory and mints a new token when the current one is 45 minutes old or expires within 15, checking every minute, so a Mac waking from sleep gets a fresh token within a minute. It ends with the container or `up.sh stop`, which removes the token.
+- **Delivery:** the token is written to a temporary file and renamed into a host directory outside the clone (`~/.factory-run/<project>/token/`, mode 0700), which is mounted read-only at `/etc/factory/token`. A directory, not the file, is mounted, because a single-file mount keeps the old file after a rename. In the image, a root-owned `gh` wrapper reads the token on every call and puts it only in the real `gh`'s environment; git uses the wrapper as its credential helper for github.com. No credential is in the container's environment or in any process's arguments on the host (key and JWT go through file descriptors and stdin). The rule "never a file on the container's disk" became "never a long-lived credential in the container".
 - **The 1Password CLI is never installed in the container.** Access to the vault would expose all other credentials.
-- Only processes started by the start script get the token. Starting the container any other way, such as from the VS Code UI, skips the token, the workspace setup and the exec guard. The container is started from the terminal with the start script.
+- Only containers started by the start script get the token mount. Starting the container any other way, such as from the VS Code UI, skips the token, the workspace setup and the exec guard.
 - No other credentials are placed in the container. Claude Code's own credentials are the only exception and are treated as exposed if the container is compromised.
 - Anything given to the container can be read by agents. Protection comes from limiting the scope and lifetime of credentials, not from hiding them.
+- **Commits** carry the App's bot address (`<id>+<app>[bot]@users.noreply.github.com`) and the role's name as author (`factory <role>`). Neither is authenticated; the `Factory-Role` trailer and the guards are what the checks rely on.
 
 ### Labels
 
 - Type: `user-story`, `bug`, `chore`, `trivial`
-- State: `ready-for-factory`, `needs-human`, `spec-approved`, `dispute`, `gate-change`, `tests-change-approved`
+- State: `ready-for-factory`, `needs-human`, `spec-approved`, `dispute`, `tests-change-approved`
+- **Owner-only labels** (`spec-approved`, `tests-change-approved`) count only when the issue's newest `labeled` event for them has the owner's account as actor; GitHub permissions are not per label. The orchestrator and the guards check this, and the `label-audit` workflow removes such a label added by anyone else and fails on label definition changes by anyone but the owner ("trust, but verify").
+- **Trusted input** to the agents is text written by the owner that nobody else edited last (GraphQL `author` and `editor`), because the App can edit other accounts' text.
+- `tests-change-approved` covers one change: the orchestrator removes it after the reopened test gate approves, and the guard counts the owner's label events against the later changes to approved tests.
 
 ## 5. Workflow
 
@@ -227,7 +235,7 @@ Both the factory repo and project repos follow these. Agents follow them too.
 - **Branches:** [Conventional Branch 1.1.0](https://conventionalbranch.org/), `<type>/<description>` in lowercase letters, digits and hyphens. `main` takes no prefix.
 - **Story branches:** `feat/issue-<n>-<slug>` for a user story, `fix/issue-<n>-<slug>` for a bug, `chore/issue-<n>-<slug>` for a chore.
 - **Role commits** carry a `Factory-Role: <role>` git trailer.
-- **Enforcement:** instructions until step 4, then a commit message check among the gates.
+- **Enforcement:** instructions until step 4; from step 4 the `guards` check also fails on a non-Conventional commit message or a story branch not named `<type>/issue-<n>-<description>`.
 
 ### Story to spec
 
@@ -246,9 +254,10 @@ Both the factory repo and project repos follow these. Agents follow them too.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
 4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.
 5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once; after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.
-6. When the reviewer approves and the tests (from step 4: the gates) pass, the orchestrator writes the PR description, marks the PR ready, and posts to the issue (from step 4: with the preview link).
-7. The PR description contains a **"Where to look"** section for the human: restricted-list hits, deviations from the spec, assumptions made, and places where the reviewer is uncertain. The human reads this section and the preview, not the whole diff.
-8. The human merges, or comments with changes, which restarts implementation.
+6. When the reviewer approves and the orchestrator's own test run passes, it writes the PR description, waits for the required checks on GitHub ("trust, but verify"), marks the PR ready, and posts to the issue that the preview appears in the PR's deployments panel.
+7. **Feature removal.** A story that removes a feature states the absence as acceptance criteria ("the board shows no Archive button", "tasks stored with the old status still load"). The test writer removes the removed behaviour's tests in the tests phase, before approval, as its own path; the coverage review checks each removal and the guard lists removed tests for "Where to look". After approval, any further change needs `tests-change-approved`.
+8. The PR description contains a **"Where to look"** section for the human: restricted-list hits, deviations from the spec, assumptions made, and places where the reviewer is uncertain. The human reads this section and the preview, not the whole diff.
+9. The human merges, or comments with changes, which restarts implementation.
 
 ## 6. Roles
 
@@ -272,23 +281,24 @@ Always requires the human: authentication and authorisation changes, data deleti
 
 ## 8. Deterministic gates (GitHub Actions)
 
-Required checks on every PR:
+Required checks on every PR (as built in step 4):
 
-- Type check, lint, unit tests, acceptance tests
-- Dependency vulnerability audit
-- Secret scanning
-- **Path ownership guard:** each commit stage touches only its role's paths
-- **Acceptance test guard:** implementation commits may not modify acceptance tests unless the human added `tests-change-approved`
-- **Factory definitions guard:** fails if the PR modifies `.factory/`, `.claude/`, `.github/`, `.devcontainer/`, `scripts/up.sh` or `CLAUDE.md`
-- **Gate change visibility:** any change to gate configuration is labelled `gate-change` and needs a written justification in the PR description
+- **`guards`** runs `main`'s definition on `pull_request_target` and reads the PR's commits and diff as data, never executing them; event values reach its script only through the environment. It fails on: a commit outside its role's paths or without a parsed `Factory-Role` trailer (spec-only commits excepted); a merge commit that is not a clean merge of `main`; a non-Conventional commit message; a branch not named `<type>/issue-<n>-<description>`; any change to `.factory/`, `.claude/`, `.github/`, `.devcontainer/`, `scripts/` or `CLAUDE.md`; changes to `tests/acceptance/` after the first implementer commit beyond the owner's `tests-change-approved` label events. It lists changed earlier tests and test configuration for "Where to look". The owner's own PRs get only a note.
+- **`tests`** runs on `pull_request` with a read-only token and fixed commands (not the project's npm scripts): type check, unit tests, build (`unit-and-build`), and Playwright acceptance tests (`acceptance`).
+- **`dependency-review`**: no new dependency with a high-severity vulnerability.
+- **CodeQL** (default setup) through the ruleset: no high-severity alert.
+- **Secret scanning** with push protection.
+- **`label-audit`**: owner-only labels by anyone else are removed.
 
-Exact static analysis tools are chosen in step 4 and checked for current availability on public repositories.
+Test commands cannot be weakened from a PR: the workflow fixes them and the App cannot change workflow files. The gate-change label of earlier revisions is dropped for that reason.
+
+**Preview:** for a PR that is not a draft, `tests` uploads its build; `preview-deploy` runs `main`'s definition on `workflow_run` after `tests` passes, checks without any secret that guards passed on the same commit, then deploys only the build's static files in environment `preview` with the Vercel token, never running PR code there. One preview per PR at `<owner>-<repo>-pr-<n>.vercel.app`, shown in the PR's deployments panel, replaced on each push and removed when the PR closes. The Vercel token is scoped to the one project.
 
 ## 9. Test project defaults
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
-- Vercel for preview deployments
+- Vercel for preview deployments (Hobby, through the pipeline; no Git integration)
 
 The topic is a Todo-app (owner decision, 2026-10-23): generic and disposable, because the point is to test the factory.
 
@@ -299,7 +309,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 1. **Foundations.** Factory repo, project template, test project repo, repository protections (including GitHub Actions disabled until step 4), dev container with network allowlist and read-only mounts, start script with token from 1Password and protection checks, scoped token, labels, issue template, Projects board, README. Exit: an agent inside the container cannot modify factory definitions, cannot reach non-allowlisted hosts, cannot see anything outside the project workspace, and cannot push directly to `main`.
 2. **Context and spec chain.** Researcher, spec writer with understanding check, spec reviewer, question flow. Exit: approved project context, and one story with an approved spec where at least one question was answered through the issue.
 3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory:run` extended to tests and implementation. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
-4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a machine user or a GitHub App, chosen when step 4 is planned) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR gets a preview link, and the agent identity cannot merge a PR without the owner's approval. Step 4 re-enables GitHub Actions, which is disabled in steps 1 to 3, with restrictions, and updates the `up.sh` check to match.
+4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a GitHub App) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR marked ready gets a preview link, and the agent identity cannot merge a PR without the owner's approval. Step 4 re-enables GitHub Actions, which is disabled in steps 1 to 3, with restrictions, and updates the `up.sh` check to match. Plan: `docs/plans/step-4.md`; evidence: `docs/verification/step-4.md`.
 5. **First full run.** A new story from idea to merge without manual code edits. Exit: definition of done met and problems recorded.
 
 ## 11. Definition of done for v1
@@ -320,10 +330,11 @@ Each step ends with an exit check, and the next starts only after the owner has 
 - **Subscription limits.** Agent runs share the Team plan quota with the owner's other work.
 - **Agent loops.** Mitigation: turn limits and dispute rules.
 - **Specs approved without reading.** Mitigation: questions and assumptions are surfaced separately.
-- **Agents can technically merge PRs until step 4.** In steps 1 to 3 the agent token acts as the owner, so "the human merges" is a convention backed only by a deny rule in managed settings. Agents do not open PRs before step 3, which keeps the exposure short. A merged change never runs on the owner's Mac until the owner reviews and pulls it, because `up.sh` refuses to start while the host clone is behind `origin/main`. GitHub Actions is disabled until step 4, so no workflow runs outside the sandbox.
+- **After the owner approves, the App could technically merge.** Only the deny rule in managed settings prevents it; the owner's approval is the decision that matters, so this is accepted. Before step 4 the agents acted as the owner and could merge without approval; agent commits from then carry the noreply address of an unrelated GitHub account (`factory-agent`) as author and are not rewritten.
+- **Roles share the App.** Only commit trailers and the guards tell the roles apart; separate identities per role need separate sandboxes (backlog 9 and 11).
 - **Interaction limit expires** after six months. Mitigation: `up.sh` checks it on every run.
 - **Copied templates drift** from the factory as it evolves. Accepted in v1. Plugin distribution is in the backlog.
 
 ## 13. Open questions for the owner
 
-- Vercel account for previews.
+None open.

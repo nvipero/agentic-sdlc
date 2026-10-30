@@ -48,7 +48,7 @@ Path: `specs/<issue>-<slug>.md`, where the slug is 2 to 5 lowercase words from t
 ```markdown
 # <issue>: <title>
 
-TL;DR: <two lines>
+> **TL;DR:** <two lines>
 
 ## Problem and why
 ## Scope
@@ -106,10 +106,10 @@ Ask all questions at once. Keep them few: the owner's attention is the scarcest 
 
 - You are on the story branch the orchestrator checked out. Do not switch branches.
 - Stage only the spec by name: `git add specs/<issue>-<slug>.md`. Never `git add -A` or `git add .`.
-- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run:
+- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run. Commit under your role's name (`-c user.name="factory spec-writer"`), so the commit list shows who wrote what:
 
   ```
-  git commit -m "docs(spec): add spec for #<issue>" --trailer "Factory-Role: spec-writer"
+  git -c user.name="factory spec-writer" commit -m "docs(spec): add spec for #<issue>" --trailer "Factory-Role: spec-writer"
   ```
 
   For a fix: `docs(spec): address review round <n> for #<issue>`. For answers: `docs(spec): apply owner answers for #<issue>`.

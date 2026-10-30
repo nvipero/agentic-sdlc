@@ -1,0 +1,61 @@
+# Runs the PR's code, so it has a read-only token and no secrets. The commands
+# are fixed here (agents cannot change workflow files), not taken from the
+# project's npm scripts. For a PR that is not a draft, the build is uploaded
+# for preview-deploy, which runs only after this whole workflow passes.
+name: tests
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  unit-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Type check
+        run: npx --no-install tsc --noEmit
+      - name: Unit tests
+        run: npx --no-install vitest run
+      - name: Build
+        run: npx --no-install vite build
+      - if: ${{ !github.event.pull_request.draft }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview-dist
+          path: dist/
+          retention-days: 1
+          if-no-files-found: error
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm ci
+        working-directory: tests/acceptance
+      - name: Browser
+        run: npx --no-install playwright install --with-deps chromium
+        working-directory: tests/acceptance
+      - name: Acceptance tests
+        run: npx --no-install playwright test --reporter=line
+        working-directory: tests/acceptance
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high

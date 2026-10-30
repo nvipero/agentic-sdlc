@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exit check for steps 1 to 3. Runs on the host against a project whose container was
+# Exit check for steps 1 to 4. Runs on the host against a project whose container was
 # started with scripts/up.sh. Prints PASS/FAIL lines; raw output may contain
 # host details, so redact it (scripts/redact.sh) before publishing.
 #
@@ -27,10 +27,10 @@ fail() { echo "FAIL  $1${2:+ — $2}"; FAILS=$((FAILS + 1)); }
 skip() { echo "SKIP  $1${2:+ — $2}"; }   # not applicable here; not counted as a pass
 section() { echo; echo "## $1"; }
 
-# Load up.sh functions (read_token, build_image, check_image_label, ...).
+# Load up.sh functions (read_app_key, mint_token, build_image, check_image_label, ...).
 # shellcheck source=/dev/null
 FACTORY_UP_SOURCE_ONLY=1 source "$REPO/scripts/up.sh"
-read_token
+read_app_key   # once, for the refresh test; kept in this shell's memory only
 set +e   # up.sh enables errexit; checks here must keep going after a failure
 NWO="$(cd "$REPO" && gh repo view --json nameWithOwner --jq .nameWithOwner)"
 export FACTORY_REPO_URL="https://github.com/$NWO.git"
@@ -38,6 +38,9 @@ export FACTORY_DEVCONTAINER_TREE="$(git -C "$REPO" rev-parse HEAD:.devcontainer)
 
 CID="$(container_id)"   # container_id comes from up.sh
 [ -n "$CID" ] || { echo "no running container; start it with scripts/up.sh first" >&2; exit 2; }
+# The current App token, for searching docker metadata and process lists; never printed.
+FACTORY_GH_TOKEN="$(cat "$FACTORY_TOKEN_DIR/token" 2>/dev/null)"
+[ -n "$FACTORY_GH_TOKEN" ] || { echo "no token in $FACTORY_TOKEN_DIR; start the container with scripts/up.sh" >&2; exit 2; }
 
 # Run a command inside the container as the agent user (box_exec from up.sh: token by name only).
 in_box() { box_exec bash -c "$1" 2>&1; }
@@ -55,7 +58,7 @@ expect_ok() {
   if [ "$rc" -eq 0 ]; then pass "$1" "$(echo "$out" | tail -1)"; else fail "$1" "rc=$rc: $(echo "$out" | tail -1)"; fi
 }
 
-echo "# Exit check (steps 1 to 3)"
+echo "# Exit check (steps 1 to 4)"
 echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "project: $NWO  factory: $FACTORY_NWO"
 echo "devcontainer tree: $FACTORY_DEVCONTAINER_TREE"
@@ -101,11 +104,11 @@ if in_box "ip -6 addr show lo | grep -q '::1'" >/dev/null; then
 else
   skip "IPv6 loopback is open" "the container has no IPv6"
 fi
-# Each allowed host must answer with the status it gives without credentials (GitHub: with the token).
+# Each allowed host must answer with the status it gives without credentials (GitHub: with the token, through gh).
 expect_ok "https://api.anthropic.com is reachable (404 expected for the bare host)" \
   "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://api.anthropic.com); echo \$c; [ \$c = 404 ]"
 expect_ok "https://api.github.com/zen is reachable (authenticated, 200 expected)" \
-  "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer \$GH_TOKEN\" https://api.github.com/zen); echo \$c; [ \$c = 200 ]"
+  "c=\$(gh api -i zen 2>&1 | head -1); echo \$c; echo \$c | grep -q ' 200'"
 expect_ok "https://registry.npmjs.org/ is reachable (200 expected)" \
   "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://registry.npmjs.org/); echo \$c; [ \$c = 200 ]"
 
@@ -121,7 +124,7 @@ if [ "$rc" -eq 0 ]; then pass "agent cannot pass an allowlist override through s
 expect_fail "sudo refuses the firewall script with arguments" "sudo -n /usr/local/bin/init-firewall.sh /run/exit-check-allowlist" "not allowed|password is required|may not run"
 docker exec -u root "$CID" rm -f /run/exit-check-allowlist
 expect_ok "network restored by a normal firewall run (authenticated, 200 expected)" \
-  "c=\$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer \$GH_TOKEN\" https://api.github.com/zen); echo \$c; [ \$c = 200 ]"
+  "c=\$(gh api -i zen 2>&1 | head -1); echo \$c; echo \$c | grep -q ' 200'"
 docker exec -u root "$CID" rm -f /run/firewall-ok
 out="$(box_exec /usr/local/bin/factory-exec true 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING: firewall marker missing" \
@@ -184,12 +187,48 @@ expect_ok "mounts: only workspace volume, 5 read-only overlays, Claude volume" \
   "n=\$(findmnt -rno TARGET | grep -cE '^/workspace|^/home/node'); ro=\$(findmnt -rno TARGET,OPTIONS | grep -E '^/workspace/' | grep -c ' ro,'); test \$n -eq 7 -a \$ro -eq 5 && echo \"\$n mounts, \$ro read-only\""
 expect_ok "no host home, Docker socket or SSH keys" \
   "test ! -e /Users -a ! -S /var/run/docker.sock -a ! -e /home/node/.ssh && test -z \"\$(find / -xdev -name docker.sock 2>/dev/null)\" && echo none"
-expect_ok "credential-like env vars: only GH_TOKEN" \
-  "env | cut -d= -f1 | grep -iE 'token|secret|key|pass|cred|auth' | tr '\n' ' '; test \"\$(env | cut -d= -f1 | grep -iE 'token|secret|key|pass|cred|auth')\" = GH_TOKEN"
+expect_ok "no credential-like env vars (the token is read from its file)" \
+  "v=\$(env | cut -d= -f1 | grep -iE 'token|secret|key|pass|cred|auth' | tr '\n' ' '); echo \"none\${v:+: \$v}\"; test -z \"\$v\""
 
 section "Token on disk"
 hits="$( { docker inspect "$CID"; docker image inspect "$(docker inspect -f '{{.Image}}' "$CID")"; } | grep -cFf <(printf '%s' "$FACTORY_GH_TOKEN") || true)"
 if [ "$hits" = "0" ]; then pass "token not in docker inspect (container or image)"; else fail "token found in docker inspect" "$hits matching lines"; fi
+
+section "Step 4: GitHub App token"
+case "$FACTORY_GH_TOKEN" in ghs_*) pass "the container's token is a GitHub App installation token (ghs_ prefix)" ;;
+  *) fail "the container's token is not an installation token" ;; esac
+left=$(( $(cat "$RUN_DIR/expires_at") - $(date +%s) ))
+[ "$left" -gt 0 ] && [ "$left" -le 3600 ] && pass "token expires within an hour" "$((left / 60)) minutes left" \
+  || fail "token expiry" "$left seconds left"
+expect_ok "the token mount is read-only and holds only the token" \
+  "! touch /etc/factory/token/probe 2>/dev/null && test \"\$(ls -A /etc/factory/token)\" = token && echo read-only, entries: \$(ls -A /etc/factory/token)"
+expect_ok "no private key anywhere the agent can read outside the project's dependencies" \
+  "h=\$(grep -rlsI -e 'BEGIN RSA PRIVATE KEY' -e 'BEGIN PRIVATE KEY' /etc /home/node /tmp /run /workspace --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null); echo \"none\${h:+: \$h}\"; test -z \"\$h\""
+expect_ok "the token reaches exactly one repository" \
+  "n=\$(gh api installation/repositories --jq '[.repositories[].full_name] | join(\" \")'); echo \$n; test \"\$n\" = $NWO"
+before="$(in_box "sha256sum /etc/factory/token/token | cut -c1-64" | tail -1)"
+if mint_token; then
+  seen=
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    after="$(in_box "sha256sum /etc/factory/token/token | cut -c1-64" | tail -1)"
+    [ "$after" = "$(shasum -a 256 "$FACTORY_TOKEN_DIR/token" | cut -c1-64)" ] && [ "$after" != "$before" ] && { seen=1; break; }
+    sleep 1
+  done
+  [ -n "$seen" ] && pass "a refreshed token is seen in the container at once" "within $i s" \
+    || fail "refreshed token not seen in the container"
+  FACTORY_GH_TOKEN="$(cat "$FACTORY_TOKEN_DIR/token")"
+  expect_ok "gh and git work with the refreshed token" \
+    "gh api -i zen | head -1 | grep ' 200' && git -C /workspace ls-remote -q origin HEAD | cut -c1-12"
+else
+  fail "mint a fresh token on the host"
+fi
+pid="$(cat "$RUN_DIR/refresher.pid" 2>/dev/null)"
+[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && pass "the host refresher runs" "pid $pid" || fail "the host refresher is not running"
+HEAD_SHA="$(gh api "repos/$NWO/commits/main" --jq .sha)"
+expect_fail "App token cannot create a commit status" \
+  "gh api -X POST repos/$NWO/statuses/$HEAD_SHA -f state=success -f context=exit-check-probe" "HTTP 403|HTTP 404"
+expect_fail "App token cannot create a check run" \
+  "gh api -X POST repos/$NWO/check-runs -f name=exit-check-probe -f head_sha=$HEAD_SHA" "HTTP 403|HTTP 404"
 
 section "Agent token reach (observed behaviour)"
 BR="chore/exit-check-$(date +%s)"
@@ -209,7 +248,7 @@ expect_fail "agent token cannot change repository settings" \
   "gh api -X PATCH repos/$NWO --input - <<< '{}'" "HTTP 403|HTTP 404"
 # A commit that adds a workflow file, built with plumbing (the .github overlay is read-only):
 # GitHub must refuse it, because the token has no Workflows permission. On an unexpected
-# success the branch is deleted again; Actions is disabled, so it would not run.
+# success the branch is deleted again at once.
 WF_BR="chore/exit-check-workflow-$(date +%s)"
 out="$(in_box "cd /workspace && git fetch -q origin main && idx=\$(mktemp) && export GIT_INDEX_FILE=\$idx && git read-tree origin/main && blob=\$(printf 'on: push\njobs:\n  probe:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo probe\n' | git hash-object -w --stdin) && git update-index --add --cacheinfo 100644,\$blob,.github/workflows/exit-check-probe.yml && tree=\$(git write-tree) && rm -f \$idx && unset GIT_INDEX_FILE && c=\$(git commit-tree \$tree -p origin/main -m 'chore: exit check workflow probe') && git push origin \$c:refs/heads/$WF_BR")"; rc=$?
 if [ "$rc" -ne 0 ] && echo "$out" | grep -qiE "workflow.*(scope|permission)|refusing to allow"; then
@@ -220,6 +259,9 @@ else
 fi
 expect_fail "agent token cannot push to the factory repo" \
   "cd /workspace && git push --dry-run https://github.com/$FACTORY_NWO.git HEAD:refs/heads/exit-check-probe" "403|denied|not found"
+# The probe PR marked ready has no approval: the ruleset must refuse the App's merge.
+expect_fail "agent token cannot merge a PR without the owner's approval (ruleset)" \
+  "cd /workspace && gh pr ready $BR >/dev/null 2>&1 && gh pr merge $BR --merge" "prohibits the merge|is not mergeable"
 in_box "cd /workspace && gh pr close $BR --delete-branch --comment 'Exit check finished; closing without merge.' >/dev/null 2>&1; git switch -q main; git branch -q -D $BR" >/dev/null
 gh api "repos/$NWO/branches/$BR" >/dev/null 2>&1 && fail "probe branch cleaned up" || pass "probe branch and PR cleaned up (closed, not merged)"
 expect_ok "merge deny rule active in bypass mode (claude -p, permission_denials)" \
@@ -301,11 +343,60 @@ for r in "$NWO" "$FACTORY_NWO"; do
   echo '```'
   ok="$(gh api "repos/$r/rules/branches/main" --jq '[.[].type] | (index("pull_request") != null and index("non_fast_forward") != null and index("deletion") != null)')"
   [ "$ok" = "true" ] && pass "$r: pull_request, non_fast_forward, deletion active on main" || fail "$r: rules on main"
-  ok="$(gh api "repos/$r/rulesets" --jq '.[].id' | while read -r id; do gh api "repos/$r/rulesets/$id" --jq 'has("bypass_actors") and (.bypass_actors|length==0)'; done | sort -u)"
-  [ "$ok" = "true" ] && pass "$r: no bypass actors" || fail "$r: bypass actors" "$ok"
-  ok="$(gh api "repos/$r/actions/permissions" --jq .enabled)"
-  [ "$ok" = "false" ] && pass "$r: GitHub Actions disabled" || fail "$r: GitHub Actions" "enabled=$ok"
+  if [ "$r" = "$FACTORY_NWO" ]; then
+    ok="$(gh api "repos/$r/rulesets" --jq '.[].id' | while read -r id; do gh api "repos/$r/rulesets/$id" --jq 'has("bypass_actors") and (.bypass_actors|length==0)'; done | sort -u)"
+    [ "$ok" = "true" ] && pass "$r: no bypass actors" || fail "$r: bypass actors" "$ok"
+  else
+    # ruleset_problem comes from up.sh, so the preflight and this check agree.
+    problem="$(ruleset_problem "$r" "$(gh api "repos/$r/rules/branches/main" --jq '[.[].ruleset_id] | unique | .[]')")" \
+      && pass "$r: ruleset requires code owner review (dismissed on push), the gate checks from GitHub Actions and CodeQL; only bypass: admin role, pull requests" \
+      || fail "$r: ruleset" "$problem"
+  fi
+  if [ "$r" = "$FACTORY_NWO" ]; then
+    ok="$(gh api "repos/$r/actions/permissions" --jq .enabled)"
+    [ "$ok" = "false" ] && pass "$r: GitHub Actions disabled (the factory repo runs no workflows)" || fail "$r: GitHub Actions" "enabled=$ok"
+  else
+    # actions_settings_problem comes from up.sh, so the preflight and this check agree.
+    problem="$(actions_settings_problem "$r")" \
+      && pass "$r: Actions restricted (GitHub-owned actions pinned by SHA, read-only token, pull_request_target for guards.yml only, no repository secrets)" \
+      || fail "$r: Actions settings" "$problem"
+  fi
 done
+
+section "Step 4: gates on main"
+# The project's .github/ on main must match the factory template, so the gates are the reviewed ones.
+drift=""
+for f in CODEOWNERS scripts/guards.sh scripts/vercel-preview.sh workflows/guards.yml workflows/tests.yml workflows/label-audit.yml \
+         workflows/preview-deploy.yml workflows/preview-closed.yml workflows/preview-cleanup.yml; do
+  [ "$(git -C "$REPO" show "origin/main:.github/$f" 2>/dev/null | shasum -a 256)" = "$(shasum -a 256 < "$FACTORY_DIR/templates/project/.github/$f")" ] || drift="$drift $f"
+done
+extra="$(git -C "$REPO" ls-tree --name-only origin/main .github/workflows/ | sed 's|.github/workflows/||' | grep -vxE 'guards.yml|tests.yml|label-audit.yml|preview-deploy.yml|preview-closed.yml|preview-cleanup.yml' | tr '\n' ' ')"
+[ -z "$drift" ] && [ -z "$extra" ] && pass "$NWO main: .github/ matches the factory template, no other workflows" \
+  || fail "$NWO main: .github/ drift" "differs:${drift:- none}; extra: ${extra:-none}"
+owners="$(git -C "$REPO" show origin/main:.github/CODEOWNERS 2>/dev/null | grep -v '^#' | grep -oE '@[A-Za-z0-9_-]+' | sort -u | tr '\n' ' ')"
+[ "$owners" = "@$(gh api user --jq .login) " ] && pass "CODEOWNERS on main names only the owner" "$owners" || fail "CODEOWNERS owners" "$owners"
+# Triggers, and no expression with event data inside a run: block (it would be interpolated into the script).
+# Read from the template: the drift check above shows main has the same files.
+wf_check="$(ruby -ryaml -e '
+    bad = []; trig = {}
+    Dir.glob(ARGV[0] + "/*.yml").each do |f|
+      w = YAML.load_file(f); n = File.basename(f, ".yml")
+      trig[n] = (w["on"] || w[true]).keys.sort.join(",")
+      (w["jobs"] || {}).each { |j, job| (job["steps"] || []).each { |st| bad << "#{n}/#{j}" if st["run"].to_s.include?("${{") } }
+    end
+    puts "triggers=" + trig.sort.map { |k, v| "#{k}:#{v}" }.join(" ")
+    puts "interpolated=" + bad.uniq.join(" ")' "$FACTORY_DIR/templates/project/.github/workflows")"
+echo "$wf_check" | grep -qx "triggers=guards:pull_request_target label-audit:issues,label preview-cleanup:workflow_run preview-closed:pull_request preview-deploy:workflow_run tests:pull_request" \
+  && pass "workflow triggers: guards on pull_request_target, preview-deploy and preview-cleanup on workflow_run, tests on pull_request" \
+  || fail "workflow triggers" "$(echo "$wf_check" | head -1)"
+echo "$wf_check" | grep -qx "interpolated=" && pass "no \${{ }} expression inside any run: block (event data only through env:)" \
+  || fail "expressions in run: blocks" "$(echo "$wf_check" | tail -1)"
+env_branches="$(gh api "repos/$NWO/environments/preview/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"
+[ "$env_branches" = "branch:main" ] && pass "environment preview deploys from main only" || fail "preview environment branches" "$env_branches"
+env_secrets="$(gh api "repos/$NWO/environments/preview/secrets" --jq '[.secrets[].name] | sort | join(" ")')"
+[ "$env_secrets" = "VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN" ] && pass "Vercel secrets only in environment preview" "$env_secrets" || fail "preview secrets" "$env_secrets"
+delete_merged="$(gh api "repos/$NWO" --jq .delete_branch_on_merge)"
+[ "$delete_merged" = true ] && pass "merged branches are deleted automatically" || fail "delete branch on merge" "$delete_merged"
 
 section "Image is rebuilt when .devcontainer/ changes"
 # Leftovers from an aborted run: the worktree that has the branch checked out, then the branch.
@@ -338,7 +429,9 @@ out="$(FACTORY_EXPECTED_VISIBILITY=PRIVATE "$REPO/scripts/up.sh" true 2>&1)"; rc
   || fail "preflight refusal" "$out"
 [ "$(container_id)" = "$CID" ] && pass "preflight refusal leaves the running container untouched" "$CID" \
   || fail "preflight refusal changed the container" "before '$CID', after '$(container_id)'"
-out="$( (FACTORY_GH_TOKEN=""; NWO="$NWO"; start_container) 2>&1 )"; rc=$?
+EMPTY_TOKEN_DIR="$(mktemp -d)"
+out="$( (export FACTORY_TOKEN_DIR="$EMPTY_TOKEN_DIR"; NWO="$NWO"; start_container) 2>&1 )"; rc=$?
+rmdir "$EMPTY_TOKEN_DIR"
 [ "$rc" -ne 0 ] && echo "$out" | grep -q "REFUSING TO START: workspace init failed" && pass "up.sh aborts when workspace init fails" "$(echo "$out" | grep -E 'init-workspace|REFUSING' | tail -2 | tr '\n' ' ')" \
   || fail "workspace init failure abort" "$(echo "$out" | tail -3)"
 [ -z "$(container_id)" ] && pass "no container left running after failed start" || fail "container running after failed start"
@@ -356,20 +449,23 @@ fi
 rm -rf "$BEHIND_PARENT"
 
 section "Token never in a host process's arguments"
-# Samples every host process's argument list while up.sh starts the container
-# (workspace init, probe) and runs a session command. Only match counts are
-# written; the patterns come from a file descriptor, so they are in no argv either.
+# Samples every host process's argument list while up.sh mints a token, starts the
+# container (workspace init, probe) and runs a session command. Patterns: the
+# current token, any installation token (ghs_), the App JWT's fixed header, a
+# private key, and GH_TOKEN=. Only match counts are written; the patterns come
+# from a file descriptor, so they are in no argv either.
 PS_COUNTS="$(mktemp)"
-( while :; do ps -Aww -o args= | grep -cF -f <(printf 'GH_TOKEN=\n%s\n' "$FACTORY_GH_TOKEN"); sleep 0.2; done ) > "$PS_COUNTS" 2>/dev/null &
+( while :; do ps -Aww -o args= | grep -cF -f <(printf 'GH_TOKEN=\nghs_\neyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9\nPRIVATE KEY\n%s\n' "$FACTORY_GH_TOKEN"); sleep 0.2; done ) > "$PS_COUNTS" 2>/dev/null &
 sampler=$!
 "$REPO/scripts/up.sh" sleep 5 >/dev/null 2>&1; rc=$?
 kill "$sampler"; wait "$sampler" 2>/dev/null
 samples="$(grep -c . "$PS_COUNTS")"; hits="$(awk '{s += $1} END {print s + 0}' "$PS_COUNTS")"
 rm -f "$PS_COUNTS"
 [ "$rc" -eq 0 ] && [ "$samples" -ge 10 ] && [ "$hits" = "0" ] \
-  && pass "GH_TOKEN= and the token value never in a host process list during start and session" "$samples samples" \
+  && pass "no token, JWT, key or GH_TOKEN= in a host process list during mint, start and session" "$samples samples" \
   || fail "token in host process list" "rc=$rc, $samples samples, $hits matching lines"
 CID="$(container_id)"
+FACTORY_GH_TOKEN="$(cat "$FACTORY_TOKEN_DIR/token" 2>/dev/null)"   # the start minted a new one
 
 section "Workspace is never deleted automatically"
 # run_on_volume and workspace_image come from up.sh, so both use the same image and mount.

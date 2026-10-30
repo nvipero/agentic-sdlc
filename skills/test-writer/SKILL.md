@@ -46,10 +46,10 @@ Run the story's tests: `cd tests/acceptance && npm ci && npx playwright test --g
 ## Commit
 
 - Stage only your files by name under `tests/acceptance/` (never `node_modules/`, `test-results/` or `playwright-report/`, which `.gitignore` covers). Never `git add -A` or `git add .`.
-- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run:
+- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run. Commit under your role's name (`-c user.name="factory test-writer"`), so the commit list shows who wrote what:
 
   ```
-  git commit -m "test(acceptance): add acceptance tests for #<issue>" --trailer "Factory-Role: test-writer"
+  git -c user.name="factory test-writer" commit -m "test(acceptance): add acceptance tests for #<issue>" --trailer "Factory-Role: test-writer"
   ```
 
 - Commit, do not push. Do not comment on issues, change labels or call `gh`. Write nothing outside `tests/acceptance/`.

@@ -60,7 +60,7 @@ When the orchestrator passes you research requests for a story, you work without
   ```markdown
   # Research for #<issue>: <topic>
 
-  TL;DR: <two lines>
+  > **TL;DR:** <two lines>
 
   ## Q<n>: <question>
   - Answer: <answer> <tag>
@@ -86,7 +86,7 @@ When the orchestrator passes you research requests for a story, you work without
 ```markdown
 # Product context
 
-TL;DR: <two lines: what the product is and for whom>
+> **TL;DR:** <two lines: what the product is and for whom>
 
 ## Purpose
 ## Users
@@ -117,10 +117,10 @@ Keep both short. A reader should get the product in two minutes. The glossary's 
 
 - Branch: stay on the branch the command checked out: `chore/project-context` for the first context, `chore/update-project-context-<date>` for an update, the story branch for research requests. Do not switch branches.
 - Stage only your files by name: `git add docs/product-context.md docs/glossary.md`, or the research file. Never `git add -A` or `git add .`.
-- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run:
+- Conventional Commits. Add the role with git's `--trailer` option, never by writing it into the message: git then puts it in the last trailer paragraph, next to any `Co-Authored-By`, where it parses. A `Factory-Role` line in its own paragraph does not parse, and the orchestrator stops the run. Commit under your role's name (`-c user.name="factory researcher"`), so the commit list shows who wrote what:
 
   ```
-  git commit -m "docs(context): add product context and glossary" --trailer "Factory-Role: researcher"
+  git -c user.name="factory researcher" commit -m "docs(context): add product context and glossary" --trailer "Factory-Role: researcher"
   ```
 
 - Commit, do not push. Do not comment on issues or change labels. The command that started you does that.

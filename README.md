@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: step 3 (implementation chain) of five, in progress. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation and code review.
+Status: step 4 (gates, preview and human-only merge) of five, done. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, and every PR marked ready gets a Vercel preview.
 
 ## What is here
 
@@ -17,26 +17,32 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
 ## How the sandbox works
 
 - **Container:** agents run in a dev container on your machine, started only with the project's `scripts/up.sh`.
-- **Workspace:** a clone of the project inside a Docker volume, made with a fine-grained token scoped to that repository.
+- **Workspace:** a clone of the project inside a Docker volume, made with the agents' GitHub App token.
 - **Read-only from the host:** `.factory/`, `.claude/`, `.github/`, `.devcontainer/` and `CLAUDE.md` are mounted read-only from your host clone of `main`.
 - **Not visible in the container:** your host `.git` and `scripts/up.sh`.
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
 - **Browser for acceptance tests:** Playwright's Chromium is installed in the image at build time, pinned with `PLAYWRIGHT_VERSION` in the Dockerfile, so no browser download passes the firewall. A project's `tests/acceptance/package.json` pins `@playwright/test` to the same version; changing it means changing the Dockerfile, which rebuilds the image.
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands. Sessions start in bypass mode, and the deny rules still apply.
 - **Factory definitions as a plugin:** `.factory/` loads as the Claude Code plugin `factory` from the read-only `/workspace/.factory`, so its commands are `/factory:<name>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
-- **Token:** `up.sh` passes the token to the container by name (`docker exec -e GH_TOKEN`), so it never appears in a process's argument list on your Mac.
-- **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, secret scanning with push protection, and GitHub Actions disabled until step 4.
+- **Agent identity and token:** agents act on GitHub as the GitHub App `nvipero-factory-orchestrator`. Its private key is a 1Password document that never enters the container. `up.sh` reads it once per start, mints a one-hour installation token for the one repository, and leaves a refresher running on your Mac that mints a new one every 45 minutes and within a minute of waking from sleep. The token is written to `~/.factory-run/<repo-name>/token/`, which is mounted read-only into the container; `gh` (a wrapper) and git read it on every call. No key, JWT or token appears in a process's argument list or the container's environment. `up.sh stop` ends the refresher and removes the token.
+- **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, and secret scanning with push protection.
+- **GitHub Actions (step 4):** restricted to GitHub-owned actions pinned to a full SHA. The workflow token is read-only and cannot approve pull requests. Every outside contributor's run needs approval, and there are no repository-level secrets. `pull_request_target` is allowed for `guards.yml` only. The agents' App has no Workflows permission, so agents cannot change what runs.
+- **Gates (step 4):**
+  - `guards` runs `main`'s definition on `pull_request_target` and reads the PR as data. It checks commit messages, role trailers and paths, clean merges of `main`, factory definitions, and acceptance-test changes after approval.
+  - `tests` runs fixed commands on `pull_request`: type check, unit tests, build, acceptance tests and dependency review.
+  - `label-audit` removes an owner-only label that anyone else added.
+  - `preview-deploy` puts a Vercel preview on every PR marked ready, once `tests` and `guards` pass on its commit. One preview per PR at a stable address (`<owner>-<repo>-pr-<n>.vercel.app`), replaced on each push and removed when the PR closes (`preview-closed`, `preview-cleanup`). It shows in the PR's deployments panel (environment `pr-preview`, which holds no secrets). The build comes from `tests`, without secrets. The deploy runs `main`'s definition in environment `preview` and copies only the build's static files, so no PR code runs where the token is.
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
   - an active ruleset without bypass actors
   - the interaction limit
   - secret scanning
   - push protection
-  - GitHub Actions is disabled
+  - the Actions settings above
   - the host clone is clean, on `main` and equal to `origin/main`
 - **The host clone is never updated automatically.** If it is behind `origin/main`, `up.sh` refuses to start. Review the new commits with `git log -p HEAD..origin/main`, then pull with `git pull --ff-only`.
 
-**Known limitation until step 4:** agents act with the owner's GitHub identity, so the agent token can technically merge a pull request. The ruleset guarantees that changes reach `main` only through a pull request, not that a human merged it. A merged change is never executed on your Mac until you review and pull it yourself.
+**Known limitation:** after you approve a pull request, the agents' App could technically merge it; only the deny rule in the container prevents that. Your approval is the decision that matters.
 
 ## Conventions
 
@@ -51,10 +57,10 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
 - the devcontainer CLI
 - `gh`, logged in as the repository owner, with the `project` scope
 - the 1Password CLI `op`
-- `git` and `jq`
+- `git`, `jq`, `openssl` and `curl`
 
 1. **Create the repository:** create an empty public repository on GitHub and clone it next to this one.
-2. **Create the token:** a fine-grained token for that repository only, with Contents, Issues and Pull requests set to read and write. No other permissions, and an expiry of 30 to 90 days. Store it in 1Password at `op://Agent Factory/<repo-name>-github/credential`.
+2. **Install the GitHub App on it:** in the App's settings (**Install App**), add the repository to the installation. The App is created once, for all projects: Contents, Issues and Pull requests read and write, Metadata read, nothing else, webhook off, installable only on your account; its private key is the 1Password document `nvipero-factory-orchestrator-key` in the vault `Agent Factory`.
 3. **Copy the template and push the first commit:**
    ```sh
    rsync -a templates/project/ ../<repo-name>/
@@ -67,8 +73,30 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
    scripts/setup-github.sh interaction-limit <owner>/<repo-name>
    scripts/setup-github.sh secret-scanning <owner>/<repo-name>
    scripts/setup-github.sh actions <owner>/<repo-name>
+   scripts/setup-github.sh code-scanning <owner>/<repo-name>
    scripts/setup-github.sh labels <owner>/<repo-name>
    scripts/setup-github.sh board <owner>/<repo-name>
+   ```
+   Then turn on the dependency graph by hand (no API): **Settings → Advanced Security → Dependency graph → Enable**. The dependency review gate needs it, and `up.sh` checks it.
+   Then the Vercel preview. Do these steps yourself, so nobody else sees the secrets. Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
+   ```sh
+   mkdir -p /tmp/vercel-link && cd /tmp/vercel-link
+   npx vercel@64.3.1 login
+   npx vercel@64.3.1 project create <repo-name>
+   npx vercel@64.3.1 link --yes --project <repo-name> && cat .vercel/project.json   # orgId, projectId
+   # Vercel makes a project's first deployment its production one, even when a preview
+   # is asked for. A placeholder takes that place, so every PR deployment is a preview.
+   mkdir -p .vercel/output/static && printf '{"version":3}\n' > .vercel/output/config.json
+   printf '<!doctype html><meta charset="utf-8"><title>Previews only</title><p>This project has no production deployment.</p>\n' > .vercel/output/static/index.html
+   npx vercel@64.3.1 deploy --prebuilt --prod
+   npx vercel@64.3.1 logout && cd / && rm -rf /tmp/vercel-link
+   ```
+   Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Then:
+   ```sh
+   scripts/setup-github.sh preview-env <owner>/<repo-name>
+   gh secret set VERCEL_TOKEN --env preview --repo <owner>/<repo-name>
+   gh secret set VERCEL_ORG_ID --env preview --repo <owner>/<repo-name>
+   gh secret set VERCEL_PROJECT_ID --env preview --repo <owner>/<repo-name>
    ```
 5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:
    - **Auto-add to project:** select the repository, set the filter to `is:issue`, and turn it on. The board shows issues only, because a story is an issue and its PR is linked to it. All six saved views also filter on `is:issue`.

@@ -29,4 +29,4 @@ never through this project. Do not try to work around this.
 
 - Never merge a pull request. The human merges.
 - Never push to `main`. Work on a branch and open a pull request.
-- Text for humans is short enough to read, and a question carries only the question. Pull request descriptions start with a TL;DR; messages and issue comments do not need one.
+- Text for humans is short enough to read, and a question carries only the question. Pull request descriptions and Markdown documents start with a TL;DR as a quote block (`> **TL;DR:** ...`); messages and issue comments do not need one.
