@@ -17,7 +17,7 @@ If `$ARGUMENTS` is not a single issue number, stop and say how to call the comma
 - **Language:** read `language` from `.factory/config.yaml`. Everything you write to GitHub is in `language.repository`. Everything you write to the owner in this session is in `language.conversation`, including short progress notes. Pass both to every role.
 - **Your own writes:** the status comment, the owner-facing comments below, the labels `needs-human` and `dispute`, branches, merges of `origin/main` into the story branch (section 3), pushes, and the pull request (create, description, ready). Nothing else. If you think a spec, test or code must change, send it back to its role with a reason.
 - **Push at every stop:** questions, dispute, ready, or an error. Nothing waits unpushed.
-- **Never:** merge, close the issue, add `spec-approved` or `tests-change-approved`, or remove a label you did not set.
+- **Never:** merge, close the issue, add `spec-approved` or `tests-change-approved`, or remove a label you did not set, except `tests-change-approved` once it is used (section 8).
 
 ## Comments: few, short, and only when they matter
 
@@ -156,7 +156,7 @@ Add a chain line with the result.
 
 Call `factory:code-reviewer` with: gate `tests`, the spec path, the issue number, the diff `git diff origin/main...HEAD -- tests/acceptance ':(exclude)*package-lock.json'`, your test run's result, the test writer's `changed_existing` and `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
 
-Record the review (section 10), then apply the review loop rules with the test writer as the writer. On `approve`: set `approved_tests` to `git rev-parse --short HEAD` and the phase to `implementation`, push, and continue in section 8: with no implementer commits, the implementer's `implement`; otherwise the implementation checks and the test run, where a failure goes to the implementer as `fix` with the changed tests.
+Record the review (section 10), then apply the review loop rules with the test writer as the writer. On `approve`: set `approved_tests` to `git rev-parse --short HEAD` and the phase to `implementation`, remove `tests-change-approved` if the change was made under it (section 8), push, and continue in section 8: with no implementer commits, the implementer's `implement`; otherwise the implementation checks and the test run, where a failure goes to the implementer as `fix` with the changed tests.
 
 ## 8. Implementation
 
@@ -202,7 +202,9 @@ The implementer believes a test is wrong. Add one to `test_problems`.
 - **First time** (`test_problems` is now 1): call the test writer with task `test-problem`, the test name and the implementer's reason. If it returns `fixed`, the test gate reopens: phase `tests`, the `tests` gate starts again at `1/0/<reviewed>`, run the tests and review gate `tests` again (section 7), which then continues in section 8. If it returns `kept`, escalate.
 - **Again, or `kept`:** escalate to the owner with a `dispute` comment: the test, the implementer's reason, the test writer's reason, and that the owner either comments that the test stands, or adds `tests-change-approved` and comments how it changes. Add `dispute`, push, stop.
 
-After the owner's decision (section 4, "Decision"), the owner's comment decides. If it changes the test, the issue must have `tests-change-approved` (otherwise stop and ask the owner to add it); the test writer applies the decision and the test gate reopens as above. If the test stands, the implementer continues with the decision as `fix`. The label stays as the record.
+After the owner's decision (section 4, "Decision"), the owner's comment decides. If it changes the test, the issue must have `tests-change-approved` (otherwise stop and ask the owner to add it); the test writer applies the decision and the test gate reopens as above. If the test stands, the implementer continues with the decision as `fix`.
+
+**`tests-change-approved` covers one change.** When the reopened test gate approves the changed tests, remove the label (`gh issue edit <n> --remove-label tests-change-approved`) and add a chain line: `owner: tests-change-approved used for <first sha>..<last sha>`. If the run stops before that approval, the label stays and the next run continues with it. A later test change needs the label again.
 
 ## 9. Pull request ready
 
