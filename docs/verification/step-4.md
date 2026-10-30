@@ -20,7 +20,7 @@ Plan: [docs/plans/step-4.md](../plans/step-4.md), approved 2026-10-30. Filled in
 
 **Owner-run mint test before the container change:** the token is `ghs_`-prefixed, 390 bytes (longer than the 40 characters installation tokens used to have; nothing depends on the length), file mode 0600 in a 0700 directory, 60 minutes valid, one repository.
 
-**Still open for this build step:** the run across two refreshes while the Mac sleeps past the token's expiry (owner, plan section 6 step 1). The old fine-grained token is revoked after that.
+**Sleep test (owner, 2026-10-30):** the container stayed up while the Mac slept for more than the token's hour; after waking, `gh` in the container worked. The old fine-grained token (`sdlc-pilot-agents` on GitHub, `sdlc-pilot-github` in 1Password) is no longer read by anything and is revoked.
 
 ### Found and fixed while verifying
 
