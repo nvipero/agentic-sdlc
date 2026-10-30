@@ -1,6 +1,7 @@
-# Deploys a preview-build artifact to Vercel. workflow_run runs main's
-# definition, in environment "preview" (deployment branch: main only), the only
-# place the Vercel token exists. Nothing from the PR is executed here: the
+# Deploys the build of a PR whose tests passed (the tests workflow uploads it
+# for PRs that are not drafts) to Vercel, if guards passed on the same commit.
+# workflow_run runs main's definition; the deploy job runs in environment
+# "preview" (deployment branch: main only), the only place the Vercel token exists. Nothing from the PR is executed here: the
 # artifact is untrusted data, so only its regular files are copied into a
 # static-only Build Output directory this job writes itself (no functions,
 # routes or project settings from the PR). The PR number and head come from
@@ -10,18 +11,43 @@
 name: preview-deploy
 on:
   workflow_run:
-    workflows: [preview-build]
+    workflows: [tests]
     types: [completed]
 permissions:
   contents: read
   actions: read
   pull-requests: write
 jobs:
-  deploy:
+  check:
+    # No environment here: a draft or a PR failing guards never loads the token.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.ready.outputs.go }}
+    steps:
+      - name: A ready PR's build, and guards passed on the same commit
+        id: ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.event.workflow_run.id }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          # Drafts get no artifact: nothing to deploy.
+          n="$(gh api "repos/$REPO/actions/runs/$RUN/artifacts" --jq '[.artifacts[] | select(.name == "preview-dist")] | length')"
+          if [ "$n" = 0 ]; then echo "draft: no preview"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          guards="$(gh api "repos/$REPO/commits/$SHA/check-runs?check_name=guards" \
+            --jq '[.check_runs[] | select(.app.id == 15368)] | sort_by(.completed_at) | last | .conclusion // "none"')"
+          if [ "$guards" != success ]; then echo "::notice::guards is '$guards' on ${SHA:0:7}: no preview"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+  deploy:
+    needs: check
+    if: needs.check.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: preview

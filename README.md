@@ -31,7 +31,7 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
   - `guards` runs `main`'s definition on `pull_request_target` and reads the PR as data. It checks commit messages, role trailers and paths, clean merges of `main`, factory definitions, and acceptance-test changes after approval.
   - `tests` runs fixed commands on `pull_request`: type check, unit tests, build, acceptance tests and dependency review.
   - `label-audit` removes an owner-only label that anyone else added.
-  - `preview-build` and `preview-deploy` put a Vercel preview link on every PR marked ready. The build has no secrets. The deploy runs `main`'s definition in environment `preview` and copies only the build's static files, so no PR code runs where the token is.
+  - `preview-deploy` puts a Vercel preview on every PR marked ready, once `tests` and `guards` pass on its commit. One preview per PR at a stable address (`<owner>-<repo>-pr-<n>.vercel.app`), replaced on each push and removed when the PR closes (`preview-closed`, `preview-cleanup`). The build comes from `tests`, without secrets. The deploy runs `main`'s definition in environment `preview` and copies only the build's static files, so no PR code runs where the token is.
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
   - an active ruleset without bypass actors
