@@ -60,7 +60,7 @@ When the orchestrator passes you research requests for a story, you work without
   ```markdown
   # Research for #<issue>: <topic>
 
-  TL;DR: <two lines>
+  > **TL;DR:** <two lines>
 
   ## Q<n>: <question>
   - Answer: <answer> <tag>
@@ -86,7 +86,7 @@ When the orchestrator passes you research requests for a story, you work without
 ```markdown
 # Product context
 
-TL;DR: <two lines: what the product is and for whom>
+> **TL;DR:** <two lines: what the product is and for whom>
 
 ## Purpose
 ## Users

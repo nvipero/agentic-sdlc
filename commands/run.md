@@ -212,7 +212,7 @@ After the owner's decision (section 4, "Decision"), the owner's comment decides.
 When the code reviewer approves and your last test run passed:
 1. Push.
 2. Write the description with `gh pr edit <pr> --body-file <file>`:
-   - `**TL;DR:**` one or two sentences: what the story now does;
+   - `> **TL;DR:**` one or two sentences, as a quote block: what the story now does;
    - what changed, a few lines;
    - your test results: unit and acceptance, passed and total;
    - the reviewer's "Where to look" section, unchanged;

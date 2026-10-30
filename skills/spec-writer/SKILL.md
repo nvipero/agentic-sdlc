@@ -48,7 +48,7 @@ Path: `specs/<issue>-<slug>.md`, where the slug is 2 to 5 lowercase words from t
 ```markdown
 # <issue>: <title>
 
-TL;DR: <two lines>
+> **TL;DR:** <two lines>
 
 ## Problem and why
 ## Scope
