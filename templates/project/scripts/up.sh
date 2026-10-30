@@ -207,9 +207,14 @@ stop_refresher() {
 # Runs in the background while container $CID runs, checking every minute, so a
 # Mac waking from sleep gets a new token within a minute. It survives the
 # terminal closing; up.sh stop or the next start ends it. Exits with the
-# container and removes the token.
+# container and removes the token. It closes every inherited descriptor above
+# stderr, so a caller reading up.sh's output through a pipe is not kept waiting.
 start_refresher() {
   (
+    for fd in /dev/fd/*; do
+      fd="${fd##*/}"
+      if [ "$fd" -gt 2 ] 2>/dev/null; then eval "exec $fd>&-" 2>/dev/null || true; fi
+    done
     trap '' HUP
     trap 'remove_token; exit 0' TERM
     while [ "$(docker inspect -f '{{.State.Running}}' "$CID" 2>/dev/null)" = "true" ]; do
