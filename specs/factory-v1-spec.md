@@ -65,11 +65,11 @@ Fixed for v1. Changing one requires an owner decision.
 13. Generating project-specific dev containers through a skill.
 14. Custom dashboard.
 15. Using the factory to develop the factory itself.
-16. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
 16. Optional spec-first pull request merged before implementation.
 17. 1Password service account limited to the factory vault only, so that even the start script cannot read other vaults (availability and cost to be checked).
 18. Private project support through a GitHub organization on the Team plan, with the step 1 exit check repeated in a private repository.
 19. Inspection mode: attach VS Code to the container only while agents are stopped, with credential forwarding disabled and VS Code hosts allowlisted only for that mode.
+20. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
 
 ## 4. Architecture
 

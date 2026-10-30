@@ -111,7 +111,7 @@ Each piece is tested on the pilot before the next starts.
 - Section 5: feature-removal stories (section 5 of this plan); `tests-change-approved` covers one change (already in `run.md`).
 - Section 8: the gates as built (section 4 of this plan); event data never interpolated into workflow scripts.
 - Section 10: step 4's exit as verified.
-- Backlog item 17 (owner decision, 2026-10-30): dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository. The guards then let `dependabot[bot]` change only manifests and lock files without a `Factory-Role` trailer. The Claude Code and Playwright pins stay a manual monthly check. The owner's Mac tools are the owner's to update.
+- Backlog item 21 (owner decision, 2026-10-30): dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository. The guards then let `dependabot[bot]` change only manifests and lock files without a `Factory-Role` trailer. The Claude Code and Playwright pins stay a manual monthly check. The owner's Mac tools are the owner's to update.
 
 ## 9. Open points tested before they are relied on
 
