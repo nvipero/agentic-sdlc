@@ -1,10 +1,11 @@
 # Builds the static app of a PR marked ready, with no secret, and uploads it.
-# Drafts are skipped: the agents do not need the preview, only the owner does.
+# Drafts are skipped (a PR opened ready gets one at once): the agents do not need
+# the preview, only the owner does.
 # Not a required check (a skipped job would report success anyway).
 name: preview-build
 on:
   pull_request:
-    types: [ready_for_review, synchronize, reopened]
+    types: [opened, ready_for_review, synchronize, reopened]
 permissions:
   contents: read
 jobs:
