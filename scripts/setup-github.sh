@@ -45,6 +45,8 @@ ruleset() {
    \"require_last_push_approval\":false,\"required_review_thread_resolution\":false}},
   {\"type\":\"non_fast_forward\"},{\"type\":\"deletion\"}$checks]}"
   echo "$body" | jq -e . >/dev/null || die "ruleset body is not valid JSON"
+  # A merged branch is deleted at once; the PR keeps its commits, and the branch can be restored from it.
+  gh api -X PATCH "repos/$nwo" -F delete_branch_on_merge=true --jq '"delete branch on merge: \(.delete_branch_on_merge)"' >&2
   id="$(gh api "repos/$nwo/rulesets" --jq ".[] | select(.name == \"$RULESET_NAME\") | .id")"
   if [ -n "$id" ]; then
     echo "$body" | gh api -X PUT "repos/$nwo/rulesets/$id" --input - >/dev/null
@@ -231,6 +233,7 @@ status() {
        (.rules[] | select(.type == "required_status_checks") | "  required checks: \([.parameters.required_status_checks[] | "\(.context)@\(.integration_id)"])"),
        (.rules[] | select(.type == "code_scanning") | "  code scanning: \(.parameters.code_scanning_tools)")'
   done
+  gh api "repos/$nwo" --jq '"delete branch on merge: \(.delete_branch_on_merge)"'
   gh api "repos/$nwo/interaction-limits" --jq '"interaction limit: \(.limit // "none") until \(.expires_at // "-")"'
   gh api "repos/$nwo/actions/permissions" --jq '"actions: enabled=\(.enabled) allowed=\(.allowed_actions // "-") sha_pinning=\(.sha_pinning_required // "-")"'
   if [ "$(gh api "repos/$nwo/actions/permissions" --jq .enabled)" = "true" ]; then
