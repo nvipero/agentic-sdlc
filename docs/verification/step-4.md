@@ -115,3 +115,29 @@ CodeQL and dependency review passed on all ten.
 - After an App push: `review=REVIEW_REQUIRED state=BLOCKED reviews=["nvipero:DISMISSED"]`.
 
 **Local test before the first run:** `guards.sh` against the merged pilot PRs, with the App as author: #35 passes; #39 fails twice for real reasons, the trailer of 1668c0d the owner accepted by hand, and the acceptance-test rename after approval without `tests-change-approved` (issue #29's events confirm no such label was added; it was done under the label exception later withdrawn).
+
+## Build step 5: preview (2026-10-30)
+
+**Result:** a PR that is not a draft gets one preview at a stable address after `tests` and `guards` pass on its commit; a push replaces it; closing or merging removes it. Drafts and PRs failing guards get none, and the job holding the Vercel token never starts for them. sdlc-pilot #59, #62, #63, #64, #67, #68 merged; probes #61, #66, #70, #71 closed without merging.
+
+**As built** (differs from plan decision 8, after the owner's review and what the runs showed):
+- No separate build workflow: `tests` uploads its own build for PRs that are not drafts, and `preview-deploy` runs on `tests`' `workflow_run`. A `check` job without the environment confirms the artifact exists and that guards' latest run on the same commit succeeded; only then does the `deploy` job (environment `preview`, deployment branch `main`) load the token. Owner, 2026-10-30: a gate failing after the preview is deployed would leave a preview of rejected code.
+- One preview per PR (owner: previews per push pile up) at `<owner>-<repo>-pr-<n>.vercel.app` (owner: one address to test). Each deploy carries `pr=<n>` as Vercel metadata; the new deployment takes the alias, then the PR's other previews are deleted, and the PR's link comment is edited in place. `preview-closed` (no secrets) and `preview-cleanup` (`workflow_run`, environment `preview`) delete a closed PR's previews.
+- Deploy uses the Vercel CLI (pinned 64.3.1); alias and deletion use the REST API through `.github/scripts/vercel-preview.sh`. Decision (owner, 2026-10-30): keep the token scoped to the one project. With that token the CLI's `list`, `remove` and `alias` fail with "Could not retrieve Project Settings", because they look up the account first (403) and only `deploy` and `pull` tolerate that (read from the CLI source); the REST endpoints work with the narrow token. The script deletes only deployments with no target (previews) and this PR's number, never the production placeholder.
+- Vercel makes a project's first deployment production even when a preview is asked for, also after the production deployment is deleted. A placeholder production page ("Previews only") holds that place; the README's setup does it before the first preview.
+
+**Evidence:**
+
+| Check | Result |
+|---|---|
+| Draft PR #61 | no preview-build run, no comment |
+| Ready PR, CLI target | first runs deployed to production (fixed: `--target=preview` and the placeholder); later runs `Preview  https://sdlc-pilot-…-nvipero1.vercel.app` |
+| Stable address #66 | `alias nvipero-sdlc-pilot-pr-66.vercel.app set`; the comment `Preview: https://nvipero-sdlc-pilot-pr-66.vercel.app (updated to f94d262)`, edited to `39be594` after a push |
+| Older preview deleted on push | `dpl_4gC47aVnaGDvBphD85skfEmQqCna DELETED`; its own URL then 404 |
+| Login required | the stable address answers 302 to `vercel.com/sso-api` |
+| Cleanup on close | first run failed (`line 31: 3: unbound variable`, fixed in #67); after it, `dpl_HoFz47vBabpYREV9uSEpdhvxNDnK DELETED`, stable address 404, production placeholder 200 |
+| Preview after tests (#70) | tests done 21:24:20, deploy run created 21:24:23: `check=success deploy=success` |
+| Guards failing (#71) | tests passed, guards failed: `check=success deploy=skipped`, no comment |
+| Cleanup of #70 and #71 | both `success`; #70's address 404 |
+
+**Found on the way:** a PR opened ready got no preview until its next push (fixed: the `opened` event); `vercel project add` is deprecated (`project create`); the first `preview-deploy` after a fix waited about five minutes in `waiting` with no protection rule set and then ran (not explained; not seen again).
