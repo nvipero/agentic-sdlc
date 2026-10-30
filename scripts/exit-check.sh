@@ -261,7 +261,7 @@ expect_fail "agent token cannot push to the factory repo" \
   "cd /workspace && git push --dry-run https://github.com/$FACTORY_NWO.git HEAD:refs/heads/exit-check-probe" "403|denied|not found"
 # The probe PR marked ready has no approval: the ruleset must refuse the App's merge.
 expect_fail "agent token cannot merge a PR without the owner's approval (ruleset)" \
-  "cd /workspace && gh pr ready $BR >/dev/null && gh pr merge $BR --merge" "prohibits the merge|not mergeable|review|protected"
+  "cd /workspace && gh pr ready $BR >/dev/null 2>&1 && gh pr merge $BR --merge" "prohibits the merge|is not mergeable"
 in_box "cd /workspace && gh pr close $BR --delete-branch --comment 'Exit check finished; closing without merge.' >/dev/null 2>&1; git switch -q main; git branch -q -D $BR" >/dev/null
 gh api "repos/$NWO/branches/$BR" >/dev/null 2>&1 && fail "probe branch cleaned up" || pass "probe branch and PR cleaned up (closed, not merged)"
 expect_ok "merge deny rule active in bypass mode (claude -p, permission_denials)" \
