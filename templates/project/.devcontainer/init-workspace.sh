@@ -24,9 +24,9 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ -f /run/firewall-ok ] || { log "firewall is not active"; exit 1; }
-[ -n "${GH_TOKEN:-}" ] || { log "GH_TOKEN is not set (start with scripts/up.sh)"; exit 1; }
+[ -s /etc/factory/token/token ] || { log "no GitHub token at /etc/factory/token (start with scripts/up.sh)"; exit 1; }
 
-gh auth setup-git --hostname github.com
+# git gets github.com credentials from the gh wrapper (system config in the image).
 git config --global user.name "factory-agent"
 git config --global user.email "factory-agent@users.noreply.github.com"
 

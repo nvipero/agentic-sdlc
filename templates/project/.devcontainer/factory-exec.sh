@@ -13,9 +13,12 @@ jq -e .permissions.deny /etc/claude-code/managed-settings.json >/dev/null \
 if curl -s --max-time 5 -o /dev/null https://example.com; then
   refuse "example.com is reachable"
 fi
-# Authenticated: proves both the network path and the token (5000 requests per hour).
-[ -n "${GH_TOKEN:-}" ] || refuse "GH_TOKEN is not set"
-code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/zen || true)"
+# Authenticated: proves both the network path and the token. The token goes to
+# curl in a config on stdin, never in its arguments.
+token_file=/etc/factory/token/token
+[ -s "$token_file" ] || refuse "no GitHub token at $token_file"
+code="$(printf 'header = "Authorization: Bearer %s"\n' "$(cat "$token_file")" \
+  | curl -sS --max-time 10 -K - -o /dev/null -w '%{http_code}' https://api.github.com/zen || true)"
 [ "$code" = "200" ] || refuse "authenticated api.github.com check returned HTTP ${code:-none}"
 
 [ "$#" -gt 0 ] || set -- bash -l

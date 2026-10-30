@@ -8,17 +8,33 @@
 #                            show the workspace content, ask for confirmation,
 #                            archive the workspace volume and clone a fresh one
 #
-# Needs on the host: gh (logged in as the repo owner), git, op, devcontainer, docker.
+# Needs on the host: gh (logged in as the repo owner), git, op, openssl, curl, jq,
+# devcontainer, docker.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$(basename "$REPO_DIR")"
-TOKEN_REF="${FACTORY_TOKEN_REF:-op://Agent Factory/${PROJECT}-github/credential}"
+# The agents' GitHub identity: a GitHub App. Its client id is not secret; its
+# private key is a 1Password document that never leaves this machine.
+APP_CLIENT_ID="${FACTORY_APP_CLIENT_ID:-}"
+APP_KEY_VAULT="${FACTORY_APP_KEY_VAULT:-Agent Factory}"
+APP_KEY_DOC="${FACTORY_APP_KEY_DOC:-nvipero-factory-orchestrator-key}"
+# Per-project host state, outside the clone. token/ is mounted read-only into
+# the container (devcontainer.json) and holds only the current one-hour token.
+RUN_DIR="$HOME/.factory-run/$PROJECT"
+export FACTORY_TOKEN_DIR="$RUN_DIR/token"
+REFRESH_AGE=2700      # mint a new token when the current one is 45 minutes old
+REFRESH_MARGIN=900    # or expires within 15 minutes
 EXPECTED_VISIBILITY="${FACTORY_EXPECTED_VISIBILITY:-PUBLIC}"
 WARN_DAYS=14
 VOLUME="${PROJECT}-workspace"   # matches workspaceMount in devcontainer.json
 
-die() { echo "up.sh: REFUSING TO START: $*" >&2; exit 1; }
+# After this start has taken over the token (TOKEN_OWNED), a refusal removes it.
+die() {
+  echo "up.sh: REFUSING TO START: $*" >&2
+  if [ -n "${TOKEN_OWNED:-}" ]; then remove_token; fi
+  exit 1
+}
 say() { echo "up.sh: $*" >&2; }
 
 container_id() {
@@ -31,17 +47,16 @@ stop_container() {
   if [ -n "$cid" ]; then docker stop "$cid" >/dev/null; fi
 }
 
-# Runs a command in the container ($CID) as the agent user. The token is passed
-# by name only (-e GH_TOKEN): the docker client reads the value from its own
-# environment, so it never appears in any process's argument list. Leading
-# "-e NAME" arguments pass more variables by name. A terminal (-t) is used only
-# when both stdin and stdout are one; give non-interactive execs </dev/null so
-# they do not consume the caller's stdin.
+# Runs a command in the container ($CID) as the agent user. No credential is
+# passed: gh and git in the container read the token from the read-only token
+# mount on every call. Leading "-e NAME" arguments pass variables by name. A
+# terminal (-t) is used only when both stdin and stdout are one; give
+# non-interactive execs </dev/null so they do not consume the caller's stdin.
 box_exec() {
-  local tty= envs=(-e GH_TOKEN)
+  local tty= envs=()
   while [ "${1:-}" = "-e" ]; do envs+=(-e "$2"); shift 2; done
   if [ -t 0 ] && [ -t 1 ]; then tty=1; fi
-  GH_TOKEN="$FACTORY_GH_TOKEN" docker exec -i ${tty:+-t} -u node -w /workspace "${envs[@]}" "$CID" "$@"
+  docker exec -i ${tty:+-t} -u node -w /workspace ${envs[@]+"${envs[@]}"} "$CID" "$@"
 }
 
 # Removes the project's containers, running or stopped (they are recreated on every start).
@@ -120,10 +135,93 @@ check_clone() {
 }
 
 # --- 3. Token: the only secret source step ----------------------------------
-read_token() {
-  # Not exported: only box_exec hands it to the docker client, by name.
-  FACTORY_GH_TOKEN="$(op read "$TOKEN_REF")" || die "cannot read token from 1Password"
-  [ -n "$FACTORY_GH_TOKEN" ] || die "empty token"
+# The App key is read once per start and kept in this shell's memory (not
+# exported, never on disk). No secret ever reaches a process's arguments: the
+# key goes to openssl through a file descriptor, the JWT to curl through a
+# config on stdin, and jq reads responses from a pipe.
+read_app_key() {
+  [ -n "$APP_CLIENT_ID" ] || die "FACTORY_APP_CLIENT_ID is not set"
+  APP_KEY="$(op document get "$APP_KEY_DOC" --vault "$APP_KEY_VAULT")" \
+    || die "cannot read the GitHub App key from 1Password"
+  case "$APP_KEY" in *"PRIVATE KEY"*) ;; *) die "the 1Password document is not a private key" ;; esac
+}
+
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+# A JWT for the App, valid 9 minutes; issued 60 seconds in the past against clock skew.
+app_jwt() {
+  local now unsigned sig
+  now="$(date +%s)"
+  unsigned="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' \
+    $((now - 60)) $((now + 540)) "$APP_CLIENT_ID" | b64url)"
+  sig="$(printf '%s' "$unsigned" | openssl dgst -sha256 -binary -sign <(printf '%s\n' "$APP_KEY") | b64url)" \
+    || return 1
+  [ -n "$sig" ] || return 1
+  printf '%s.%s' "$unsigned" "$sig"
+}
+
+# app_api <jwt> <method> <path> [json body]: the JWT goes in a curl config on stdin.
+app_api() {
+  printf 'header = "Authorization: Bearer %s"\n' "$1" \
+    | curl -fsS --max-time 20 -K - -X "$2" -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" ${4:+--data "$4"} "https://api.github.com$3"
+}
+
+# Mints an installation token for this one repository with only the permissions
+# the agents use, and replaces the token file atomically (write, then rename:
+# the directory is mounted, so the container sees the new file).
+mint_token() {
+  local jwt inst resp tmp
+  jwt="$(app_jwt)" || { echo "cannot sign the App JWT" >&2; return 1; }
+  inst="$(app_api "$jwt" GET "/repos/$NWO/installation" | jq -r '.id // empty')"
+  [ -n "$inst" ] || { echo "the App is not installed on $NWO" >&2; return 1; }
+  resp="$(app_api "$jwt" POST "/app/installations/$inst/access_tokens" \
+    "{\"repositories\":[\"${NWO#*/}\"],\"permissions\":{\"contents\":\"write\",\"issues\":\"write\",\"pull_requests\":\"write\",\"metadata\":\"read\"}}")" \
+    || { echo "minting the installation token failed" >&2; return 1; }
+  mkdir -p "$FACTORY_TOKEN_DIR" && chmod 0700 "$RUN_DIR" "$FACTORY_TOKEN_DIR"
+  tmp="$(mktemp "$FACTORY_TOKEN_DIR/.token.XXXXXX")"
+  printf '%s' "$resp" | jq -j '.token // empty' > "$tmp"
+  [ -s "$tmp" ] || { rm -f "$tmp"; echo "the mint response has no token" >&2; return 1; }
+  printf '%s' "$resp" | jq -r '.expires_at | fromdateiso8601' > "$RUN_DIR/expires_at"
+  mv -f "$tmp" "$FACTORY_TOKEN_DIR/token"
+}
+
+token_needs_refresh() {
+  local now exp mtime
+  [ -s "$FACTORY_TOKEN_DIR/token" ] && [ -s "$RUN_DIR/expires_at" ] || return 0
+  now="$(date +%s)"; exp="$(cat "$RUN_DIR/expires_at")"
+  mtime="$(stat -f %m "$FACTORY_TOKEN_DIR/token")"
+  [ $((now - mtime)) -ge "$REFRESH_AGE" ] || [ $((exp - now)) -le "$REFRESH_MARGIN" ]
+}
+
+# Removes the token, so a stopped container leaves no credential behind.
+remove_token() { rm -f "$FACTORY_TOKEN_DIR/token" "$RUN_DIR/expires_at"; }
+
+stop_refresher() {
+  local pid
+  pid="$(cat "$RUN_DIR/refresher.pid" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null || true; fi
+  rm -f "$RUN_DIR/refresher.pid"
+}
+
+# Runs in the background while container $CID runs, checking every minute, so a
+# Mac waking from sleep gets a new token within a minute. It survives the
+# terminal closing; up.sh stop or the next start ends it. Exits with the
+# container and removes the token.
+start_refresher() {
+  (
+    trap '' HUP
+    trap 'remove_token; exit 0' TERM
+    while [ "$(docker inspect -f '{{.State.Running}}' "$CID" 2>/dev/null)" = "true" ]; do
+      if token_needs_refresh; then
+        mint_token && echo "$(date -u +%FT%TZ) refreshed" || echo "$(date -u +%FT%TZ) refresh FAILED"
+      fi
+      sleep 60 & wait $!
+    done
+    remove_token
+  ) >>"$RUN_DIR/refresher.log" 2>&1 </dev/null &
+  echo $! > "$RUN_DIR/refresher.pid"
+  disown
 }
 
 # --- 4. Image: always built from the current .devcontainer/ tree -------------
@@ -274,19 +372,24 @@ reset_workspace() {
 }
 
 main() {
-  if [ "${1:-}" = "stop" ]; then stop_container; say "stopped"; exit 0; fi
-  for c in gh git jq op devcontainer docker; do
+  if [ "${1:-}" = "stop" ]; then stop_refresher; stop_container; remove_token; say "stopped"; exit 0; fi
+  for c in gh git jq op openssl curl devcontainer docker; do
     command -v "$c" >/dev/null || die "'$c' is not installed"
   done
   preflight
   check_clone
-  read_token
+  read_app_key
+  # The next start recreates the container, so the old refresher goes now.
+  stop_refresher
+  TOKEN_OWNED=1
+  mint_token || die "cannot mint a GitHub App token"
   build_image "$REPO_DIR"
   if [ "${1:-}" = "reset-workspace" ]; then
     reset_workspace
     set -- true
   fi
   start_container
+  start_refresher
   probe_network
   box_exec /usr/local/bin/factory-exec "$@"
 }

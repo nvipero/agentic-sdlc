@@ -55,6 +55,11 @@ COPY --chmod=0644 allowlist.txt /etc/factory/allowlist.txt
 COPY --chmod=0755 init-firewall.sh init-workspace.sh /usr/local/bin/
 COPY --chmod=0755 container-entrypoint.sh /usr/local/bin/container-entrypoint
 COPY --chmod=0755 factory-exec.sh /usr/local/bin/factory-exec
+# gh reads the token from the read-only mount at /etc/factory/token (it comes
+# before /usr/bin/gh in PATH), and git asks it for github.com credentials.
+COPY --chmod=0755 gh-wrapper.sh /usr/local/bin/gh
+RUN git config --system credential.https://github.com.helper '' \
+ && git config --system --add credential.https://github.com.helper '!/usr/local/bin/gh auth git-credential'
 # The trailing "" allows the script only without arguments.
 RUN echo 'node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""' > /etc/sudoers.d/node-firewall \
  && chmod 0440 /etc/sudoers.d/node-firewall \

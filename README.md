@@ -17,14 +17,14 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
 ## How the sandbox works
 
 - **Container:** agents run in a dev container on your machine, started only with the project's `scripts/up.sh`.
-- **Workspace:** a clone of the project inside a Docker volume, made with a fine-grained token scoped to that repository.
+- **Workspace:** a clone of the project inside a Docker volume, made with the agents' GitHub App token.
 - **Read-only from the host:** `.factory/`, `.claude/`, `.github/`, `.devcontainer/` and `CLAUDE.md` are mounted read-only from your host clone of `main`.
 - **Not visible in the container:** your host `.git` and `scripts/up.sh`.
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
 - **Browser for acceptance tests:** Playwright's Chromium is installed in the image at build time, pinned with `PLAYWRIGHT_VERSION` in the Dockerfile, so no browser download passes the firewall. A project's `tests/acceptance/package.json` pins `@playwright/test` to the same version; changing it means changing the Dockerfile, which rebuilds the image.
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands. Sessions start in bypass mode, and the deny rules still apply.
 - **Factory definitions as a plugin:** `.factory/` loads as the Claude Code plugin `factory` from the read-only `/workspace/.factory`, so its commands are `/factory:<name>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
-- **Token:** `up.sh` passes the token to the container by name (`docker exec -e GH_TOKEN`), so it never appears in a process's argument list on your Mac.
+- **Agent identity and token:** agents act on GitHub as the GitHub App `nvipero-factory-orchestrator`. Its private key is a 1Password document that never enters the container. `up.sh` reads it once per start, mints a one-hour installation token for the one repository, and leaves a refresher running on your Mac that mints a new one every 45 minutes and within a minute of waking from sleep. The token is written to `~/.factory-run/<repo-name>/token/`, which is mounted read-only into the container; `gh` (a wrapper) and git read it on every call. No key, JWT or token appears in a process's argument list or the container's environment. `up.sh stop` ends the refresher and removes the token.
 - **GitHub protections:** a ruleset on `main` with no bypass actors, an interaction limit of collaborators only, secret scanning with push protection, and GitHub Actions disabled until step 4.
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
@@ -51,10 +51,10 @@ Status: step 3 (implementation chain) of five, in progress. `/factory:context` w
 - the devcontainer CLI
 - `gh`, logged in as the repository owner, with the `project` scope
 - the 1Password CLI `op`
-- `git` and `jq`
+- `git`, `jq`, `openssl` and `curl`
 
 1. **Create the repository:** create an empty public repository on GitHub and clone it next to this one.
-2. **Create the token:** a fine-grained token for that repository only, with Contents, Issues and Pull requests set to read and write. No other permissions, and an expiry of 30 to 90 days. Store it in 1Password at `op://Agent Factory/<repo-name>-github/credential`.
+2. **Install the GitHub App on it:** in the App's settings (**Install App**), add the repository to the installation. The App is created once, for all projects: Contents, Issues and Pull requests read and write, Metadata read, nothing else, webhook off, installable only on your account; its private key is the 1Password document `nvipero-factory-orchestrator-key` in the vault `Agent Factory`.
 3. **Copy the template and push the first commit:**
    ```sh
    rsync -a templates/project/ ../<repo-name>/

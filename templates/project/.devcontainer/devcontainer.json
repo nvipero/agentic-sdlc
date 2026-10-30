@@ -1,5 +1,5 @@
 {
-  // Start only with scripts/up.sh. It runs the protection preflight, passes the
+  // Start only with scripts/up.sh. It runs the protection preflight, mints the
   // token, prepares the workspace and verifies the image and firewall before giving you a shell.
   "name": "${localWorkspaceFolderBasename}",
   "build": {
@@ -18,6 +18,9 @@
     "source=${localWorkspaceFolder}/.github,target=/workspace/.github,type=bind,readonly",
     "source=${localWorkspaceFolder}/.devcontainer,target=/workspace/.devcontainer,type=bind,readonly",
     "source=${localWorkspaceFolder}/CLAUDE.md,target=/workspace/CLAUDE.md,type=bind,readonly",
+    // The current one-hour GitHub App token, read-only: a directory, so a token the host
+    // refresher renames into place is seen at once. scripts/up.sh sets the path.
+    "source=${localEnv:FACTORY_TOKEN_DIR},target=/etc/factory/token,type=bind,readonly",
     // Claude Code login and state.
     "source=${localWorkspaceFolderBasename}-claude,target=/home/node/.claude,type=volume"
   ],
@@ -30,8 +33,7 @@
   "containerUser": "node",
   "remoteUser": "node",
   "updateRemoteUserUID": false,
-  // No remoteEnv and no lifecycle commands: the devcontainer CLI would pass the token as
-  // -e NAME=VALUE on the docker command line. scripts/up.sh runs init-workspace.sh and
-  // the session itself with docker exec -e GH_TOKEN (by name).
+  // No remoteEnv and no lifecycle commands: scripts/up.sh runs init-workspace.sh and the
+  // session itself with docker exec, and no credential is ever passed in the environment.
   "userEnvProbe": "none"
 }
