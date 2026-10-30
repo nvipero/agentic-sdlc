@@ -1,0 +1,20 @@
+# Marks a closed or merged PR for preview cleanup. No secrets: it only records
+# the PR number for preview-cleanup, which runs main's definition with the token.
+name: preview-closed
+on:
+  pull_request:
+    types: [closed]
+permissions: {}
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          PR: ${{ github.event.pull_request.number }}
+        run: mkdir -p pr && printf '%s\n' "$PR" > pr/number
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: closed-pr
+          path: pr/
+          retention-days: 1

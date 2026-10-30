@@ -4,7 +4,8 @@
 # artifact is untrusted data, so only its regular files are copied into a
 # static-only Build Output directory this job writes itself (no functions,
 # routes or project settings from the PR). The PR number and head come from
-# the event, not from the artifact.
+# the event, not from the artifact. One preview per PR: after a new one is up,
+# the PR's older previews are removed, and the PR's comment is edited in place.
 name: preview-deploy
 on:
   workflow_run:
@@ -57,14 +58,31 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          PR: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
           set -euo pipefail
-          # Always a preview: without --target, a prebuilt deploy goes to production.
-          vercel deploy --prebuilt --target=preview --non-interactive --no-color > "$RUNNER_TEMP/deploy.out"
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::no PR number in the event"; exit 1; }
+          # Always a preview: --target=preview, and the project has a placeholder production
+          # deployment (Vercel makes a project's first deployment production regardless).
+          vercel deploy --prebuilt --target=preview --meta "pr=$PR" --non-interactive --no-color > "$RUNNER_TEMP/deploy.out"
           # stdout carries the deployment URL; take the first one.
           url="$(grep -oE 'https://[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/deploy.out" | head -1 || true)"
           [ -n "$url" ] || { echo "::error::no deployment URL in the output"; cat "$RUNNER_TEMP/deploy.out"; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Remove the PR's older previews
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          vercel list --meta "pr=$PR" --environment preview --json --non-interactive --no-color > "$RUNNER_TEMP/list.json"
+          for old in $(grep -oE '[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/list.json" | sort -u); do
+            [ "https://$old" = "$URL" ] && continue
+            vercel remove "$old" --safe --yes --non-interactive --no-color
+          done
       - name: Link on the PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,4 +93,4 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::no PR number in the event"; exit 1; }
-          gh pr comment "$PR" --repo "$REPO" --body "Preview of ${SHA:0:7}: $URL"
+          gh pr comment "$PR" --repo "$REPO" --edit-last --create-if-none --body "Preview of ${SHA:0:7}: $URL"

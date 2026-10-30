@@ -112,6 +112,7 @@ Each piece is tested on the pilot before the next starts.
 - Section 8: the gates as built (section 4 of this plan); event data never interpolated into workflow scripts.
 - Section 10: step 4's exit as verified.
 - Backlog item 21 (owner decision, 2026-10-30): dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository. The guards then let `dependabot[bot]` change only manifests and lock files without a `Factory-Role` trailer. The Claude Code and Playwright pins stay a manual monthly check. The owner's Mac tools are the owner's to update.
+- Backlog item 22 (owner, 2026-10-30): production deployment of `main` through the pipeline, when the project needs one. Until then production is a placeholder page and every PR deployment is a preview.
 
 ## 9. Open points tested before they are relied on
 
