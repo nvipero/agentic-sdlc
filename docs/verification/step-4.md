@@ -61,3 +61,57 @@ RESULT: all checks passed
 ```
 
 The other sections (steps 1 to 3: overlays, network, restarts, plugin and roles, browser, protections, image rebuild, fail-closed start, workspace) passed unchanged; with the token now in a file, `credential-like env vars` reads `none` instead of `only GH_TOKEN`.
+
+## Build steps 2 to 4: workflows, ruleset, guards, tests (2026-10-30)
+
+**Result:** every deliberately broken PR is blocked for the right reason, the control PR passes every gate, the App cannot merge without your approval, and an App push after your approval dismisses it. sdlc-pilot #45 (workflows), #46 and #58 (preflight) merged; ruleset and Actions settings applied with `scripts/setup-github.sh`.
+
+**Settings as applied** (`setup-github.sh status nvipero/sdlc-pilot`):
+
+```text
+ruleset protect-main: enforcement=active bypass_actors=["RepositoryRole:5:pull_request"] target=["~DEFAULT_BRANCH"] rules=["pull_request","non_fast_forward","deletion","required_status_checks","code_scanning"]
+  pull_request: {"dismiss_stale_reviews_on_push":true,"require_code_owner_review":true,"required_approving_review_count":1}
+  required checks: ["guards@15368","unit-and-build@15368","acceptance@15368","dependency-review@15368"]
+  code scanning: [{"alerts_threshold":"errors","security_alerts_threshold":"high_or_higher","tool":"CodeQL"}]
+actions: enabled=true allowed=selected sha_pinning=true
+selected actions: github_owned=true verified=false patterns=[]
+workflow token: read, can approve PRs: false
+fork PR approval: all_external_contributors
+policy: factory-guards-pull-request-target (active): workflow_path .github/workflows/guards.yml, allowed_events pull_request_target
+repository secrets: 0
+```
+
+**Open points from plan section 9, now settled:**
+- The `pull_request_target` policy can be set on a personal account's public repository through `POST /repos/{owner}/{repo}/actions/policies`, and `guards` runs under it. The list endpoint omits a policy's conditions and rules; the preflight reads each one by id.
+- A `pull_request_target` check attaches to the PR's head commit and can be a required check (`guards@15368` above; the probes' merge state followed it).
+- The `code_scanning` rule is accepted on a personal public repository.
+
+**Found while building:**
+- Dependency review needs the dependency graph, which was off and has no API switch. The owner turned it on in the UI; the preflight checks it through the SBOM endpoint, and the README says so.
+- `gh` opened a pager for every call in `setup-github.sh`; `GH_PAGER=cat` in both scripts.
+
+**Probes** (issue #47, PRs #48–#57, opened by `nvipero-factory-orchestrator[bot]` from the container, all closed without merging):
+
+| PR | Probe | guards | tests | Reason in the guards log |
+|---|---|---|---|---|
+| #48 | test-writer commit in `src/` | failure | pass | `(test-writer): src/main.tsx is outside the role's paths` |
+| #49 | no trailer | failure | pass | `no parsed Factory-Role trailer` |
+| #50 | non-conventional message | failure | pass | `message is not Conventional Commits` |
+| #51 | `scripts/probe.sh`, and `.github/scripts/guards.sh` replaced by `exit 0` | failure | pass | both paths outside the role and both factory definitions: judged by main's script |
+| #52 | acceptance test changed after the first implementer commit | failure | pass | `1 change(s) to tests/acceptance/ after the tests were approved, 0 tests-change-approved label(s) added by the owner` |
+| #53 | merge of main with a smuggled change | failure | pass | `a merge with changes of its own (not a clean merge of main)` |
+| #54 | `$(id)`, backticks, `"; curl …` and `${{ github.token }}` in branch, message, title, body | failure | pass | `branch name is not <type>/issue-<n>-<description>`; no `uid=` anywhere in the log |
+| #55 | failing unit test | pass | unit-and-build failure | — |
+| #56 | failing acceptance test | pass | acceptance failure | — |
+| #57 | control | pass | pass | — |
+
+CodeQL and dependency review passed on all ten.
+
+**label-audit:** the App added `tests-change-approved` to #47; the audit removed it and failed: `owner-only label 'tests-change-approved' added to #47 by nvipero-factory-orchestrator[bot]; removed`.
+
+**Merge only with your approval (#57):**
+- Marked ready by the App: `review=REVIEW_REQUIRED state=BLOCKED`. `gh pr merge 57 --merge` as the App: `the base branch policy prohibits the merge`. Further attempts (the REST merge endpoint, `--admin`) were not run: Claude Code's own classifier on the host refused them as merges without review.
+- After your approval: `review=APPROVED state=CLEAN`. Not merged.
+- After an App push: `review=REVIEW_REQUIRED state=BLOCKED reviews=["nvipero:DISMISSED"]`.
+
+**Local test before the first run:** `guards.sh` against the merged pilot PRs, with the App as author: #35 passes; #39 fails twice for real reasons, the trailer of 1668c0d the owner accepted by hand, and the acceptance-test rename after approval without `tests-change-approved` (issue #29's events confirm no such label was added; it was done under the label exception later withdrawn).
