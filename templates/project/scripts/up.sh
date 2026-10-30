@@ -372,7 +372,12 @@ reset_workspace() {
 }
 
 main() {
-  if [ "${1:-}" = "stop" ]; then stop_refresher; stop_container; remove_token; say "stopped"; exit 0; fi
+  if [ "${1:-}" = "stop" ]; then
+    if [ -z "$(container_id)" ] && [ ! -e "$RUN_DIR/refresher.pid" ] && [ ! -e "$FACTORY_TOKEN_DIR/token" ]; then
+      say "nothing to stop: no container, refresher or token"; exit 0
+    fi
+    stop_refresher; stop_container; remove_token; say "stopped"; exit 0
+  fi
   for c in gh git jq op openssl curl devcontainer docker; do
     command -v "$c" >/dev/null || die "'$c' is not installed"
   done
