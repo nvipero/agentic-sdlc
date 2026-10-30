@@ -1,5 +1,5 @@
 # Removes every preview of a closed or merged PR. workflow_run runs main's
-# definition in environment "preview". The PR number from the artifact is
+# definition in environment "preview" (scripts from main). The PR number from the artifact is
 # checked to be a number; nothing else from it is used.
 name: preview-cleanup
 on:
@@ -8,6 +8,7 @@ on:
     types: [completed]
 permissions:
   actions: read
+  contents: read
 jobs:
   cleanup:
     if: >-
@@ -23,28 +24,18 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/pr
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 24
-      - name: Vercel CLI
-        run: npm install --global --ignore-scripts vercel@64.3.1
+          persist-credentials: false
+          sparse-checkout: .github/scripts
       - name: Remove the PR's previews
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           FILE: ${{ runner.temp }}/pr/number
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           PR="$(head -c 12 "$FILE" | tr -d '\n')"
           [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::not a PR number"; exit 1; }
-          # The PR's stable address goes first, so --safe lets its deployment go.
-          name="$(printf '%s' "$REPO" | tr '/A-Z' '-a-z' | tr -cd 'a-z0-9-')-pr-$PR.vercel.app"
-          vercel alias remove "$name" --yes --non-interactive --no-color || echo "no alias $name"
-          vercel list --meta "pr=$PR" --environment preview --json --non-interactive --no-color > "$RUNNER_TEMP/list.json"
-          n=0
-          for old in $(grep -oE '[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/list.json" | sort -u); do
-            vercel remove "$old" --safe --yes --non-interactive --no-color; n=$((n + 1))
-          done
-          echo "removed $n preview(s) of #$PR"
+          bash .github/scripts/vercel-preview.sh prune "$PR"

@@ -70,6 +70,11 @@ jobs:
           url="$(grep -oE 'https://[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/deploy.out" | head -1 || true)"
           [ -n "$url" ] || { echo "::error::no deployment URL in the output"; cat "$RUNNER_TEMP/deploy.out"; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+          path: main-scripts
       - name: Stable address, older previews removed
         id: alias
         env:
@@ -82,15 +87,9 @@ jobs:
         run: |
           set -euo pipefail
           name="$(printf '%s' "$REPO" | tr '/A-Z' '-a-z' | tr -cd 'a-z0-9-')-pr-$PR.vercel.app"
-          vercel alias set "$URL" "$name" --non-interactive --no-color
+          bash main-scripts/.github/scripts/vercel-preview.sh alias "$URL" "$name"
           echo "url=https://$name" >> "$GITHUB_OUTPUT"
-          # The old deployments have lost the alias, so --safe lets them go; the
-          # production placeholder keeps its alias and is never removed.
-          vercel list --meta "pr=$PR" --environment preview --json --non-interactive --no-color > "$RUNNER_TEMP/list.json"
-          for old in $(grep -oE '[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/list.json" | sort -u); do
-            [ "https://$old" = "$URL" ] && continue
-            vercel remove "$old" --safe --yes --non-interactive --no-color
-          done
+          bash main-scripts/.github/scripts/vercel-preview.sh prune "$PR" "$URL"
       - name: Link on the PR
         env:
           GH_TOKEN: ${{ github.token }}
