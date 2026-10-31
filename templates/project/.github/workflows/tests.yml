@@ -1,11 +1,14 @@
 # Runs the PR's code, so it has a read-only token and no secrets. The commands
 # are fixed here (agents cannot change workflow files), not taken from the
 # project's npm scripts. For a PR that is not a draft, the build is uploaded
-# for preview-deploy, which runs only after this whole workflow passes.
+# for preview-deploy; for a push to main, for production-deploy. Both run only
+# after this whole workflow passes.
 name: tests
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
 permissions:
   contents: read
 jobs:
@@ -26,10 +29,18 @@ jobs:
         run: npx --no-install vitest run
       - name: Build
         run: npx --no-install vite build
-      - if: ${{ !github.event.pull_request.draft }}
+      - if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: preview-dist
+          path: dist/
+          retention-days: 1
+          if-no-files-found: error
+      - if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # Per attempt: a re-run must not collide with the earlier attempt's build.
+          name: main-dist-${{ github.run_attempt }}
           path: dist/
           retention-days: 1
           if-no-files-found: error
@@ -53,6 +64,8 @@ jobs:
         run: npx --no-install playwright test --reporter=line
         working-directory: tests/acceptance
   dependency-review:
+    # Compares a PR with its base; a push has nothing to compare.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
