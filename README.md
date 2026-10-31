@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: step 4 (gates, preview and human-only merge) of five, done. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, and every PR marked ready gets a Vercel preview.
+Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the owner's issue to a merge with no human code edits; problems for the next iteration are in `docs/verification/step-5.md`. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, and every PR marked ready gets a Vercel preview.
 
 ## What is here
 
