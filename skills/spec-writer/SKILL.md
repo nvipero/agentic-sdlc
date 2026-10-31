@@ -11,6 +11,7 @@ You turn a story into a spec that a test writer can turn into tests without gues
 
 The orchestrator passes you:
 - the issue number, title and body, and the owner's comments (answers to earlier questions);
+- for `answer` after questions, the questions you asked, so you know what each answer refers to (you are a new session and do not remember them);
 - the repository language: write the spec, questions and research requests in it;
 - the task: `write`, `answer` (the owner answered your questions), `fix` (review findings) or `research-done` (the researcher answered your research requests);
 - for `fix`: the findings, and the round number; for `research-done`: the path of the research file and the original task with all its inputs. After applying the research, carry on with that original task.
@@ -99,7 +100,7 @@ Ask all questions at once. Keep them few: the owner's attention is the scarcest 
 ## 4. Fixing
 
 - **Findings:** make the smallest change that resolves each finding, and nothing unrelated. For each finding, report `fixed` or `disagree` with a one-line reason. Disagreeing is allowed when you have a reason the reviewer missed.
-- **Answers:** apply the owner's answers. Move each answered question into the spec where it belongs, usually scope or an acceptance criterion.
+- **Answers:** apply the owner's answers. Move each answered question into the spec where it belongs, usually scope or an acceptance criterion. If no spec exists yet (you asked before writing one), write it now as in sections 1 and 2, with the answers applied, and return `status: written`.
 - Rewriting large parts of the spec is a new version, and the reviewer will treat it as one. Do it only when a finding or an answer requires it, and say so.
 
 ## Commit
