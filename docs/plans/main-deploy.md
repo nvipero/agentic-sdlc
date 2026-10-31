@@ -82,6 +82,12 @@ The full exit check is not run: nothing in the container, `up.sh` or the agents'
 - **You:** approve this plan, including two assumptions: the same token in both environments (decision 7), and a public production address (section 5). Then steps 4, 5 and 7, and the re-run in section 4.
 - **I do on my own:** everything else in section 3, including fixes found in the review or the first deploy, through the normal factory and pilot PRs.
 
+## As built
+
+- Decision 6: the command is `vercel-preview.sh live`, and it compares `GET /v4/aliases/<host>` (`deploymentId`) with the new deployment's id from `GET /v13/deployments/<url>`. The `/v13` response's `alias` field lists aliases "assigned upon deployment creation" (Vercel API reference), so it could not show a rollback.
+- Decision 4: the push build is `main-dist-<run attempt>`, so "Re-run all jobs" does not collide with the earlier attempt's build (upload-artifact refuses a duplicate name; whether a re-run removes the earlier attempt's artifacts is not documented).
+- Second-model review of the diff: no blocking findings; seven non-blocking, taken in or recorded in the verification document.
+
 ## 7. Second-model review of draft 1
 
 One blocking finding, twelve non-blocking. Checked against GitHub's documentation and the repository before taking them in.

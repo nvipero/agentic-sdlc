@@ -48,7 +48,8 @@ case "${1:-}" in
     id="$(vapi GET "/v13/deployments/$url" | jq -r .id)"
     [[ "$id" =~ ^dpl_[A-Za-z0-9]+$ ]] || { echo "no deployment id for $url" >&2; exit 1; }
     for _ in 1 2 3 4 5 6; do
-      now="$(vapi GET "/v4/aliases/$host?projectId=$VERCEL_PROJECT_ID" | jq -r '.deploymentId // ""')"
+      # An API error is retried like a mismatch; only the last answer fails the job.
+      now="$(vapi GET "/v4/aliases/$host?projectId=$VERCEL_PROJECT_ID" | jq -r '.deploymentId // ""' || true)"
       [ "$now" = "$id" ] && { echo "$host serves $id"; exit 0; }
       sleep 5
     done

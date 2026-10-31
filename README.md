@@ -92,7 +92,7 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
    npx vercel@64.3.1 deploy --prebuilt --prod
    npx vercel@64.3.1 logout && cd / && rm -rf /tmp/vercel-link
    ```
-   Name the Vercel project exactly like the repository: `production-deploy` derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
+   Name the Vercel project exactly like the repository, in lowercase letters, digits and hyphens: `production-deploy` derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
    ```sh
    for env in preview production; do
      scripts/setup-github.sh $env-env <owner>/<repo-name>
@@ -123,7 +123,7 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
 
 Every merge to `main` deploys it to `https://<repo>.vercel.app`, which is public (previews need a Vercel login).
 
-- **When:** `tests` runs again on `main`'s commit; after it passes, `production-deploy` deploys the build in environment `production`. Only `main`'s newest commit deploys; quick merges queue, and the last one wins. The run then checks that the production address serves the new deployment.
+- **When:** `tests` runs again on `main`'s commit; after it passes, `production-deploy` deploys the build in environment `production`. Only `main`'s newest commit deploys, if its tests pass; quick merges queue rather than replace each other. The run then checks that the production address serves the new deployment.
 - **A failed run on `main`:** fix it with a new PR, or re-run the `tests` run with **Re-run all jobs**. **Re-run failed jobs** can leave the run without its build, and `production-deploy` then fails on purpose.
 - **Rollback:** a revert PR, through the normal pipeline. For an emergency, **Instant Rollback** in the Vercel dashboard (on Hobby only to the previous production deployment; the first one returns to the placeholder). After a rollback Vercel stops moving production to new deployments, so the next `production-deploy` fails with "is the project rolled back?". Undo it in the dashboard (**Undo Rollback**); the pipeline's project-scoped token cannot.
 - **Old deployments:** Vercel's deployment retention removes them (Hobby default: 30 days; the last three and the live one are kept).
