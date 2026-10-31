@@ -8,7 +8,8 @@ Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and 
 Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, acceptance tests named by feature with per-criterion tags, test-driven unit tests by the implementer, and the layered sandbox as the first step of v2 (owner decision)  
 Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHub App as the agents' identity with host-minted one-hour tokens, owner-only labels and trusted input checked by account, the ruleset with code owner review and required gates, restricted GitHub Actions, the gates as built, the Vercel preview, feature-removal stories, and backlog items 21 and 22 (owner decisions)  
 Revision 10, 2026-10-31, with step 5: the definition of done follows principle 13 on TL;DRs (owner decision)  
-Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verification/step-5.md`
+Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verification/step-5.md`  
+Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`
 
 ## TL;DR
 
@@ -50,7 +51,7 @@ Fixed for v1. Changing one requires an owner decision.
 - Role knowledge as Agent Skills.
 - Labels, issue template and a Projects board as the human interface.
 - Deterministic gates in GitHub Actions, including guards that protect factory definitions, gates and acceptance tests.
-- Preview deployment per pull request.
+- Preview deployment per pull request; deployment of `main` to production on every merge (revision 12).
 
 ### Out of v1 (backlog, rough order)
 
@@ -75,7 +76,7 @@ Fixed for v1. Changing one requires an owner decision.
 19. Inspection mode: attach VS Code to the container only while agents are stopped, with credential forwarding disabled and VS Code hosts allowlisted only for that mode.
 20. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
 21. Dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository; the guards then let `dependabot[bot]` change only manifests and lock files. The Claude Code and Playwright pins stay a manual monthly check (owner decision, 2026-10-30).
-22. Production deployment of `main` through the pipeline, when a project needs one. Until then a project's production deployment is a placeholder page and every PR deployment is a preview (owner decision, 2026-10-30).
+22. ~~Production deployment of `main` through the pipeline.~~ Done in revision 12 (section 8, "Production").
 
 ## 4. Architecture
 
@@ -101,7 +102,7 @@ Applied to both `agentic-sdlc` and `sdlc-pilot`:
 - **A merged branch is deleted automatically.**
 - **Interaction limit "repository collaborators only":** outsiders cannot open issues or PRs, comment, react or edit. This keeps outside text out of agent input. The limit expires after at most six months.
 - **Secret scanning and push protection** enabled.
-- **GitHub Actions (projects, from step 4):** only GitHub-owned actions, pinned to a full commit SHA; a read-only `GITHUB_TOKEN` that cannot approve or create pull requests; approval required for every outside contributor's run; no repository-level secrets (the Vercel token is in the `preview` environment, deployable from `main` only); `pull_request_target` allowed by an Actions policy for `guards.yml` only, ahead of GitHub's default block on public repositories. The agents' App has no Workflows permission, so agents cannot change what runs. The dependency graph (needed by dependency review, turned on by hand) and CodeQL default setup are on. The factory repository keeps Actions disabled.
+- **GitHub Actions (projects, from step 4):** only GitHub-owned actions, pinned to a full commit SHA; a read-only `GITHUB_TOKEN` that cannot approve or create pull requests; approval required for every outside contributor's run; no repository-level secrets (the Vercel token is in the `preview` and `production` environments, deployable from `main` only); `pull_request_target` allowed by an Actions policy for `guards.yml` only, ahead of GitHub's default block on public repositories. The agents' App has no Workflows permission, so agents cannot change what runs. The dependency graph (needed by dependency review, turned on by hand) and CodeQL default setup are on. The factory repository keeps Actions disabled.
 
 `scripts/up.sh` verifies on the host, before starting the container, that the repository visibility is as expected, every ruleset is active and the project ruleset is as above, the interaction limit is active, secret scanning and push protection are on, and the Actions settings, policy, dependency graph and CodeQL are as above. It also checks that the host clone is clean, on `main` and equal to `origin/main`; it never updates the host clone itself. If any check fails, it refuses to start agents. Protections that can lapse silently (expiring limits, plan changes) are checked on every run instead of trusted.
 
@@ -296,11 +297,13 @@ Test commands cannot be weakened from a PR: the workflow fixes them and the App 
 
 **Preview:** for a PR that is not a draft, `tests` uploads its build; `preview-deploy` runs `main`'s definition on `workflow_run` after `tests` passes, checks without any secret that guards passed on the same commit, then deploys only the build's static files in environment `preview` with the Vercel token, never running PR code there. One preview per PR at `<owner>-<repo>-pr-<n>.vercel.app`, shown in the PR's deployments panel, replaced on each push and removed when the PR closes. The Vercel token is scoped to the one project.
 
+**Production:** `tests` also runs on every push to `main` (without dependency review) and uploads the build; `production-deploy` runs `main`'s definition on `workflow_run` after it passes, only for a push to `main`, only if the commit is still `main`'s head, and deploys the build's static files in environment `production` (deployable from `main` only, same token) to `<repo>.vercel.app`. Deploys queue rather than replace each other. After the deploy it checks that the production address serves the new deployment. Production is public; old deployments are left to Vercel's retention. Before the first merge a placeholder holds the production place, because Vercel makes a project's first deployment production.
+
 ## 9. Test project defaults
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
-- Vercel for preview deployments (Hobby, through the pipeline; no Git integration)
+- Vercel for preview and production deployments (Hobby, through the pipeline; no Git integration)
 
 The topic is a Todo-app (owner decision, 2026-10-23): generic and disposable, because the point is to test the factory.
 

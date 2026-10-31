@@ -9,6 +9,7 @@
 #   scripts/setup-github.sh actions-off       <owner/repo>   (the factory repo: no workflows)
 #   scripts/setup-github.sh code-scanning     <owner/repo>   (CodeQL default setup)
 #   scripts/setup-github.sh preview-env       <owner/repo>   (environment for the Vercel token)
+#   scripts/setup-github.sh production-env    <owner/repo>   (the same, for deploys of main)
 #   scripts/setup-github.sh labels            <owner/repo>
 #   scripts/setup-github.sh board             <owner/repo>
 #   scripts/setup-github.sh status            <owner/repo>   (read-only)
@@ -110,21 +111,22 @@ actions_off() {
   gh api "repos/$nwo/actions/permissions" --jq '"actions enabled: \(.enabled)"'
 }
 
-# Environment "preview" holds the Vercel secrets. Only main may deploy to it:
-# preview-deploy runs on workflow_run, which uses main. The owner adds the
-# secrets with gh secret set --env preview, so nobody else sees them.
-preview_env() {
-  local nwo="$1"
-  gh api -X PUT "repos/$nwo/environments/preview" --input - >/dev/null <<'EOF'
+# Environments "preview" and "production" hold the Vercel secrets. Only main may
+# deploy to them: preview-deploy and production-deploy run on workflow_run, which
+# uses main. The owner adds the secrets with gh secret set --env <name>, so
+# nobody else sees them.
+deploy_env() {
+  local nwo="$1" env="$2"
+  gh api -X PUT "repos/$nwo/environments/$env" --input - >/dev/null <<'EOF'
 {"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
 EOF
-  if ! gh api "repos/$nwo/environments/preview/deployment-branch-policies" \
+  if ! gh api "repos/$nwo/environments/$env/deployment-branch-policies" \
       --jq '.branch_policies[] | select(.name == "main" and .type == "branch")' | grep -q .; then
-    gh api -X POST "repos/$nwo/environments/preview/deployment-branch-policies" -f name=main -f type=branch >/dev/null
+    gh api -X POST "repos/$nwo/environments/$env/deployment-branch-policies" -f name=main -f type=branch >/dev/null
   fi
-  gh api "repos/$nwo/environments/preview/deployment-branch-policies" \
-    --jq '"preview deploys from: \([.branch_policies[] | "\(.type):\(.name)"])"'
-  gh api "repos/$nwo/environments/preview/secrets" --jq '"preview secrets: \([.secrets[].name])"'
+  gh api "repos/$nwo/environments/$env/deployment-branch-policies" \
+    --jq "\"$env deploys from: \([.branch_policies[] | \"\(.type):\(.name)\"])\""
+  gh api "repos/$nwo/environments/$env/secrets" --jq "\"$env secrets: \([.secrets[].name])\""
 }
 
 code_scanning() {
@@ -246,7 +248,7 @@ status() {
   gh api "repos/$nwo" --jq '.security_and_analysis | "secret scanning: \(.secret_scanning.status), push protection: \(.secret_scanning_push_protection.status)"'
 }
 
-[ "$#" -ge 2 ] && { [ "$#" -eq 2 ] || [ "$1" = ruleset ]; } || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|actions-off|code-scanning|preview-env|labels|board|status> <owner/repo>"
+[ "$#" -ge 2 ] && { [ "$#" -eq 2 ] || [ "$1" = ruleset ]; } || die "usage: $0 <ruleset|interaction-limit|secret-scanning|actions|actions-off|code-scanning|preview-env|production-env|labels|board|status> <owner/repo>"
 case "$1" in
   ruleset) ruleset "$2" "${3:-project}" ;;
   interaction-limit) interaction_limit "$2" ;;
@@ -254,7 +256,8 @@ case "$1" in
   actions) actions "$2" ;;
   actions-off) actions_off "$2" ;;
   code-scanning) code_scanning "$2" ;;
-  preview-env) preview_env "$2" ;;
+  preview-env) deploy_env "$2" preview ;;
+  production-env) deploy_env "$2" production ;;
   labels) labels "$2" ;;
   board) board "$2" ;;
   status) status "$2" ;;

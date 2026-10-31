@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the owner's issue to a merge with no human code edits; problems for the next iteration are in `docs/verification/step-5.md`. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, and every PR marked ready gets a Vercel preview.
+Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the owner's issue to a merge with no human code edits; problems for the next iteration are in `docs/verification/step-5.md`. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a Vercel preview, and every merge deploys `main` to production.
 
 ## What is here
 
@@ -29,9 +29,10 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
 - **GitHub Actions (step 4):** restricted to GitHub-owned actions pinned to a full SHA. The workflow token is read-only and cannot approve pull requests. Every outside contributor's run needs approval, and there are no repository-level secrets. `pull_request_target` is allowed for `guards.yml` only. The agents' App has no Workflows permission, so agents cannot change what runs.
 - **Gates (step 4):**
   - `guards` runs `main`'s definition on `pull_request_target` and reads the PR as data. It checks commit messages, role trailers and paths, clean merges of `main`, factory definitions, and acceptance-test changes after approval.
-  - `tests` runs fixed commands on `pull_request`: type check, unit tests, build, acceptance tests and dependency review.
+  - `tests` runs fixed commands on `pull_request`: type check, unit tests, build, acceptance tests and dependency review. On a push to `main` it runs them again, without dependency review.
   - `label-audit` removes an owner-only label that anyone else added.
   - `preview-deploy` puts a Vercel preview on every PR marked ready, once `tests` and `guards` pass on its commit. One preview per PR at a stable address (`<owner>-<repo>-pr-<n>.vercel.app`), replaced on each push and removed when the PR closes (`preview-closed`, `preview-cleanup`). It shows in the PR's deployments panel (environment `pr-preview`, which holds no secrets). The build comes from `tests`, without secrets. The deploy runs `main`'s definition in environment `preview` and copies only the build's static files, so no PR code runs where the token is.
+  - `production-deploy` deploys `main` to the project's production address (`<repo>.vercel.app`, public) after `tests` passes on `main`'s own commit (see "Production" below).
 - **Preflight:** on every start, `up.sh` checks these and refuses to start if any check fails:
   - the repository's visibility
   - an active ruleset without bypass actors
@@ -85,18 +86,20 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
    npx vercel@64.3.1 project create <repo-name>
    npx vercel@64.3.1 link --yes --project <repo-name> && cat .vercel/project.json   # orgId, projectId
    # Vercel makes a project's first deployment its production one, even when a preview
-   # is asked for. A placeholder takes that place, so every PR deployment is a preview.
+   # is asked for. A placeholder holds that place until the first merge deploys main.
    mkdir -p .vercel/output/static && printf '{"version":3}\n' > .vercel/output/config.json
-   printf '<!doctype html><meta charset="utf-8"><title>Previews only</title><p>This project has no production deployment.</p>\n' > .vercel/output/static/index.html
+   printf '<!doctype html><meta charset="utf-8"><title>Not deployed yet</title><p>Production appears here after the first merge to main.</p>\n' > .vercel/output/static/index.html
    npx vercel@64.3.1 deploy --prebuilt --prod
    npx vercel@64.3.1 logout && cd / && rm -rf /tmp/vercel-link
    ```
-   Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Then:
+   Name the Vercel project exactly like the repository: `production-deploy` derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
    ```sh
-   scripts/setup-github.sh preview-env <owner>/<repo-name>
-   gh secret set VERCEL_TOKEN --env preview --repo <owner>/<repo-name>
-   gh secret set VERCEL_ORG_ID --env preview --repo <owner>/<repo-name>
-   gh secret set VERCEL_PROJECT_ID --env preview --repo <owner>/<repo-name>
+   for env in preview production; do
+     scripts/setup-github.sh $env-env <owner>/<repo-name>
+     gh secret set VERCEL_TOKEN --env $env --repo <owner>/<repo-name>
+     gh secret set VERCEL_ORG_ID --env $env --repo <owner>/<repo-name>
+     gh secret set VERCEL_PROJECT_ID --env $env --repo <owner>/<repo-name>
+   done
    ```
 5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:
    - **Auto-add to project:** select the repository, set the filter to `is:issue`, and turn it on. The board shows issues only, because a story is an issue and its PR is linked to it. All six saved views also filter on `is:issue`.
@@ -115,6 +118,15 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
      Nothing is deleted: the archive stays until you remove it with `docker volume rm`. An archive is complete only if it contains the file `.factory-archive-complete`, which is written after the copy has been checked. An interrupted or failed copy removes its own incomplete archive.
 
 **The factory repository itself** gets the same `ruleset`, `interaction-limit`, `secret-scanning` and `actions` setup. The exit check verifies both repositories.
+
+## Production
+
+Every merge to `main` deploys it to `https://<repo>.vercel.app`, which is public (previews need a Vercel login).
+
+- **When:** `tests` runs again on `main`'s commit; after it passes, `production-deploy` deploys the build in environment `production`. Only `main`'s newest commit deploys; quick merges queue, and the last one wins. The run then checks that the production address serves the new deployment.
+- **A failed run on `main`:** fix it with a new PR, or re-run the `tests` run with **Re-run all jobs**. **Re-run failed jobs** can leave the run without its build, and `production-deploy` then fails on purpose.
+- **Rollback:** a revert PR, through the normal pipeline. For an emergency, **Instant Rollback** in the Vercel dashboard (on Hobby only to the previous production deployment; the first one returns to the placeholder). After a rollback Vercel stops moving production to new deployments, so the next `production-deploy` fails with "is the project rolled back?". Undo it in the dashboard (**Undo Rollback**); the pipeline's project-scoped token cannot.
+- **Old deployments:** Vercel's deployment retention removes them (Hobby default: 30 days; the last three and the live one are kept).
 
 ## Updating a project's factory definitions
 
