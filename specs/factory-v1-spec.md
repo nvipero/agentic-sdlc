@@ -6,7 +6,8 @@ Author: Claude (claude.ai planning session, 2026-10-13, revision 5)
 Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-only paths, token delivery, GitHub Actions disabled until step 4)  
 Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)  
 Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, acceptance tests named by feature with per-criterion tags, test-driven unit tests by the implementer, and the layered sandbox as the first step of v2 (owner decision)  
-Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHub App as the agents' identity with host-minted one-hour tokens, owner-only labels and trusted input checked by account, the ruleset with code owner review and required gates, restricted GitHub Actions, the gates as built, the Vercel preview, feature-removal stories, and backlog items 21 and 22 (owner decisions)
+Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHub App as the agents' identity with host-minted one-hour tokens, owner-only labels and trusted input checked by account, the ruleset with code owner review and required gates, restricted GitHub Actions, the gates as built, the Vercel preview, feature-removal stories, and backlog items 21 and 22 (owner decisions)  
+Revision 10, 2026-10-31, with step 5: the definition of done follows principle 13 on TL;DRs (owner decision)
 
 ## TL;DR
 
@@ -315,7 +316,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 ## 11. Definition of done for v1
 
 - A story written by the human reaches a merged PR without the human editing code.
-- The human was asked only at defined points, and each human-facing message started with a TL;DR.
+- The human was asked only at defined points. Each pull request description and long document started with a TL;DR, and each question to the human carried only the question (principle 13).
 - The spec's problem and why section is traceable to the approved project context.
 - All gates ran and were required for merge.
 - No agent modified acceptance tests, factory definitions or gates.
