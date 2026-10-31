@@ -7,7 +7,8 @@ Revision 6, 2026-10-23: aligned with the step 1 implementation (preflight, read-
 Revision 7, 2026-10-29, with step 2: naming conventions, the factory plugin and its commands, research before asking with source tags, research requests, review loop rules, configurable languages, and quieter issue comments (principles 10 and 13, owner decision)  
 Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance test package and its start contract, root project files owned by the implementer, the orchestrator runs the tests and opens the pull request, two code review gates, the wrong-test path, acceptance tests named by feature with per-criterion tags, test-driven unit tests by the implementer, and the layered sandbox as the first step of v2 (owner decision)  
 Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHub App as the agents' identity with host-minted one-hour tokens, owner-only labels and trusted input checked by account, the ruleset with code owner review and required gates, restricted GitHub Actions, the gates as built, the Vercel preview, feature-removal stories, and backlog items 21 and 22 (owner decisions)  
-Revision 10, 2026-10-31, with step 5: the definition of done follows principle 13 on TL;DRs (owner decision)
+Revision 10, 2026-10-31, with step 5: the definition of done follows principle 13 on TL;DRs (owner decision)  
+Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verification/step-5.md`
 
 ## TL;DR
 
@@ -311,7 +312,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 2. **Context and spec chain.** Researcher, spec writer with understanding check, spec reviewer, question flow. Exit: approved project context, and one story with an approved spec where at least one question was answered through the issue.
 3. **Implementation chain.** Test writer, implementer, code reviewer, `/factory:run` extended to tests and implementation. Exit: the story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section.
 4. **Gates, preview and human-only merge.** All gates in section 8, Vercel preview, and a separate GitHub identity for agents (a GitHub App) so that the ruleset can require an approving review from the owner. With a single shared identity this cannot be enforced: merging a PR needs only Contents write, which the agent token must have, and nobody can approve their own PR. Exit: a PR that breaks any gate cannot be merged, every PR marked ready gets a preview link, and the agent identity cannot merge a PR without the owner's approval. Step 4 re-enables GitHub Actions, which is disabled in steps 1 to 3, with restrictions, and updates the `up.sh` check to match. Plan: `docs/plans/step-4.md`; evidence: `docs/verification/step-4.md`.
-5. **First full run.** A new story from idea to merge without manual code edits. Exit: definition of done met and problems recorded.
+5. **First full run.** A new story from idea to merge without manual code edits. Exit: definition of done met and problems recorded. Plan: `docs/plans/step-5.md`; evidence: `docs/verification/step-5.md` (v1 done, 2026-10-31).
 
 ## 11. Definition of done for v1
 
