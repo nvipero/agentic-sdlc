@@ -1,6 +1,6 @@
 # Step 5 plan: First full run
 
-Status: draft 1, for the owner's approval
+Status: approved by the owner on 2026-10-31 (draft 2; draft 1 reviewed by a second model, findings in section 7)
 Spec: `specs/factory-v1-spec.md` revision 10, section 10, step 5, and section 11
 Date: 2026-10-31
 
