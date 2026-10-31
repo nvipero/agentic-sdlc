@@ -10,7 +10,8 @@ Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHu
 Revision 10, 2026-10-31, with step 5: the definition of done follows principle 13 on TL;DRs (owner decision)  
 Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verification/step-5.md`  
 Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`  
-Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`
+Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`  
+Revision 14, 2026-10-31: backlog item 23, token usage statistics (owner request)
 
 ## TL;DR
 
@@ -78,6 +79,7 @@ Fixed for v1. Changing one requires an owner decision.
 20. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
 21. Dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository; the guards then let `dependabot[bot]` change only manifests and lock files. The Claude Code and Playwright pins stay a manual monthly check (owner decision, 2026-10-30).
 22. ~~Production deployment of `main` through the pipeline.~~ Done in revision 12 (section 8, "Production").
+23. Token usage statistics: how many tokens each story uses, split by role and phase (spec, research, tests, implementation, review rounds, disputes), and how that shows up in the owner's subscription quota, which Claude Code shows only as a percentage. For understanding the cost first, and for finding where optimising pays off if it is needed (owner request, 2026-10-31).
 
 ## 4. Architecture
 
