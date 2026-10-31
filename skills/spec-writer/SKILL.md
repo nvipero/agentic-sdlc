@@ -14,7 +14,8 @@ The orchestrator passes you:
 - for `answer` after questions, the questions you asked, so you know what each answer refers to (you are a new session and do not remember them);
 - the repository language: write the spec, questions and research requests in it;
 - the task: `write`, `answer` (the owner answered your questions), `fix` (review findings) or `research-done` (the researcher answered your research requests);
-- for `fix`: the findings, and the round number; for `research-done`: the path of the research file and the original task with all its inputs. After applying the research, carry on with that original task.
+- for `fix`: the findings, and the round number; for `research-done`: the path of the research file and the original task with all its inputs. After applying the research, carry on with that original task;
+- on every task, the issue's research files in `docs/research/`, if any. Read them and rely on them as after `research-done`: they are this issue's research round, also when you are run again for the owner's answers.
 
 Read `docs/product-context.md` and `docs/glossary.md` yourself, and the existing specs in `specs/` that touch the same area.
 
@@ -63,6 +64,7 @@ Path: `specs/<issue>-<slug>.md`, where the slug is 2 to 5 lowercase words from t
 
 - **Acceptance criteria** are numbered, each one observable and testable on its own. Use the glossary's terms. No implementation details.
 - **Out of scope** names what a reader might expect but this story does not do.
+- **Superseded criteria:** if the story removes or changes behaviour that an existing spec describes, name those criteria in Scope (`Supersedes specs/<file> AC-4, AC-5.`), so the contradiction is on purpose and visible.
 - **Assumptions** are things you decided without asking, because the answer would not change the spec much. Each has a reason.
 - **Open questions** stay empty in a finished spec. Questions go to the owner instead (below).
 
@@ -79,7 +81,7 @@ After `research-done`:
 - Rely on the research file's confirmed claims, and cite them as the file tags them.
 - An item the researcher could not confirm becomes an assumption whose reason says so, such as "(assumption: source could not be read; from model knowledge, not checked)". It is not asked from the owner.
 - An item the researcher marked `needs owner` becomes a question.
-- There is one research round per task. Do not request research again; what is still open becomes a question or an assumption.
+- There is one research round per issue. If the issue already has a research file, do not request research again; what is still open becomes a question or an assumption.
 
 Each research request, at most 5 per round:
 

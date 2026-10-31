@@ -46,7 +46,7 @@ Context notes: <one line per context_update from the spec writer or researcher; 
 
 **Owner-facing comments**, each ending with `<!-- factory:run kind=<kind> -->`, or `<!-- factory:run kind=ready phase=implementation -->` for the pull request's ready comment:
 - `question`: only the spec writer's questions, numbered, each with its options and the writer's recommendation, and a last line saying the owner answers in a comment. Nothing else: no context notes, no assumptions, no summary.
-- `dispute`: the disagreement, both positions, what each option costs, and how the owner decides (a comment; for a test, also the label `tests-change-approved` to change it).
+- `dispute`: the disagreement, both positions, what each option costs, and how the owner decides (a comment; for a test, also the label `tests-change-approved` to change it), and a last line saying the owner removes `dispute` after commenting.
 - `ready`: see sections 6 and 9.
 
 There are no other comments. An error is reported in this session and in the status comment, not as a new comment.
@@ -54,11 +54,11 @@ There are no other comments. An error is reported in this session and in the sta
 ## 1. Read the issue
 
 1. `owner="$(gh repo view --json owner --jq .owner.login)"`, and your own identity, the factory's GitHub App: `bot="$(gh api graphql -f query='{viewer{login}}' --jq .data.viewer.login)"`. Everything you write to GitHub appears as `$bot`; the owner is the only other trusted author.
-2. Read the issue with its authors and editors: `gh api graphql` for `repository.issue(number: <n>)` with `title body state author{login} editor{login} labels(first: 50){nodes{name}}` and `comments(first: 100){nodes{databaseId body createdAt author{login} editor{login}}}`. `editor` is the last account that edited the text, `null` if never edited.
+2. Read the issue with its authors and editors: `gh api graphql` for `repository.issue(number: <n>)` with `title body state author{login} editor{login} labels(first: 50){nodes{name}}` and `comments(first: 100){nodes{databaseId body createdAt author{login} editor{login}}}`. "Newer than" a comment compares `createdAt` (for a review, `submittedAt`). `editor` is the last account that edited the text, `null` if never edited.
 3. **Trusted input** is text written by `$owner` that nobody else edited last (the App can edit other accounts' text, so authorship alone is not enough):
    - the issue body, if its `author` is `$owner` and its `editor` is `null` or `$owner`;
    - comments with the same two conditions;
-   - once a pull request exists (`pr` in the state), its comments, reviews and review comments with the same two conditions: `gh api graphql` for `repository.pullRequest(number: <pr>)` with `comments`, `reviews{nodes{state body author{login} editor{login} comments(first: 100){nodes{body author{login} editor{login}}}}}`. Of the reviews, count only those with a non-empty body or the state `CHANGES_REQUESTED`: an approval alone is not a change request. Never the description: you wrote it.
+   - once a pull request exists (`pr` in the state), its comments, reviews and review comments with the same two conditions: `gh api graphql` for `repository.pullRequest(number: <pr>)` with `comments(first: 100){nodes{databaseId body createdAt author{login} editor{login}}}`, `reviews(first: 100){nodes{state body submittedAt author{login} editor{login} comments(first: 100){nodes{body createdAt author{login} editor{login}}}}}`. Of the reviews, count only those with a non-empty body or the state `CHANGES_REQUESTED`: an approval alone is not a change request. Never the description: you wrote it.
 
    Pass only trusted input to the roles. If you skipped anything, say how much and why (another author, or edited by another account) in the status comment.
 4. **Owner-only labels** count only if the owner added them: `spec-approved` and `tests-change-approved` are on the issue **and** the newest `labeled` event for that label has `$owner` as actor (`gh api --paginate --slurp repos/<owner>/<repo>/issues/<n>/events | jq -r '[.[][] | select(.event == "labeled" and .label.name == "<label>")] | last | .actor.login'`; `--slurp` joins the pages first, because `--jq` with `--paginate` runs once per page). A label added by anyone else does not count: treat the issue as if it were missing, and say so in the status comment (the `label-audit` workflow removes it, too).
@@ -87,7 +87,9 @@ Stop with a one-line reason to the owner, without changing anything, if any of t
 - **No question comment:** if the issue has `needs-human` but you find no `question` comment (it was set by hand, or by an older factory version), remove `needs-human` and decide the task without it.
 - **Waiting:** the issue has `needs-human`, and there is no trusted comment newer than your last `question` comment. Stop: tell the owner the run waits for answers.
 - **Answer:** the issue has `needs-human`, and there are trusted comments newer than your last `question` comment. Remove `needs-human`. The task is the spec writer's `answer`, with those comments and the questions from that `question` comment (your own text, passed as the questions the owner answers, not as trusted input).
-- **Decision:** your last owner-facing comment is a `dispute` comment, there are trusted comments newer than it, and the newest of them is not `decision` in the state. The owner has decided the dispute. Set `decision` to that comment's id, pass the decision with the disputed findings to the role whose work was disputed (the spec writer `answer`, the test writer `test-problem` or `fix`, the implementer `fix`), and start that gate's counts again at `1/0/<reviewed>`.
+- **Decision:** your last owner-facing comment is a `dispute` comment, there are trusted comments newer than it, and the newest of them is not `decision` in the state. The owner has decided the dispute. Set `decision` to that comment's id and start that gate's counts again at `1/0/<reviewed>`. Then:
+  - **The decision keeps the disputed work as it is** (the findings do not apply, or the test stands and the implementer's reason does not): do not call the writer. Under Open findings, mark each disputed finding `closed by owner (<comment id>)`, with the decision as its response, and continue with that gate's reviewer. A test that stands goes to the implementer as `fix` with the decision.
+  - **Otherwise** pass the decision with the disputed findings to the role whose work was disputed (the spec writer `answer`, the test writer `test-problem` or `fix`, the implementer `fix`).
 
 **Spec phase** (no `spec-approved`):
 - **Change request:** a spec exists, and there are trusted comments newer than your last `ready` comment. The task is `answer`, with those comments.
@@ -96,7 +98,12 @@ Stop with a one-line reason to the owner, without changing anything, if any of t
 - **Review:** a spec exists and nothing above applies (for example a run that stopped half way). Start with the spec reviewer, continuing the `spec` gate.
 
 **Implementation phase** (`spec-approved`). The story's tests are those tagged `@issue-<n>-ac-<k>` (select them with `--grep @issue-<n>-`); "implementer commits" are commits in `origin/main..HEAD` with `Factory-Role: implementer`. Before any row below that runs a role or a review, check every commit in `origin/main..HEAD` against the paths of the role in its `Factory-Role` trailer (section 10): a commit from a run that stopped half way has not been checked yet. Commits that touch only `specs/` or `docs/research/` belong to the spec the owner approved: check their paths, not their trailer (older factory versions wrote it in a separate paragraph).
-- **Change request:** `pr` is set, you have posted a ready comment for it, and there are trusted comments newer than that comment. If the pull request is not a draft, convert it back (`gh pr ready <pr> --undo`). Route each request by what it changes: a request about the acceptance tests goes to the test writer as `fix` with those comments, and the test gate reopens as after a test problem (section 8). Changing approved tests needs the label `tests-change-approved` on the issue, as the deterministic record the step 4 guard checks: if it is missing, ask the owner in this session to add it, and stop; everything else goes to the implementer as `fix`, and the `impl` gate continues. A request that touches both goes to the test writer first.
+- **Change request:** `pr` is set, you have posted a ready comment for it, and there are trusted comments newer than that comment. If the pull request is not a draft, convert it back (`gh pr ready <pr> --undo`). Route each request by what it changes:
+  - **What the story does** (an acceptance criterion or the scope): first the spec writer as `answer` with those comments (its commit touches only `specs/`; the owner's request is the approval of that change), then the test writer as `fix` with the comments and the spec change, and the test gate reopens as after a test problem (section 8).
+  - **Only the acceptance tests:** the test writer as `fix` with those comments, and the test gate reopens the same way.
+  - **Everything else:** the implementer as `fix`, and the `impl` gate continues.
+
+  A request that touches more than one goes in that order. Changing approved tests needs the label `tests-change-approved` on the issue, as the deterministic record the step 4 guard checks: if it is missing, ask the owner in this session to add it, and stop. Pass the owner's request to the code reviewer at the reopened `tests` gate.
 - **Done:** your last owner-facing comment is the pull request's ready comment, and no trusted comment is newer. Stop: the pull request waits for the owner's review.
 - **Write tests:** no test on the branch carries a tag `@issue-<n>-` (`npx playwright test --list --grep @issue-<n>-` in `tests/acceptance/` lists none, or the package does not exist). Phase `tests`; the test writer's task is `write` (section 7).
 - **Review tests:** the story's tests exist and `approved_tests` is `-`, or `tests/acceptance/` differs between `approved_tests` and `HEAD`. Phase `tests`: run the tests (section 7), then the code reviewer at gate `tests`, continuing the `tests` gate.
@@ -109,15 +116,15 @@ Update the status comment after each role call.
 
 ### Spec writer
 
-Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-writer` with: the issue number, title, the trusted input, the task, both languages, for `fix` the findings and round, and for `answer` after a `question` comment the questions it answers. Record any `context_update` it reports under Context notes. Read its return block.
+Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-writer` with: the issue number, title, the trusted input, the task, both languages, for `fix` the findings and round, for `answer` after a `question` comment the questions it answers, and on every call the issue's research files (`git ls-files 'docs/research/<n>-*'`), if any. Record any `context_update` it reports under Context notes. Read its return block.
 
-- **`research`:** only once per task. Note `before` again, call `factory:researcher` with the requests, the issue number, the branch and both languages, and check its commits (below). Record its `context_update`, if any, under Context notes. Then call the spec writer again with task `research-done`, the research file path, **and the original task with all its inputs** (for `fix` the findings and round, for `answer` the owner's comments and the questions they answer). If the spec writer asks for research a second time, treat the requests as questions.
+- **`research`:** only once per issue: if the issue already has a research file, treat the requests as questions. Note `before` again, call `factory:researcher` with the requests, the issue number, the branch and both languages, and check its commits (below). Record its `context_update`, if any, under Context notes. Then call the spec writer again with task `research-done`, the research file path, **and the original task with all its inputs** (for `fix` the findings and round, for `answer` the owner's comments and the questions they answer). If the spec writer asks for research a second time, treat the requests as questions.
 - **`questions`:** post a `question` comment with only the questions. Add `needs-human`. Push. Stop.
 - **`written` or `fixed`:** check the commits (below), then go to the reviewer.
 
 ### Spec reviewer
 
-Call `factory:spec-reviewer` with: the spec path, the issue number, the trusted input, both languages, the round, the previous findings and the writer's responses (from the status comment on a resumed run), and from round 2 the output of `git diff <reviewed> HEAD -- <spec>`.
+Call `factory:spec-reviewer` with: the spec path, the issue number, the trusted input, both languages, the round, the previous findings and the writer's responses (from the status comment on a resumed run; findings `closed by owner` with the decision), and from round 2 the output of `git diff <reviewed> HEAD -- <spec>`.
 
 Record the review (section 10), then apply the review loop rules. On `approve`, go to section 6.
 
@@ -148,14 +155,14 @@ If the repository root has a `package.json`, run `npm ci` there first, so the ap
 2. `npm ci`, then `npx playwright test --list`. It must succeed: a failure here is a broken test, which goes back to the test writer as a finding without a review.
 3. **Tags:** `npx playwright test --list --reporter=json | jq -r '[.. | objects | select(has("tags") and has("title")) | .tags[]] | unique | .[]'` lists the tags (without `@`). Every acceptance criterion id in the spec (`AC-<k>`) has a tag `issue-<n>-ac-<k>`, every `issue-<n>-ac-<k>` tag names a criterion in the spec, and every test has at least one tag. A mismatch goes back to the test writer as a finding.
 4. `npx playwright test --reporter=line --grep @issue-<n>-`. Record the summary line, and whether the web server started.
-   - **Without implementer commits** the tests must **fail** because the behaviour does not exist yet. If they pass, send it to the test writer as a finding: the tests do not test the new behaviour. If the root has a `package.json`, the web server must have started: otherwise the failure says nothing, and it goes to the test writer as a broken test.
+   - **Without implementer commits** the tests must **fail** because the behaviour does not exist yet: at least one test of every criterion, except the criteria the test writer lists under `already_passing` (a criterion the current app already meets, such as an absence in a removal story), which the code reviewer checks. If a test of any other criterion passes, send it to the test writer as a finding: the tests do not test the new behaviour. If the root has a `package.json`, the web server must have started: otherwise the failure says nothing, and it goes to the test writer as a broken test.
    - **With implementer commits** (a test gate reopened by a test problem), only record the result: the code may already meet the corrected test.
 
 Add a chain line with the result.
 
 ### Code reviewer, gate `tests`
 
-Call `factory:code-reviewer` with: gate `tests`, the spec path, the issue number, the diff `git diff origin/main...HEAD -- tests/acceptance ':(exclude)*package-lock.json'`, your test run's result, the test writer's `changed_existing` and `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
+Call `factory:code-reviewer` with: gate `tests`, the spec path, the issue number, the diff `git diff origin/main...HEAD -- tests/acceptance ':(exclude)*package-lock.json'`, your test run's result, the test writer's `changed_existing`, `already_passing` and `uncertain`, the owner's change request if the gate reopened for one, both languages, the round, the previous findings and the responses (findings `closed by owner` with the decision), and from round 2 the diff since `reviewed`.
 
 Record the review (section 10), then apply the review loop rules with the test writer as the writer. On `approve`: set `approved_tests` to `git rev-parse --short HEAD` and the phase to `implementation`, remove `tests-change-approved` if the change was made under it (section 8), push, and continue in section 8: with no implementer commits, the implementer's `implement`; otherwise the implementation checks and the test run, where a failure goes to the implementer as `fix` with the changed tests.
 
@@ -193,14 +200,14 @@ After the first implementer commit that passes the checks, if `pr` is `-`:
 
 ### Code reviewer, gate `implementation`
 
-Call `factory:code-reviewer` with: gate `implementation`, the spec path, the issue number, `git diff --stat origin/main...HEAD`, the diff `git diff origin/main...HEAD -- . ':(exclude)specs' ':(exclude)tests/acceptance' ':(exclude)*package-lock.json'`, your test run's result, the results of the implementation checks, the implementer's `choices` and `uncertain`, both languages, the round, the previous findings and the responses, and from round 2 the diff since `reviewed`.
+Call `factory:code-reviewer` with: gate `implementation`, the spec path, the issue number, `git diff --stat origin/main...HEAD`, the diff `git diff origin/main...HEAD -- . ':(exclude)specs' ':(exclude)tests/acceptance' ':(exclude)*package-lock.json'`, your test run's result, the results of the implementation checks, the implementer's `choices` and `uncertain`, both languages, the round, the previous findings and the responses (findings `closed by owner` with the decision), and from round 2 the diff since `reviewed`.
 
 Record the review (section 10), then apply the review loop rules with the implementer as the writer. On `approve`, with your last test run passing, go to section 9.
 
 ### Test problem
 
 The implementer believes a test is wrong. Add one to `test_problems`.
-- **First time** (`test_problems` is now 1): call the test writer with task `test-problem`, the test name and the implementer's reason. If it returns `fixed`, the test gate reopens: phase `tests`, the `tests` gate starts again at `1/0/<reviewed>`, run the tests and review gate `tests` again (section 7), which then continues in section 8. If it returns `kept`, escalate.
+- **First time** (`test_problems` is now 1): implementation has started, so a change to the test needs the owner's `tests-change-approved` before it is pushed (the guard counts the label events). If the label is missing (section 1), ask the owner in this session to add it so the test writer may change the test, and wait; check it again before you go on. If the owner declines, escalate as below. Then call the test writer with task `test-problem`, the test name and the implementer's reason. If it returns `fixed`, the test gate reopens: phase `tests`, the `tests` gate starts again at `1/0/<reviewed>`, run the tests and review gate `tests` again (section 7), which then continues in section 8. If it returns `kept`, escalate.
 - **Again, or `kept`:** escalate to the owner with a `dispute` comment: the test, the implementer's reason, the test writer's reason, and that the owner either comments that the test stands, or adds `tests-change-approved` and comments how it changes. Add `dispute`, push, stop.
 
 After the owner's decision (section 4, "Decision"), the owner's comment decides. If it changes the test, the issue must have `tests-change-approved` (otherwise stop and ask the owner to add it); the test writer applies the decision and the test gate reopens as above. If the test stands, the implementer continues with the decision as `fix`.
@@ -230,7 +237,7 @@ When the code reviewer approves and your last test run passed:
 ### Commit check (after every role that commits)
 
 Check **every** commit the role made, not only the one it reported: `git log --no-merges --stat --format='%H%n%B' "$before"..HEAD`.
-- There is at least one commit (an implementer's `test_problem` may have none), and each one touches only the role's own paths:
+- There is at least one commit (an implementer's `test_problem` may have none, and so may a `fix` whose return answers every finding `disagree`), and each one touches only the role's own paths:
   - spec writer: only `specs/`;
   - researcher: only `docs/research/`;
   - test writer: only `tests/acceptance/`;

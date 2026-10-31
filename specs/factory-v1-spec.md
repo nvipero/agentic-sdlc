@@ -9,7 +9,8 @@ Revision 8, 2026-10-29, with step 3: no story worktrees in v1, the acceptance te
 Revision 9, 2026-10-31, with step 4: principle 15 "Trust, but verify", the GitHub App as the agents' identity with host-minted one-hour tokens, owner-only labels and trusted input checked by account, the ruleset with code owner review and required gates, restricted GitHub Actions, the gates as built, the Vercel preview, feature-removal stories, and backlog items 21 and 22 (owner decisions)  
 Revision 10, 2026-10-31, with step 5: the definition of done follows principle 13 on TL;DRs (owner decision)  
 Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verification/step-5.md`  
-Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`
+Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`  
+Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`
 
 ## TL;DR
 
@@ -247,7 +248,7 @@ Both the factory repo and project repos follow these. Agents follow them too.
 3. The spec writer produces `specs/<issue>-<slug>.md`: problem and why, scope, out of scope, testable acceptance criteria, assumptions, open questions.
 4. **Research, then ask, then assume.** For an open point that changes the scope or an acceptance criterion, the spec writer first requests research: the orchestrator runs the researcher, which answers in `docs/research/<issue>-<topic>.md` with the same source rules (one research round per task). Only a product decision that only the human can make becomes a question. Everything else is an assumption with a reason. A question is posted to the issue on its own, and the issue gets `needs-human`.
 5. The spec reviewer checks ambiguity, missing edge cases, testability, sources and consistency with the project context.
-6. **Review loop.** A loop ends only when the reviewer approves the latest version or the work escalates to the human with `dispute`. Fixes are targeted. A change that alters the scope or the acceptance criteria is a rework: it is reviewed in full and restarts the round count, at most `rework_resets` times. `max_rounds` and `escalate_when_no_progress_for` apply per version.
+6. **Review loop.** A loop ends only when the reviewer approves the latest version or the work escalates to the human with `dispute`. Fixes are targeted. A change that alters the scope or the acceptance criteria is a rework: it is reviewed in full and restarts the round count, at most `rework_resets` times. `max_rounds` and `escalate_when_no_progress_for` apply per version. The human's decision on a dispute either changes the work, or keeps it and closes the disputed findings, which the reviewer does not raise again.
 7. When the reviewer approves, the ready comment links the spec and lists its assumptions. The human answers questions in the issue and adds `spec-approved`.
 
 ### Spec to merge
@@ -256,11 +257,11 @@ Both the factory repo and project repos follow these. Agents follow them too.
 2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
 4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.
-5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once; after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.
+5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once, but once implementation has started, its change to the test also needs the human's `tests-change-approved` (the guard counts it); after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.
 6. When the reviewer approves and the orchestrator's own test run passes, it writes the PR description, waits for the required checks on GitHub ("trust, but verify"), marks the PR ready, and posts to the issue that the preview appears in the PR's deployments panel.
-7. **Feature removal.** A story that removes a feature states the absence as acceptance criteria ("the board shows no Archive button", "tasks stored with the old status still load"). The test writer removes the removed behaviour's tests in the tests phase, before approval, as its own path; the coverage review checks each removal and the guard lists removed tests for "Where to look". After approval, any further change needs `tests-change-approved`.
+7. **Feature removal.** A story that removes a feature states the absence as acceptance criteria ("the board shows no Archive button", "tasks stored with the old status still load"). The spec names the earlier criteria it supersedes. The test writer removes the removed behaviour's tests in the tests phase, before approval, as its own path, and lists the criteria the current app already meets, whose tests may pass before implementation; the coverage review checks each removal and the guard lists the changed and removed test files for "Where to look". After approval, any further change needs `tests-change-approved`.
 8. The PR description contains a **"Where to look"** section for the human: restricted-list hits, deviations from the spec, assumptions made, and places where the reviewer is uncertain. The human reads this section and the preview, not the whole diff.
-9. The human merges, or comments with changes, which restarts implementation.
+9. The human merges, or requests changes: a change to what the story does goes through the spec writer and the test writer first, a change to the tests through the test writer, anything else to the implementer.
 
 ## 6. Roles
 
