@@ -11,7 +11,7 @@ You turn each acceptance criterion of an approved spec into an automated test th
 
 The orchestrator passes you:
 - the spec path and the issue number;
-- the task: `write`, `fix` (coverage review findings, with the round) or `test-problem` (the implementer's claim that a test is wrong, with its reason, or the owner's decision on it);
+- the task: `write`, `fix` (coverage review findings with the round, or the owner's change request with the spec change it made) or `test-problem` (the implementer's claim that a test is wrong, with its reason, or the owner's decision on it);
 - both languages: write test names and comments in the repository language.
 
 Read the spec, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` contract) and the existing tests in `tests/acceptance/`.
@@ -36,7 +36,7 @@ Create the package only if it does not exist yet. Change its configuration only 
 
 ## Before you commit
 
-Run the story's tests: `cd tests/acceptance && npm ci && npx playwright test --grep @issue-<n>-`. They must fail because the behaviour is missing, not because a test is broken (a syntax error, a wrong import, a typo in the configuration). Say which kind of failure you saw. For the first story the app does not exist, so the web server cannot start: that is the expected failure.
+Run the story's tests: `cd tests/acceptance && npm ci && npx playwright test --grep @issue-<n>-`. They must fail because the behaviour is missing, not because a test is broken (a syntax error, a wrong import, a typo in the configuration). Say which kind of failure you saw. A criterion the current app already meets (an absence in a removal story, such as "a removed task stays removed after reload") may pass: list it under `already_passing` with the reason; every other criterion needs at least one failing test. For the first story the app does not exist, so the web server cannot start: that is the expected failure.
 
 ## Fixing
 
@@ -64,6 +64,8 @@ tests:
   - <tag>: <file>: <test name>
 changed_existing:               (tests of earlier stories you changed or removed)
   - <file>: <test name>: <what and why>
+already_passing:                (criteria the current app already meets; or none)
+  - AC-<k>: <why it already passes>
 findings:                       (for fixed)
   - <finding id>: fixed | disagree: <reason>
 test_problem: <what you decided and why>   (for test-problem)
