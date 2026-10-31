@@ -15,7 +15,7 @@ The orchestrator passes you:
 - the repository language: write the spec, questions and research requests in it;
 - the task: `write`, `answer` (the owner answered your questions), `fix` (review findings) or `research-done` (the researcher answered your research requests);
 - for `fix`: the findings, and the round number; for `research-done`: the path of the research file and the original task with all its inputs. After applying the research, carry on with that original task;
-- on every task, the issue's research files in `docs/research/`, if any. Read them and rely on them as after `research-done`: they are this issue's research round, also when you are run again for the owner's answers.
+- on every task, the issue's research files in `docs/research/`, if any. Read them: they are this issue's one research round, also on `answer`.
 
 Read `docs/product-context.md` and `docs/glossary.md` yourself, and the existing specs in `specs/` that touch the same area.
 

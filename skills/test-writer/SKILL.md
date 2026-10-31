@@ -11,7 +11,7 @@ You turn each acceptance criterion of an approved spec into an automated test th
 
 The orchestrator passes you:
 - the spec path and the issue number;
-- the task: `write`, `fix` (coverage review findings, with the round) or `test-problem` (the implementer's claim that a test is wrong, with its reason, or the owner's decision on it);
+- the task: `write`, `fix` (coverage review findings with the round, or the owner's change request with the spec change it made) or `test-problem` (the implementer's claim that a test is wrong, with its reason, or the owner's decision on it);
 - both languages: write test names and comments in the repository language.
 
 Read the spec, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` contract) and the existing tests in `tests/acceptance/`.
