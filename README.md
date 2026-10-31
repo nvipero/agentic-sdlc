@@ -84,7 +84,7 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
    mkdir -p /tmp/vercel-link && cd /tmp/vercel-link
    npx vercel@64.3.1 login
    npx vercel@64.3.1 project create <repo-name>
-   npx vercel@64.3.1 link --yes --project <repo-name> && cat .vercel/project.json   # orgId, projectId
+   npx vercel@64.3.1 link --yes --project <repo-name> && cat .vercel/project.json   # orgId, projectId: keep both in 1Password
    # Vercel makes a project's first deployment its production one, even when a preview
    # is asked for. A placeholder holds that place until the first merge deploys main.
    mkdir -p .vercel/output/static && printf '{"version":3}\n' > .vercel/output/config.json
