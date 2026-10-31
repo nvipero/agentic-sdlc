@@ -85,7 +85,7 @@ RESULT: 1 check(s) failed
 | 4 | Spec phase, run 1 | Not exercised | The spec writer asked no questions and requested no research, so the question and answer path fixed before the run (https://github.com/nvipero/agentic-sdlc/pull/8) did not run under the App identity | #82 comments |
 | 5 | Run 2 | Not exercised | No test problem, dispute, resumed run or owner change request happened; those paths remain untested under the App, as after step 3 | #82 status comment |
 | 6 | Before run 1 | Friction | The container was started again between the baseline reading and the run, so its counters restarted and the baseline for the run's container was not read. Reading counters by hand is easy to miss; a reading at every start and stop belongs in `up.sh` if the counters stay the evidence | Network counters table |
-| 7 | Exit check | Friction | The exit check asks for 1Password authorization more than once, minutes apart; a missed prompt fails an unrelated check after a timeout | Exit check section |
+| 7 | Exit check | Friction | The exit check asks for 1Password authorization more than once, minutes apart; a missed prompt fails an unrelated check after a timeout. It restarts `up.sh` about ten times, and each start reads the App key (`up.sh:450`). Likely cause of the extra prompt (not confirmed against 1Password's documentation): the CLI's authorization is tied to the terminal session, and the failing check runs `up.sh` without one (`setsid`). Fix: the exit check reads the key once and passes it to its `up.sh` restarts through an inherited file descriptor, never the environment or arguments | Exit check section; owner, 2026-10-31: the owner had already approved one prompt and did not notice the later ones |
 
 ## Proposed order for the next iteration
 
@@ -95,4 +95,4 @@ My proposal; the owner decides the order.
 2. **Run the untested paths on purpose** (problems 4 and 5): stories designed to cause a question, an owner change request, a test problem and a feature removal. Cheap, and they test code that already exists, before v2 changes the ground under it.
 3. **Show the reviewers' non-blocking findings to the owner** (problem 3): a line in the ready comment; a small change to `commands/run.md`.
 4. **Network evidence** (problems 1 and 6): logs in the v2 host gatekeeper; until then, `up.sh` could print the counters at start and stop.
-5. **One 1Password authorization per exit check** (problem 7).
+5. **One 1Password authorization per exit check** (problem 7). Owner decision 2026-10-31: stays fifth; the exit check runs only at the end of a step.
