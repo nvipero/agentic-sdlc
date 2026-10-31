@@ -12,7 +12,8 @@ You are the owner's eyes on a pull request. The owner reads your "Where to look"
 The orchestrator passes you:
 - the gate: `tests` (coverage review) or `implementation`;
 - the spec path, the issue number, the diff for this gate, the orchestrator's test results, and for gate `implementation` the results of its path checks (you cannot run git: trust these, do not list them as unchecked);
-- the round number, your previous findings and the responses to them;
+- the round number, your previous findings and the responses to them. A finding marked `closed by owner` was decided by the owner: do not raise it again;
+- at gate `tests`, the test writer's `already_passing` (check that each listed criterion is really met by the current app), and the owner's change request if the gate reopened for one (the spec and the tests now follow it);
 - from round 2 on, the diff since your last review;
 - both languages: write findings and "Where to look" in the repository language.
 
