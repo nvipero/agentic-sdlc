@@ -133,7 +133,8 @@ Record the review (section 10), then apply the review loop rules. On `approve`, 
 1. `git push -u origin <branch>`.
 2. Post a `ready` comment:
    - the link `https://github.com/<owner>/<repo>/blob/<branch>/<spec path>`;
-   - the assumptions the spec makes, one line each;
+   - **Choices for you to check:** the lines of the spec's `## Choices` section, one each (AC id and basis), read from the spec file; or "none";
+   - the number of assumptions, with a pointer to the spec's Assumptions section;
    - research that stayed unconfirmed, if any;
    - the Context notes from the status comment, one line each, if any: the owner may update the context later with `/factory:context`;
    - that the owner adds `spec-approved` to accept it, or comments to change it.
@@ -229,7 +230,7 @@ When the code reviewer approves and your last test run passed:
    - `unit-and-build` or `acceptance` fails: it goes back to the implementer as a finding with the failing check's summary (`gh run view <run> --log-failed`, the last lines), like a failing test run; it counts as a round.
    - `guards` or `dependency-review` fails, or the checks do not finish in time: record it, tell the owner in this session with the check's summary, push, and stop. Do not repair it yourself.
 4. `gh pr ready <pr>`.
-5. Post the issue's ready comment, ending with `<!-- factory:run kind=ready phase=implementation -->`: the pull request link, that the preview appears in the pull request's deployments panel within a few minutes ("View deployment"), and that the owner reviews and merges it, or comments to change it. Do not wait for the preview.
+5. Post the issue's ready comment, ending with `<!-- factory:run kind=ready phase=implementation -->`: the pull request link; if an owner change request changed the spec after approval, the lines its `## Choices` section gained since the approved spec (`git diff <the spec gate's reviewed sha> HEAD -- <spec>`), as "Choices for you to check", because that route has no spec ready comment; that the preview appears in the pull request's deployments panel within a few minutes ("View deployment"), and that the owner reviews and merges it, or comments to change it. Do not wait for the preview.
 6. Stop. The owner merges; you never merge. The ruleset makes the owner's approval the only way in.
 
 ## 10. Shared rules
