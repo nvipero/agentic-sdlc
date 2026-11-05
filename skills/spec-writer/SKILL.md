@@ -33,7 +33,7 @@ The context and research files tag every claim with its source. You may rely on:
 - `(standard: <URL>, read <date>)`: a published, normative standard or specification that the researcher read;
 - `(docs: <URL>, read <date>)`: official documentation that the researcher read;
 - `(practice: <URL>; <URL>, read <date>)`: best practice that two independent sources agree on;
-- `(issue: #<n>)`: the story itself, or the owner's comment on it;
+- `(issue: #<n>)`: the story itself, or the owner's comment on it; `(issue: #<n>, owner comment <id>)` for a specific comment, such as the owner's answer to a question (the orchestrator passes each comment with its id);
 - `(main: <path>)`: what the app does today, read in your working tree (`main` plus the story's spec commits): an acceptance test in `tests/acceptance/` first, the code only where no test covers the behaviour. Cite the code as a source, never as an implementation detail in a criterion.
 
 **Earlier specs are history.** They explain why the app does what it does, but they may be out of date. When an earlier spec disagrees with `main` or with a newer owner decision, and the story depends on the point, ask the owner which holds, unless a later spec names it as superseded. When two sources you may rely on disagree (for example research and an earlier owner decision), ask as well.
@@ -72,24 +72,24 @@ Path: `specs/<issue>-<slug>.md`, where the slug is 2 to 5 lowercase words from t
 - **Acceptance criteria** are numbered, each one observable and testable on its own. Use the glossary's terms. No implementation details.
 - **Out of scope** names what a reader might expect but this story does not do.
 - **Superseded criteria:** if the story removes or changes behaviour that an existing spec describes, name those criteria in Scope (`Supersedes specs/<file> AC-4, AC-5.`), so the contradiction is on purpose and visible.
-- **Choices** are criteria you decided yourself: you extended, narrowed or settled a criterion or an owner decision (for example the owner decided that a click outside cancels an edit, and you apply the same to leaving with Tab), or you proposed a product decision (section 3). Each is an acceptance criterion, so it is tested, and is listed here with its basis, one line: a source you may rely on, `extends: <the owner decision or criterion>`, or `proposal: <why this is a sensible default>`. The owner checks this list before approving. Leave the section empty when there are none.
+- **Choices** are criteria you decided yourself: you extended, narrowed or settled a criterion or an owner decision (for example the owner decided that a click outside cancels an edit, and you apply the same to leaving with Tab), or you proposed a product decision (section 3). Each is an acceptance criterion, so it is tested, and is listed here with its basis, one line: a source you may rely on, `extends: AC-<j>` or `extends: (issue: #<n>, owner comment <id>)`, or `proposal: <why this is a sensible default>`. The owner checks this list before approving. Leave the section empty when there are none.
 - **Assumptions** are things you decided without asking that change no acceptance criterion. Each has a reason. Anything that extends, narrows or settles a criterion or an owner decision is a choice, not an assumption.
 - **Open questions** stay empty in a finished spec. Questions go to the owner instead (below).
 
-## 3. Request research, then ask, then assume
+## 3. Request research, then propose or ask, then decide
 
 For each open point that changes the scope or an acceptance criterion, in this order:
 1. **Request research** when a standard, official documentation or clear best practice could answer it, and the context does not already. Return `status: research` with the requests (format below) instead of a spec. The researcher answers them in a file under `docs/research/`, and you are run again with `research-done`.
 2. **Propose or ask** when it is a product decision that only the owner can make. **Propose** it as a choice (basis `proposal`) when one option is a sensible default that the owner can change before approval at little cost. **Ask** when no option is a sensible default, or when the options change the story's size or direction. A contradiction with the context is always a question (section 1). Never ask what research could answer, and never ask a question the owner cannot be expected to answer.
-3. **Assume** in every other case, and say why it is safe.
+3. **Decide** it yourself in every other case, as a choice: write the criterion and list it under Choices with its basis (a source you may rely on, or `extends:`).
 
-Open points that do not change the scope or an acceptance criterion are assumptions straight away: do not request research or ask for them.
+Open points that do not change the scope or an acceptance criterion are assumptions straight away, each with why it is safe: do not request research or ask for them.
 
 After `research-done`:
 - Rely on the research file's confirmed claims, and cite them as the file tags them.
 - An item the researcher could not confirm is not asked from the owner. If it changes an acceptance criterion, it becomes a choice with basis `proposal (research unconfirmed: <reason>)`; otherwise an assumption whose reason says so, such as "(assumption: source could not be read; from model knowledge, not checked)".
 - An item the researcher marked `needs owner` becomes a question.
-- There is one research round per issue. If the issue already has a research file, do not request research again; what is still open becomes a question or an assumption.
+- There is one research round per issue. If the issue already has a research file, do not request research again; what is still open becomes a question, a choice or an assumption, as above.
 
 Each research request, at most 5 per round:
 
@@ -105,7 +105,7 @@ Each question has:
 - why it matters, in one line;
 - 2 to 4 options, one line each, saying what the option means for the user, with your recommendation marked.
 
-Ask all questions at once. Keep them few: the owner's attention is the scarcest resource. A question carries nothing else: no assumptions, no notes about the context, no summary. Assumptions go into the spec and reach the owner when it is ready.
+Ask all questions at once. Keep them few: the owner's attention is the scarcest resource. A question carries nothing else: no assumptions, no notes about the context, no summary. Choices and assumptions go into the spec and reach the owner when it is ready.
 
 ## 4. Fixing
 
@@ -136,7 +136,7 @@ spec: specs/<issue>-<slug>.md   (absent for questions and research)
 commit: <short sha>             (absent for questions and research)
 research:                       (only for status research)
   - <request as above>
-context_update: <one line, or none>   (what the issue settles that the context leaves open)
+context_update: <one line, or none>   (what the issue settles that the context leaves open, or how the owner's answer to a contradiction changes the context)
 questions:                      (only for status questions)
   - <question>, why, options
 findings:                       (only for status fixed)
