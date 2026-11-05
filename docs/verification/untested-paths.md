@@ -1,20 +1,22 @@
 # Verification: running the untested paths
 
-> **TL;DR:** Done. Two stories (sdlc-pilot #87 and #89) ran under the App for the first time: five disputes with the owner's decisions and resumed runs, a decision that keeps the work (F3), a spec change request before approval, the owner's change request on a PR that changed the spec (F2), and a feature removal (F5); both merged and deployed to production. Not exercised: questions, research and a test problem, because the spec writer settled every open point from the issue or earlier specs, and no wrong test came up. The run found one new defect class (problem 4: retrying assertions pass absence criteria against the old feature).
+> **TL;DR:** Done. Two stories (https://github.com/nvipero/sdlc-pilot/issues/87 and https://github.com/nvipero/sdlc-pilot/issues/89) ran under the App for the first time: five disputes with the owner's decisions and resumed runs, a decision that keeps the work (F3), a spec change request before approval, the owner's change request on a PR that changed the spec (F2), and a feature removal (F5); both merged and deployed to production. Not exercised: questions, research and a test problem, because the spec writer settled every open point from the issue or earlier specs, and no wrong test came up. The run found one new defect class (problem 4: retrying assertions pass absence criteria against the old feature).
 
 Plan: `docs/plans/untested-paths.md`. Factory fixes: https://github.com/nvipero/agentic-sdlc/pull/11; pilot copy with `max_rounds: 1`: https://github.com/nvipero/sdlc-pilot/pull/86 (merged 2026-10-31).
+
+Stories: A, edit a task's title, https://github.com/nvipero/sdlc-pilot/issues/87; B, removing a task is final, https://github.com/nvipero/sdlc-pilot/issues/89.
 
 ## Paths
 
 | Path | Story | Result | Evidence |
 |---|---|---|---|
-| Dispute, decision, resumed run | A (#87) spec, tests and `impl` gates; B (#89) spec and tests gates | Exercised five times | Below |
-| Decision that keeps the work (F3) | A (#87), `impl` gate | Exercised | Below |
+| Dispute, decision, resumed run | A: spec, tests and `impl` gates; B: spec and tests gates | Exercised five times | Below |
+| Decision that keeps the work (F3) | A, `impl` gate | Exercised | Below |
 | Question and answer | A, B | Not exercised | Problem 1 |
 | Research request | A, B | Not exercised | Problem 1 |
-| Spec change request before approval | A (#87) | Exercised | Below |
-| Owner change request on the PR (F2) | A (#87), PR https://github.com/nvipero/sdlc-pilot/pull/88 | Exercised, through a third dispute | Below |
-| Feature removal (F5) | B (#89), PR https://github.com/nvipero/sdlc-pilot/pull/90 | Exercised | Below |
+| Spec change request before approval | A | Exercised | Below |
+| Owner change request on the PR (F2) | A, PR https://github.com/nvipero/sdlc-pilot/pull/88 | Exercised, through a third dispute | Below |
+| Feature removal (F5) | B, PR https://github.com/nvipero/sdlc-pilot/pull/90 | Exercised | Below |
 | Test problem (F4) | | Not exercised | No implementer claimed a wrong test (plan decision 3) |
 
 ### Story A, spec phase (2026-10-31)
@@ -47,7 +49,7 @@ Plan: `docs/plans/untested-paths.md`. Factory fixes: https://github.com/nvipero/
 ### Story B, spec phase (2026-11-02)
 
 - Spec writer `172fb93`: absence criteria (AC-2: no Undo and no message after removal) and the superseded criteria named in scope ("Supersedes `specs/29-remove-task-no-longer-needed.md` AC-4, AC-5, AC-6, AC-8 to AC-12 ..."), as F5 intends; the spec reviewer did not block on the supersession.
-- **No question again.** The issue was written to leave open whether a confirmation replaces Undo (the owner chose Undo over a confirmation for #29); the spec writer settled it from the issue's "removed at once" and put a confirmation out of scope.
+- **No question again.** The issue was written to leave open whether a confirmation replaces Undo (the owner chose Undo over a confirmation for https://github.com/nvipero/sdlc-pilot/issues/29); the spec writer settled it from the issue's "removed at once" and put a confirmation out of scope.
 - The spec reviewer's round 1 blocked on R1-1 (a Primer guideline tagged `standard` instead of `docs`, and the next-then-previous focus order not stated as the spec's own choice); `dispute` labeled 09:31:37 by the App.
 - Owner's decision at 09:37:34 (option 1 plus two non-blocking points), `dispute` unlabeled 09:37:44 by the owner; the resumed run's spec was approved by the reviewer and the ready comment posted at 09:39:14 (AC-2 and AC-4 made testable: 10 seconds, 100 ms).
 
