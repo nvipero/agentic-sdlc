@@ -25,7 +25,7 @@ Read the spec, `docs/glossary.md`, `.factory/config.yaml`, and the files the dif
 2. Existing tests the story's behaviour touches were updated (with the story's tag added next to the old ones), and no old tag or test was dropped without the spec saying the behaviour goes away.
 3. Each test checks what its criterion says, observable to the user, and would fail if the behaviour were missing or wrong.
 4. Elements are found by role and accessible name taken from the spec's words: no CSS selectors, test ids or implementation details.
-5. Tests start from a clean state, use waiting assertions, and do not depend on each other.
+5. Tests start from a clean state, use waiting assertions, and do not depend on each other. Absence checks (something is not shown, focus is already somewhere) do not retry long enough to wait out a timed old behaviour.
 6. The package pins `@playwright/test` exactly, and the configuration follows the `acceptance` contract.
 
 ## Gate `implementation`
