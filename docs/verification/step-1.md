@@ -122,25 +122,25 @@ Recorded under the rule agreed after the fourth review round: only blocking find
 - **Managed settings were initially unreadable by the agent user.**
   - `COPY --chmod=0644` also set mode 0644 on the new `/etc/claude-code` directory.
   - Claude Code reported the file as unreadable and offered to continue without it.
-  - Fixed in sdlc-pilot PR #1: the directories are created with 0755. `up.sh` now refuses to start unless the agent can read the managed settings, and the exit check covers this.
-- **`up.sh` changes took effect one run late.** Bash had already read the script when the fast-forward pulled a new version. `up.sh` now re-executes itself when the fast-forward changed it (sdlc-pilot PR #6).
+  - Fixed in sdlc-pilot PR [#1](https://github.com/nvipero/sdlc-pilot/pull/1): the directories are created with 0755. `up.sh` now refuses to start unless the agent can read the managed settings, and the exit check covers this.
+- **`up.sh` changes took effect one run late.** Bash had already read the script when the fast-forward pulled a new version. `up.sh` now re-executes itself when the fast-forward changed it (sdlc-pilot PR [#6](https://github.com/nvipero/sdlc-pilot/pull/6)).
 - **A container restarted outside `up.sh` had no firewall.**
   - Found during the exit check: a manual `docker restart` left the network open, and the old marker was still present.
   - The firewall now runs in the image entrypoint on every start, and the container stops if it fails.
-  - The marker is on tmpfs, the restart policy is `no`, and every exec goes through the `factory-exec` guard (PR #6).
-- **New files on `main` in factory paths showed as untracked in the workspace clone,** so `git add -A` could stage them. The overlay paths are now in `.git/info/exclude` (PR #6).
+  - The marker is on tmpfs, the restart policy is `no`, and every exec goes through the `factory-exec` guard (PR [#6](https://github.com/nvipero/sdlc-pilot/pull/6)).
+- **New files on `main` in factory paths showed as untracked in the workspace clone,** so `git add -A` could stage them. The overlay paths are now in `.git/info/exclude` (PR [#6](https://github.com/nvipero/sdlc-pilot/pull/6)).
 - **Code review fixes:**
   - `--init` was added, so `docker stop` no longer waits for SIGKILL.
   - The exclude entries are now appended instead of overwritten.
   - The exit check got sturdier restart and cleanup handling.
-- **Fixes from the code review of the factory PR** (sdlc-pilot PR #8):
+- **Fixes from the code review of the factory PR** (sdlc-pilot PR [#8](https://github.com/nvipero/sdlc-pilot/pull/8)):
   - **IPv6 loopback:** the IPv6 DROP policy also dropped loopback, so `::1` traffic hung. The firewall now accepts `lo` for IPv6.
   - **Sudo:** the rule now allows the firewall script only without arguments.
   - **Unfinished clone:** a clone that did not finish is retried instead of breaking every later start.
   - **Preflight:** it also checks secret scanning and push protection.
   - **Exit check:** tests that could give a false pass now require exact output. "No container after refusal" was vacuous and now checks that the running container is untouched. There are new tests for IPv6 loopback and sudo arguments.
   - **`redact.sh`:** e-mail addresses are redacted before the user name.
-- **Second code review of the factory PR** (sdlc-pilot PRs #10 and #12):
+- **Second code review of the factory PR** (sdlc-pilot PRs [#10](https://github.com/nvipero/sdlc-pilot/pull/10) and [#12](https://github.com/nvipero/sdlc-pilot/pull/12)):
   - **Workspace deletion:** the fix for an unfinished clone could delete local work (`rm -rf .git` whenever `HEAD` did not resolve, which is also true on an orphan branch).
     - `init-workspace.sh` now never deletes anything. It clones only into an empty volume, and it stops with a description for files without `.git` or a `HEAD` that does not resolve.
     - `scripts/up.sh reset-workspace` is the only way to replace the workspace (refined in the third round, below).
@@ -149,7 +149,7 @@ Recorded under the rule agreed after the fourth review round: only blocking find
     - Checks that do not apply are reported as SKIP, not as a pass.
     - The rebuild test cleans up after an aborted run.
   - **`setup-github.sh`:** reopens a closed project with the repository's name.
-- **Third code review of the factory PR** (sdlc-pilot PR #16):
+- **Third code review of the factory PR** (sdlc-pilot PR [#16](https://github.com/nvipero/sdlc-pilot/pull/16)):
   - **Report gaps:** the reset report could miss commits reachable only from a detached `HEAD`, ignored files, and changes made while the confirmation was pending.
   - **Archive instead of delete:** `reset-workspace` now archives instead of deleting. It refuses without a terminal before touching anything, stops the container, shows the content, and asks for the repository name. It then copies the volume to `<repo>-workspace-archive-<timestamp>`, compares paths and file contents, and only then replaces the workspace with a fresh clone. The report is now information, not the only safeguard.
   - **Exit check:**
@@ -158,7 +158,7 @@ Recorded under the rule agreed after the fourth review round: only blocking find
     - A failed `setsid` aborts.
   - **Firewall:** the final check also opens a TCP connection to a pinned `api.github.com` address, which costs nothing against the rate limit.
   - **`setup-github.sh`:** fails if the project's closed state cannot be read.
-- **Fourth code review of the factory PR** (sdlc-pilot PR #18):
+- **Fourth code review of the factory PR** (sdlc-pilot PR [#18](https://github.com/nvipero/sdlc-pilot/pull/18)):
   - **Container killed before confirmation:** `reset-workspace` removed the container before asking for the name, so a wrong name killed a running session while saying "nothing was changed". The container is now stopped only after confirmation, and the archive is copied from the stopped workspace.
   - **Report:** it mounts the volume read-only again.
   - **Archive handling:** an existing archive name is refused, and a failed copy removes only the incomplete archive.
@@ -168,19 +168,19 @@ Recorded under the rule agreed after the fourth review round: only blocking find
     - the workspace is restored to `main` if the confirmed reset fails
     - the header states that every run archives the project's workspace on purpose.
   - **Rule for further reviews (owner decision):** only blocking findings are fixed in step 1. Other findings go to the step 2 backlog.
-- **Fifth code review of the factory PR, blocking findings only** (sdlc-pilot PR #20):
+- **Fifth code review of the factory PR, blocking findings only** (sdlc-pilot PR [#20](https://github.com/nvipero/sdlc-pilot/pull/20)):
   - **Unique archive names:** each run adds its process ID to the archive name, and a run only removes the archive it created itself.
   - **Interruption:** Ctrl-C or a closed terminal during the copy stops the copy container and removes the incomplete archive, and the message says whether that worked. This path has not been tested.
   - **No vacuous pass:** the comparison fails on empty manifests.
   - **Completion marker:** a complete archive contains `.factory-archive-complete`, written only after a successful comparison.
-- **Security review of the factory PR** (sdlc-pilot PR #22):
-  - **No automatic host clone sync:** `up.sh` no longer fast-forwards the host clone or re-executes itself. It refuses to start while the host clone is behind `origin/main`, so a change an agent merges never runs on the host until the owner reviews and pulls it. This replaces the re-exec fix from PR #6.
+- **Security review of the factory PR** (sdlc-pilot PR [#22](https://github.com/nvipero/sdlc-pilot/pull/22)):
+  - **No automatic host clone sync:** `up.sh` no longer fast-forwards the host clone or re-executes itself. It refuses to start while the host clone is behind `origin/main`, so a change an agent merges never runs on the host until the owner reviews and pulls it. This replaces the re-exec fix from PR [#6](https://github.com/nvipero/sdlc-pilot/pull/6).
   - **Token in the host process list:** the devcontainer CLI passed `remoteEnv` as `docker exec -e GH_TOKEN=<value>`, so the token was in a host process's argument list for the whole session. The plan had assumed only the `--remote-env` fallback did that. `devcontainer.json` now has no `remoteEnv` and no `postStartCommand`. `up.sh` runs the workspace init, the probe and the session with `docker exec -e GH_TOKEN` (by name), and stops the container if the workspace init fails. The token variable is no longer exported. A new exit check item samples the host process list during start and session.
   - **GitHub Actions disabled** on both repositories (`scripts/setup-github.sh actions`), and the preflight refuses to start unless it is. Step 4 re-enables Actions with restrictions.
   - **Exit check allowlist** moved from `/tmp` to the root-owned `/run`, so the agent cannot pre-create or rewrite it.
   - **First exit check run:** one check failed because the 1Password CLI timed out waiting for authorisation (`authorization timeout`), so `up.sh` refused before reaching the step under test. Run by hand, the same step passed. The full re-run below passed every check.
   - **Spec revision 6** aligns the spec with the step 1 implementation.
-- **GitHub API rate limit** (sdlc-pilot PR #14):
+- **GitHub API rate limit** (sdlc-pilot PR [#14](https://github.com/nvipero/sdlc-pilot/pull/14)):
   - Repeated exit check runs used up the 60-per-hour unauthenticated limit. The probe got HTTP 403, and `up.sh` refused to start: fail-closed, but for the wrong reason.
   - Probes and exit check calls now authenticate with the token and require HTTP 200. The firewall's own reachability check uses a github.com web URL.
   - No check accepts a 403.

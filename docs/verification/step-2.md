@@ -5,8 +5,8 @@ Host details in the outputs below are redacted: home path â†’ `~`, private IPs â
 
 ## TL;DR
 
-- **Exit criterion met** (spec section 10): the Todo-app project context is approved (sdlc-pilot PR #27, merged), and issue #29 has an approved spec where the owner answered a question in the issue.
-- **Scripted exit check:** all 86 checks pass, none skipped, against sdlc-pilot main with PR #25 merged.
+- **Exit criterion met** (spec section 10): the Todo-app project context is approved (sdlc-pilot PR [#27](https://github.com/nvipero/sdlc-pilot/pull/27), merged), and issue [#29](https://github.com/nvipero/sdlc-pilot/issues/29) has an approved spec where the owner answered a question in the issue.
+- **Scripted exit check:** all 86 checks pass, none skipped, against sdlc-pilot main with PR [#25](https://github.com/nvipero/sdlc-pilot/pull/25) merged.
 - **What worked in the real run:** the understanding check traced every claim to the context; a research request went to the researcher and came back with two independent sources and the unreadable ones marked unconfirmed; the review loop ran two rounds, the writer disagreed with one finding and the reviewer withdrew it; every commit touched only its role's paths.
 - **What did not:** the first story produced no question, because the story's own wording answered it. The orchestrator missed an owner comment when run twice in one session. Issue comments were too many and too long. Twelve observations are listed below, to be fixed before step 2 is closed.
 
@@ -14,26 +14,26 @@ Host details in the outputs below are redacted: home path â†’ `~`, private IPs â
 
 | Criterion | Evidence |
 |---|---|
-| Approved project context | PR #27 (`chore/project-context`), merged by the owner on 2026-10-23. One commit, only `docs/product-context.md` and `docs/glossary.md`, `Factory-Role: researcher` |
-| One story with an approved spec | Issue #29 "Remove a task I no longer need", label `spec-approved`. Spec `specs/29-remove-task-no-longer-needed.md` on `feat/issue-29-remove-task-no-longer-needed` |
-| At least one question answered through the issue | Issue #29: the spec writer asked how removal is protected (confirm first, undo window, or both). The owner answered in a comment (option B), and the next run applied it |
+| Approved project context | PR [#27](https://github.com/nvipero/sdlc-pilot/pull/27) (`chore/project-context`), merged by the owner on 2026-10-23. One commit, only `docs/product-context.md` and `docs/glossary.md`, `Factory-Role: researcher` |
+| One story with an approved spec | Issue [#29](https://github.com/nvipero/sdlc-pilot/issues/29) "Remove a task I no longer need", label `spec-approved`. Spec `specs/29-remove-task-no-longer-needed.md` on `feat/issue-29-remove-task-no-longer-needed` |
+| At least one question answered through the issue | Issue [#29](https://github.com/nvipero/sdlc-pilot/issues/29): the spec writer asked how removal is protected (confirm first, undo window, or both). The owner answered in a comment (option B), and the next run applied it |
 
 ## Real run
 
-### Project context (`/factory:context`, PR #27)
+### Project context (`/factory:context`, PR [#27](https://github.com/nvipero/sdlc-pilot/pull/27))
 
 - The interview ran in the main session, one topic at a time, with a read-back after each.
 - **Sources:** owner statements tagged `(owner)`. `localStorage` facts read from MDN's content repository on GitHub, and WCAG 2.2 from the W3C Editor's Draft on GitHub Pages: both reachable through the firewall's GitHub ranges. The WHATWG standard could not be reached and went to "Research, not confirmed".
 - **Owner's definition kept:** the owner defined a swimlane as one lane per status, which differs from common Kanban usage. The researcher recorded the owner's meaning and marked the common usage as unconfirmed.
 - **Five open questions** left for stories (accessibility level, blocked storage, task contents and editing, allowed status moves, supported browsers).
 
-### Issue #28 "Add a task and move it between statuses" (approved, no question)
+### Issue [#28](https://github.com/nvipero/sdlc-pilot/issues/28) "Add a task and move it between statuses" (approved, no question)
 
 - One commit, `specs/28-add-task-move-statuses.md`, role line present.
 - **No question was asked.** The acceptance criterion "I can move a task to another status" answered the open question about allowed moves before the spec writer saw it. The writer assumed any-to-any moves from that wording, and the reviewer noted it as non-blocking (R1-2). The story was written in this session, so the leak was ours, not the factory's.
 - The orchestrator reported that the spec writer read files with `cat` through Bash, outside its allowed git-only use. Harmless, and visible.
 
-### Issue #29 "Remove a task I no longer need" (approved, question answered)
+### Issue [#29](https://github.com/nvipero/sdlc-pilot/issues/29) "Remove a task I no longer need" (approved, question answered)
 
 | Step | Commit | Paths | Role line |
 |---|---|---|---|
@@ -66,7 +66,7 @@ Host details in the outputs below are redacted: home path â†’ `~`, private IPs â
 9. **The orchestrator must read the issue at the start of every run.** Run twice in one session, it relied on its memory and missed the owner's comment. Confirmed: after `/clear` it found it.
 10. **A question comment contains only the question.** No context problems and no assumption lists in it. Agents make assumptions themselves; they are listed in the "spec ready" comment.
 11. **No TL;DR in issue comments.** TL;DR belongs in pull request descriptions.
-12. **No progress-log comments.** Issue #29 got 12 comments, each a notification. Only comments with value to the owner or another agent are posted; the run's state and chain go into one status comment edited in place.
+12. **No progress-log comments.** Issue [#29](https://github.com/nvipero/sdlc-pilot/issues/29) got 12 comments, each a notification. Only comments with value to the owner or another agent are posted; the run's state and chain go into one status comment edited in place.
 
 The owner decided that observations 10 to 12 refine spec principles 10 (visible handoff chain) and 13 (TL;DR for human output).
 
@@ -82,10 +82,10 @@ The owner decided that observations 10 to 12 refine spec principles 10 (visible 
 | 9 | Every `/factory:run` starts from `gh` and `git`, never from memory of earlier runs in the session |
 | 11, 12 | No TL;DR in comments. One status comment per issue, edited in place, holds the state and the chain; new comments only for a question, a dispute or a ready spec. Spec principles 10 and 13 updated (revision 7) |
 
-### Test of the fixes (issue #31, 2026-10-29)
+### Test of the fixes (issue [#31](https://github.com/nvipero/sdlc-pilot/issues/31), 2026-10-29)
 
 - **First attempt invalid:** the owner's Claude session had started before the fixes were merged. The overlay updated at once, but Claude Code loads plugins at session start, so the run used the previous commands (four comments, each with a TL;DR). Lesson, now in the README: start a new session after a factory update.
-- **Second run** (new session; the owner commented a change request on #31):
+- **Second run** (new session; the owner commented a change request on [#31](https://github.com/nvipero/sdlc-pilot/issues/31)):
   - One status comment, created once and edited in place (created 13:50:07, updated 13:51:40 UTC), holding the chain and the state `round=1 reworks=1 reviewed=7e3d6b8 task=done`.
   - One notifying comment: the ready comment with the spec link, assumptions and the context gap in one line. No TL;DR.
   - The change request went to the spec writer. The reviewer classified it as a rework (acceptance criteria changed), the rework count rose to 1, and the whole spec was reviewed.
@@ -115,7 +115,7 @@ Ten findings, none blocking under the step 1 definition. All fixed, because each
 
 ## Scripted exit check (`scripts/exit-check.sh`, steps 1 and 2, redacted)
 
-All 86 checks pass, none skipped, against `sdlc-pilot` main with PR #25 merged.
+All 86 checks pass, none skipped, against `sdlc-pilot` main with PR [#25](https://github.com/nvipero/sdlc-pilot/pull/25) merged.
 
 - **Reviewer skill preload is still unproven.** The reviewer did not load its skill with the Skill tool, so either the `skills:` preload worked or the skill was not loaded. The real run shows which, from whether the reviewer's output follows the skill's return block.
 - **The reviewer write test is weak evidence.** Asked to write a file, the reviewer made no tool calls at all. The check proves it wrote nothing; the tool lists prove it had no write tool.

@@ -5,8 +5,8 @@ Host details in the outputs below are redacted: home path â†’ `~`, private IPs â
 
 ## TL;DR
 
-- **Exit criterion met** (spec section 10): issue #28 reached pull request sdlc-pilot #35 with passing local tests, a code reviewer approval and a "Where to look" section. The owner merged it on 2026-10-29.
-- **Scripted exit check:** all 92 checks pass, none skipped, against sdlc-pilot main with #34 (factory step 3) and #35 merged.
+- **Exit criterion met** (spec section 10): issue [#28](https://github.com/nvipero/sdlc-pilot/issues/28) reached pull request sdlc-pilot [#35](https://github.com/nvipero/sdlc-pilot/pull/35) with passing local tests, a code reviewer approval and a "Where to look" section. The owner merged it on 2026-10-29.
+- **Scripted exit check:** all 92 checks pass, none skipped, against sdlc-pilot main with [#34](https://github.com/nvipero/sdlc-pilot/pull/34) (factory step 3) and [#35](https://github.com/nvipero/sdlc-pilot/pull/35) merged.
 - **What worked:** tests before code, failing for the right reason; a coverage review that sent one blocking finding back and approved the targeted fix; every role commit touched only its paths with a parsed trailer; the orchestrator's own test runs; the reviewer flagged a data-deletion behaviour as a restricted-list hit that the spec had not mentioned.
 - **What changed after the run:** the owner's feedback moved acceptance tests to feature-named files with per-criterion tags and made the implementer's unit tests test-driven; the orchestrator's unplanned rebase and force-push became a merge rule. Not exercised by this run: a test problem, a dispute and its decision, and a resumed run.
 
@@ -14,12 +14,12 @@ Host details in the outputs below are redacted: home path â†’ `~`, private IPs â
 
 | Criterion | Evidence |
 |---|---|
-| The story reaches a PR | sdlc-pilot #35 `feat/issue-28-add-task-move-statuses`, `Closes #28`, marked ready by the orchestrator, merged by the owner |
+| The story reaches a PR | sdlc-pilot [#35](https://github.com/nvipero/sdlc-pilot/pull/35) `feat/issue-28-add-task-move-statuses`, `Closes #28`, marked ready by the orchestrator, merged by the owner |
 | Passing local tests | The orchestrator's run on 6fe6eb3: unit 8/8, build passed, acceptance 19/19 |
 | A reviewer approval | Code reviewer, gate `implementation`, round 1: approve, 0 blocking |
 | A "Where to look" section | In the PR description: one restricted-list hit, no deviations, three assumptions, three uncertainties, what to try |
 
-## Real run: issue #28 "Add a task and move it between statuses"
+## Real run: issue [#28](https://github.com/nvipero/sdlc-pilot/issues/28) "Add a task and move it between statuses"
 
 The status comment's chain, as the orchestrator left it:
 
@@ -69,18 +69,18 @@ The status comment's chain, as the orchestrator left it:
 | 5 | Owner: a test file named after the issue goes stale when a later story changes the feature, and a changing story needs someone to update old tests | Tests in feature-named files, tagged `@issue-<n>-ac-<k>`; the test writer updates existing tests a story changes; the orchestrator selects and checks a story's tests by tag (17a76d3). Tested with Playwright 1.64.1: tags appear in `--list --reporter=json`, and `--grep @issue-2-` does not match `@issue-28-â€¦` |
 | 6 | Owner: should the test writer write the unit tests (TDD)? Decided: no, the implementer writes them test-first; unit tests cover rules and edge cases, not UI flows. Mutation testing goes to the backlog (item 16) as too slow for v1 | 17a76d3, efb119b |
 
-#28's own test file keeps its issue name; it is renamed and tagged when a later story touches the feature.
+[#28](https://github.com/nvipero/sdlc-pilot/issues/28)'s own test file keeps its issue name; it is renamed and tagged when a later story touches the feature.
 
-## Second run: issue #29 "Remove a task I no longer need" (sdlc-pilot #39, merged 2026-10-30)
+## Second run: issue [#29](https://github.com/nvipero/sdlc-pilot/issues/29) "Remove a task I no longer need" (sdlc-pilot [#39](https://github.com/nvipero/sdlc-pilot/pull/39), merged 2026-10-30)
 
-A story on an existing codebase, run with the fixes above (pilot #37).
+A story on an existing codebase, run with the fixes above (pilot [#37](https://github.com/nvipero/sdlc-pilot/pull/37)).
 
 - **Merge instead of rebase** worked twice: the orchestrator merged `origin/main` into the story branch (538543d, c94cc97) and the commit checks skipped the merge commits.
-- **Tags:** the tag check failed on #28's untagged tests, and the test writer tagged them (1668c0d). The rule "every test has a tag" migrated the old tests in this story, not when a story first changed them.
+- **Tags:** the tag check failed on [#28](https://github.com/nvipero/sdlc-pilot/issues/28)'s untagged tests, and the test writer tagged them (1668c0d). The rule "every test has a tag" migrated the old tests in this story, not when a story first changed them.
 - **Tests before code on an existing app:** the web server started, and the 25 tests tagged `@issue-29-` failed; the others passed. After the implementation: unit 13/13, acceptance 44/44.
-- **Trailer, again:** 1668c0d had `Factory-Role` in its own paragraph. The owner accepted it in the session. Fixed with `git commit --trailer` in every role (agentic-sdlc #4, pilot #38).
-- **Owner change request on the ready PR:** rename `28-add-task-move-statuses.spec.ts`. The rules sent every change request to the implementer, which may not touch tests; the orchestrator routed it to the test writer, reopened the test gate, and skipped a new implementation review because the code had not changed. Written down in agentic-sdlc #5 (pilot #40), with two owner decisions: a test change always needs `tests-change-approved`, a comment is never enough; the label covers one change and the orchestrator removes it after the test gate approves.
-- **Context note:** the product context still lists task deletion as an open question; #29 answered it. The owner can update it with `/factory:context`.
+- **Trailer, again:** 1668c0d had `Factory-Role` in its own paragraph. The owner accepted it in the session. Fixed with `git commit --trailer` in every role (agentic-sdlc #4, pilot [#38](https://github.com/nvipero/sdlc-pilot/pull/38)).
+- **Owner change request on the ready PR:** rename `28-add-task-move-statuses.spec.ts`. The rules sent every change request to the implementer, which may not touch tests; the orchestrator routed it to the test writer, reopened the test gate, and skipped a new implementation review because the code had not changed. Written down in agentic-sdlc #5 (pilot [#40](https://github.com/nvipero/sdlc-pilot/pull/40)), with two owner decisions: a test change always needs `tests-change-approved`, a comment is never enough; the label covers one change and the orchestrator removes it after the test gate approves.
+- **Context note:** the product context still lists task deletion as an open question; [#29](https://github.com/nvipero/sdlc-pilot/issues/29) answered it. The owner can update it with `/factory:context`.
 
 Not exercised in either run: a test problem from the implementer, a dispute and its decision, and a resumed run with open findings.
 

@@ -7,7 +7,7 @@ Date: 2026-10-29
 ## TL;DR
 
 - **What gets built:** three roles (test writer, implementer, code reviewer) and `/factory:run` extended from an approved spec to a pull request: acceptance tests first, then the implementation, then review, then a ready PR with a "Where to look" section.
-- **Exit (spec section 10):** a story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section. The run uses issue #28, which also creates the Todo-app's first code.
+- **Exit (spec section 10):** a story reaches a PR with passing local tests, a reviewer approval and a "Where to look" section. The run uses issue [#28](https://github.com/nvipero/sdlc-pilot/issues/28), which also creates the Todo-app's first code.
 - **Main technical choice:** Playwright's browsers are installed in the image at build time, so the firewall stays closed. Microsoft's download CDN sits on shared addresses, like the documentation sites we did not open in step 2.
 - **Where I need you:** approve this plan, merge the factory PR and the pilot PRs, run `/factory:run 28`, and review the resulting PR. You merge it or ask for changes.
 - **Most likely reason this slips:** the first story also has to scaffold the whole app (Vite, React, TypeScript, Vitest, Playwright). That is more work than any later story, and the test environment in the container is new.
@@ -23,7 +23,7 @@ No blocking findings. All ten non-blocking ones are taken:
 | 3 | Any change to approved tests reopens the test gate; the approved commit moves only on approval; what `tests-change-approved` leads to | 1 (decision 9), 3 |
 | 4 | The template ships a `.gitignore` the owner owns; the orchestrator checks for ignored files under `tests/acceptance/` before counting runs | 3, 4 |
 | 5 | The implementation phase's state fields and resume table are designed before `run.md` is written | 3 |
-| 6 | First story: selector rule for tests written before the UI exists; "failing before implementation" for #28 means the app does not start; both test commands named | 2, 3 |
+| 6 | First story: selector rule for tests written before the UI exists; "failing before implementation" for [#28](https://github.com/nvipero/sdlc-pilot/issues/28) means the app does not start; both test commands named | 2, 3 |
 | 7 | Two more spec changes listed (code reviewer writes nothing; disputes stay on the issue) | 7 |
 | 8 | Exit check installs `@playwright/test` as `node` in a temporary directory to start Chromium, and checks that `node` cannot install browsers | 6 |
 | 9 | Test writer and implementer do not send research requests: they read library documentation themselves (npm, `node_modules`, GitHub), and an unsettled question goes into "Where to look" | 2 |
@@ -89,9 +89,9 @@ The run continues from `spec-approved`. Each run still reads GitHub and git firs
 ## 5. Exit: the Todo-app run
 
 1. The factory PR and one pilot PR are merged, the host clone pulled, the image rebuilt by `up.sh`, and a new Claude session started. The pilot PR carries the Dockerfile change, `.gitignore`, the `acceptance` block hand-merged into the pilot's `config.yaml`, the new `.factory/` content, and `CLAUDE.md`'s ownership table with the root files under the implementer.
-2. You run `/factory:run 28`. The run writes the tests, scaffolds the app, implements #28, reviews, and opens the PR.
+2. You run `/factory:run 28`. The run writes the tests, scaffolds the app, implements [#28](https://github.com/nvipero/sdlc-pilot/issues/28), reviews, and opens the PR.
 3. You review the PR through its description and "Where to look", and merge it or ask for changes. Merging is your step; step 3's exit is the ready PR.
-4. Optional, if time allows: #29 or #31 on top of #28, to see a story on an existing codebase.
+4. Optional, if time allows: [#29](https://github.com/nvipero/sdlc-pilot/issues/29) or [#31](https://github.com/nvipero/sdlc-pilot/issues/31) on top of [#28](https://github.com/nvipero/sdlc-pilot/issues/28), to see a story on an existing codebase.
 
 ## 6. Exit check and evidence
 
