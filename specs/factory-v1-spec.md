@@ -11,7 +11,8 @@ Revision 10, 2026-10-31, with step 5: the definition of done follows principle 1
 Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verification/step-5.md`  
 Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`  
 Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`  
-Revision 14, 2026-10-31: backlog item 23, token usage statistics (owner request)
+Revision 14, 2026-10-31: backlog item 23, token usage statistics (owner request)  
+Revision 15, 2026-11-05: choices in specs, current behaviour from `main`, propose or ask, backlog items 24 and 25 (owner decisions); plan `docs/plans/spec-choices-and-sources.md`
 
 ## TL;DR
 
@@ -80,6 +81,8 @@ Fixed for v1. Changing one requires an owner decision.
 21. Dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository; the guards then let `dependabot[bot]` change only manifests and lock files. The Claude Code and Playwright pins stay a manual monthly check (owner decision, 2026-10-30).
 22. ~~Production deployment of `main` through the pipeline.~~ Done in revision 12 (section 8, "Production").
 23. Token usage statistics: how many tokens each story uses, split by role and phase (spec, research, tests, implementation, review rounds, disputes), and how that shows up in the owner's subscription quota, which Claude Code shows only as a percentage. For understanding the cost first, and for finding where optimising pays off if it is needed (owner request, 2026-10-31).
+24. Unspecified behaviour in the implementation: the implementer returns behaviour no criterion covers to the orchestrator, which has the test writer test it if it fits the approved spec, or removes it and opens a follow-up story draft for the owner; both listed in the pull request (owner, 2026-11-05).
+25. A spec that `main` overtakes during a story: another merge changes behaviour the spec relies on before the story merges. Matters with parallel stories (item 11).
 
 ## 4. Architecture
 
@@ -246,12 +249,12 @@ Both the factory repo and project repos follow these. Agents follow them too.
 ### Story to spec
 
 1. The human writes a story with the issue template: goal, user value, acceptance criteria in plain language, priority.
-2. **Understanding check.** The spec writer first writes a "Problem and why" section in its own words, traced to the project context or to the story itself. Where the story settles something the context leaves open, the spec traces it to the story and the ready comment says so; the human may update the context later. If neither supports the problem, the spec writer asks.
-3. The spec writer produces `specs/<issue>-<slug>.md`: problem and why, scope, out of scope, testable acceptance criteria, assumptions, open questions.
-4. **Research, then ask, then assume.** For an open point that changes the scope or an acceptance criterion, the spec writer first requests research: the orchestrator runs the researcher, which answers in `docs/research/<issue>-<topic>.md` with the same source rules (one research round per issue). Only a product decision that only the human can make becomes a question. Everything else is an assumption with a reason. A question is posted to the issue on its own, and the issue gets `needs-human`.
+2. **Understanding check.** The spec writer first writes a "Problem and why" section in its own words, traced to the project context or to the story itself. What the app does today comes from `main`'s acceptance tests (the code where no test covers it); earlier specs are history, and a conflict between them and `main`, a newer owner decision or another source becomes a question. Where the story settles something the context leaves open, the spec traces it to the story and the ready comment says so; the human may update the context later. If neither supports the problem, the spec writer asks.
+3. The spec writer produces `specs/<issue>-<slug>.md`: problem and why, scope, out of scope, testable acceptance criteria, choices (criteria the spec writer decided itself, each with its basis), assumptions (decisions that change no criterion), open questions.
+4. **Research, then ask, then assume.** For an open point that changes the scope or an acceptance criterion, the spec writer first requests research: the orchestrator runs the researcher, which answers in `docs/research/<issue>-<topic>.md` with the same source rules (one research round per issue). A product decision that only the human can make is proposed as a choice when it has a sensible default, and asked otherwise; a contradiction with the project context is always a question. Everything else the spec writer decides as a choice with its basis; an assumption changes no criterion. A question is posted to the issue on its own, and the issue gets `needs-human`.
 5. The spec reviewer checks ambiguity, missing edge cases, testability, sources and consistency with the project context.
 6. **Review loop.** A loop ends only when the reviewer approves the latest version or the work escalates to the human with `dispute`. Fixes are targeted. A change that alters the scope or the acceptance criteria is a rework: it is reviewed in full and restarts the round count, at most `rework_resets` times. `max_rounds` and `escalate_when_no_progress_for` apply per version. The human's decision on a dispute either changes the work, or keeps it and closes the disputed findings, which the reviewer does not raise again.
-7. When the reviewer approves, the ready comment links the spec and lists its assumptions. The human answers questions in the issue and adds `spec-approved`.
+7. When the reviewer approves, the ready comment links the spec, lists its choices, and counts its assumptions. The human answers questions in the issue and adds `spec-approved`.
 
 ### Spec to merge
 
@@ -260,7 +263,7 @@ Both the factory repo and project repos follow these. Agents follow them too.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
 4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.
 5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once; after the first implementer commit its change also needs the human's `tests-change-approved` (the guard counts it); after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.
-6. When the reviewer approves and the orchestrator's own test run passes, it writes the PR description, waits for the required checks on GitHub ("trust, but verify"), marks the PR ready, and posts to the issue that the preview appears in the PR's deployments panel.
+6. When the reviewer approves and the orchestrator's own test run passes, it writes the PR description, waits for the required checks on GitHub ("trust, but verify"), marks the PR ready, and posts to the issue that the preview appears in the PR's deployments panel, with any choices the spec gained after approval through an owner change request.
 7. **Feature removal.** A story that removes a feature states the absence as acceptance criteria ("the board shows no Archive button", "tasks stored with the old status still load"). The spec names the earlier criteria it supersedes. The test writer removes the removed behaviour's tests in the tests phase, before approval, as its own path, and lists the criteria the current app already meets, whose tests may pass before implementation; the coverage review checks each removal and the guard lists the changed and removed test files for "Where to look". After approval, any further change needs `tests-change-approved`.
 8. The PR description contains a **"Where to look"** section for the human: restricted-list hits, deviations from the spec, assumptions made, and places where the reviewer is uncertain. The human reads this section and the preview, not the whole diff.
 9. The human merges, or requests changes: a change to what the story does goes through the spec writer and the test writer first, a change to the tests through the test writer, anything else to the implementer.
@@ -337,7 +340,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 - **Dev container setup takes longer than expected.** It is the biggest single piece of new work in v1, but adding it later would cost more.
 - **Subscription limits.** Agent runs share the Team plan quota with the owner's other work.
 - **Agent loops.** Mitigation: turn limits and dispute rules.
-- **Specs approved without reading.** Mitigation: questions and assumptions are surfaced separately.
+- **Specs approved without reading.** Mitigation: questions, choices and assumptions are surfaced separately.
 - **After the owner approves, the App could technically merge.** Only the deny rule in managed settings prevents it; the owner's approval is the decision that matters, so this is accepted. Before step 4 the agents acted as the owner and could merge without approval; agent commits from then carry the noreply address of an unrelated GitHub account (`factory-agent`) as author and are not rewritten.
 - **Roles share the App.** Only commit trailers and the guards tell the roles apart; separate identities per role need separate sandboxes (backlog 9 and 11).
 - **Interaction limit expires** after six months. Mitigation: `up.sh` checks it on every run.

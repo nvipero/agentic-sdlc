@@ -116,7 +116,7 @@ Update the status comment after each role call.
 
 ### Spec writer
 
-Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-writer` with: the issue number, title, the trusted input, the task, both languages, for `fix` the findings and round, for `answer` after a `question` comment the questions it answers, and on every call the issue's research files (`git ls-files 'docs/research/<n>-*'`), if any. Record any `context_update` it reports under Context notes. Read its return block.
+Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-writer` with: the issue number, title, the trusted input (each comment with its id), the task, both languages, for `fix` the findings and round, for `answer` after a `question` comment the questions it answers, and on every call the issue's research files (`git ls-files 'docs/research/<n>-*'`), if any. Record any `context_update` it reports under Context notes. Read its return block.
 
 - **`research`:** only once per issue: if the issue already has a research file, treat the requests as questions. Note `before` again, call `factory:researcher` with the requests, the issue number, the branch and both languages, and check its commits (below). Record its `context_update`, if any, under Context notes. Then call the spec writer again with task `research-done`, the research file path, **and the original task with all its inputs** (for `fix` the findings and round, for `answer` the owner's comments and the questions they answer).
 - **`questions`:** post a `question` comment with only the questions. Add `needs-human`. Push. Stop.
@@ -124,7 +124,7 @@ Before the call, note `before="$(git rev-parse HEAD)"`. Call `factory:spec-write
 
 ### Spec reviewer
 
-Call `factory:spec-reviewer` with: the spec path, the issue number, the trusted input, both languages, the round, the previous findings and the writer's responses (from the status comment on a resumed run; findings `closed by owner` with the decision), and from round 2 the output of `git diff <reviewed> HEAD -- <spec>`.
+Call `factory:spec-reviewer` with: the spec path, the issue number, the trusted input (each comment with its id), both languages, the round, the previous findings and the writer's responses (from the status comment on a resumed run; findings `closed by owner` with the decision), and from round 2 the output of `git diff <reviewed> HEAD -- <spec>`.
 
 Record the review (section 10), then apply the review loop rules. On `approve`, go to section 6.
 
@@ -133,7 +133,8 @@ Record the review (section 10), then apply the review loop rules. On `approve`, 
 1. `git push -u origin <branch>`.
 2. Post a `ready` comment:
    - the link `https://github.com/<owner>/<repo>/blob/<branch>/<spec path>`;
-   - the assumptions the spec makes, one line each;
+   - **Choices for you to check:** the lines of the spec's `## Choices` section, one each (AC id and basis), read from the spec file; or "none";
+   - the number of assumptions, with a pointer to the spec's Assumptions section;
    - research that stayed unconfirmed, if any;
    - the Context notes from the status comment, one line each, if any: the owner may update the context later with `/factory:context`;
    - that the owner adds `spec-approved` to accept it, or comments to change it.
@@ -200,7 +201,7 @@ After the first implementer commit that passes the checks, if `pr` is `-`:
 
 ### Code reviewer, gate `implementation`
 
-Call `factory:code-reviewer` with: gate `implementation`, the spec path, the issue number, `git diff --stat origin/main...HEAD`, the diff `git diff origin/main...HEAD -- . ':(exclude)specs' ':(exclude)tests/acceptance' ':(exclude)*package-lock.json'`, your test run's result, the results of the implementation checks, the implementer's `choices` and `uncertain`, both languages, the round, the previous findings and the responses (findings `closed by owner` with the decision), and from round 2 the diff since `reviewed`.
+Call `factory:code-reviewer` with: gate `implementation`, the spec path, the issue number, `git diff --stat origin/main...HEAD`, the diff `git diff origin/main...HEAD -- . ':(exclude)specs' ':(exclude)tests/acceptance' ':(exclude)*package-lock.json'`, your test run's result, the results of the implementation checks, the implementer's `choices` (its stack choices, not the spec's `## Choices`) and `uncertain`, both languages, the round, the previous findings and the responses (findings `closed by owner` with the decision), and from round 2 the diff since `reviewed`.
 
 Record the review (section 10), then apply the review loop rules with the implementer as the writer. On `approve`, with your last test run passing, go to section 9.
 
@@ -229,7 +230,7 @@ When the code reviewer approves and your last test run passed:
    - `unit-and-build` or `acceptance` fails: it goes back to the implementer as a finding with the failing check's summary (`gh run view <run> --log-failed`, the last lines), like a failing test run; it counts as a round.
    - `guards` or `dependency-review` fails, or the checks do not finish in time: record it, tell the owner in this session with the check's summary, push, and stop. Do not repair it yourself.
 4. `gh pr ready <pr>`.
-5. Post the issue's ready comment, ending with `<!-- factory:run kind=ready phase=implementation -->`: the pull request link, that the preview appears in the pull request's deployments panel within a few minutes ("View deployment"), and that the owner reviews and merges it, or comments to change it. Do not wait for the preview.
+5. Post the issue's ready comment, ending with `<!-- factory:run kind=ready phase=implementation -->`: the pull request link; the lines the spec's `## Choices` section gained since the approved spec, if any, as "Choices for you to check" (run `git diff <the spec gate's reviewed sha> HEAD -- <spec>`; an owner change request after approval has no spec ready comment, so its choices show here, and a later change request lists them again); that the preview appears in the pull request's deployments panel within a few minutes ("View deployment"), and that the owner reviews and merges it, or comments to change it. Do not wait for the preview.
 6. Stop. The owner merges; you never merge. The ruleset makes the owner's approval the only way in.
 
 ## 10. Shared rules
