@@ -33,6 +33,7 @@ Create the package only if it does not exist yet. Change its configuration only 
 - **Start from a clean state** in each test (for example clear `localStorage` before the page loads) so tests do not depend on each other.
 - **Observable behaviour only:** what the user sees and does, as the criterion says. Reloading the page, timing and storage failures are fine when a criterion is about them.
 - **Keep them stable:** use Playwright's waiting assertions (`expect(...).toBeVisible()`), never fixed sleeps.
+- **Absence and "stays" checks do not wait.** A waiting assertion that something is missing or stays as it is (`toHaveCount(0)`, `toBeHidden()`, `not.toBeVisible()`, `toBeFocused()` on where focus must already be) retries for its whole timeout, so it can wait out the old behaviour and pass against it: a message that hides itself after 5 seconds passes "no message is shown". First wait for a positive sign that the action took effect (the removed task is gone, the saved title is shown), then check the absence once, without retrying (`expect(await locator.count()).toBe(0)`), or with a timeout well below any timed behaviour the app has or had.
 
 ## Before you commit
 
