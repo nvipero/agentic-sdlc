@@ -1,6 +1,6 @@
 # Removes every preview of a closed or merged PR. workflow_run runs main's
-# definition in environment "preview" (scripts from main). The PR number from the artifact is
-# checked to be a number; nothing else from it is used.
+# definition in environment "preview" (scripts and deploy.target from main). The
+# PR number from the artifact is checked to be a number; nothing else from it is used.
 name: preview-cleanup
 on:
   workflow_run:
@@ -28,18 +28,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: .github/scripts
+          sparse-checkout: |
+            .github/scripts
+            .factory
+      - name: Deployment target
+        id: target
+        run: |
+          set -euo pipefail
+          [ -f .factory/config.yaml ] || { echo "::error::no .factory/config.yaml on main"; exit 1; }
+          target="$(ruby -ryaml -e 'c = YAML.load_file(ARGV[0]); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' .factory/config.yaml)"
+          [ -n "$target" ] || { echo "::error::deploy.target missing in .factory/config.yaml"; exit 1; }
+          [[ "$target" =~ ^[a-z0-9-]+$ && -f ".github/scripts/deploy/$target.sh" ]] || { echo "::error::no deploy script for target '$target'"; exit 1; }
+          echo "script=.github/scripts/deploy/$target.sh" >> "$GITHUB_OUTPUT"
       - name: Remove the PR's previews
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SCRIPT: ${{ steps.target.outputs.script }}
           FILE: ${{ runner.temp }}/pr/number
         run: |
           set -euo pipefail
           PR="$(head -c 12 "$FILE" | tr -d '\n')"
           [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::not a PR number"; exit 1; }
-          bash .github/scripts/vercel-preview.sh prune "$PR"
+          bash "$SCRIPT" prune "$PR"
       - name: Mark the PR's deployments inactive
         env:
           GH_TOKEN: ${{ github.token }}

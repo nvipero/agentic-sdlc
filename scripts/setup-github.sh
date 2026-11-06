@@ -8,7 +8,7 @@
 #   scripts/setup-github.sh actions           <owner/repo>   (project: restricted Actions, step 4)
 #   scripts/setup-github.sh actions-off       <owner/repo>   (the factory repo: no workflows)
 #   scripts/setup-github.sh code-scanning     <owner/repo>   (CodeQL default setup)
-#   scripts/setup-github.sh preview-env       <owner/repo>   (environment for the Vercel token)
+#   scripts/setup-github.sh preview-env       <owner/repo>   (environment for the deployment target's secrets)
 #   scripts/setup-github.sh production-env    <owner/repo>   (the same, for deploys of main)
 #   scripts/setup-github.sh labels            <owner/repo>
 #   scripts/setup-github.sh board             <owner/repo>
@@ -111,7 +111,8 @@ actions_off() {
   gh api "repos/$nwo/actions/permissions" --jq '"actions enabled: \(.enabled)"'
 }
 
-# Environments "preview" and "production" hold the Vercel secrets. Only main may
+# Environments "preview" and "production" hold the deployment target's secrets
+# (deploy.target in .factory/config.yaml; VERCEL_* for vercel). Only main may
 # deploy to them: preview-deploy and production-deploy run on workflow_run, which
 # uses main. The owner adds the secrets with gh secret set --env <name>, so
 # nobody else sees them.
