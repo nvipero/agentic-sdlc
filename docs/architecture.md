@@ -6,7 +6,7 @@
 |---|---|
 | Stories, specs, PRs, status | GitHub, public repositories with enforced protections |
 | Agents | Claude Code inside the project's dev container on the owner's Mac |
-| Container runtime | Rancher Desktop, engine dockerd (moby) |
+| Container runtime | A Docker engine with the `docker` CLI; tested on Rancher Desktop with dockerd (moby) |
 | Deterministic gates | GitHub Actions |
 | Preview and production | Vercel |
 

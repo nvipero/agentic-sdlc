@@ -21,7 +21,7 @@ The docs describe the factory as it is now; a change updates them in the same pu
 
 ## Getting started
 
-1. Have Rancher Desktop, the devcontainer CLI, `gh` (with the `project` scope), the 1Password CLI, `git`, `jq`, `openssl` and `curl` on your Mac.
+1. Have a Docker engine (tested: Rancher Desktop with dockerd), the devcontainer CLI, `gh` (with the `project` scope), the 1Password CLI, `git`, `jq`, `openssl` and `curl` on your Mac.
 2. Create an empty public repository and install the factory's GitHub App on it.
 3. Copy `templates/project/` and the factory definitions into it and push the first commit.
 4. Run `scripts/setup-github.sh` for protections, labels and the board, then set up the Vercel project and its token.

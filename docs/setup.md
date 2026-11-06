@@ -7,7 +7,7 @@ Run the commands from the factory repository's root.
 ## Starting a new project
 
 **Requirements on the host:**
-- Rancher Desktop (dockerd)
+- A Docker engine with the `docker` CLI. Tested on Rancher Desktop with dockerd (moby), not its containerd option. Another runtime, such as Docker Desktop, OrbStack or Colima, should work but must first pass `scripts/exit-check.sh`: the firewall needs iptables and ipset inside the container, and the token mount relies on how the runtime shares host files (the container's user must read the owner's 0600 token file, read-only, and see a renamed file within a second).
 - the devcontainer CLI
 - `gh`, logged in as the repository owner, with the `project` scope
 - the 1Password CLI `op`
