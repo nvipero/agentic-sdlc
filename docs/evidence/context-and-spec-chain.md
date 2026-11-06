@@ -1,6 +1,6 @@
 # Step 2 verification
 
-Date: 2026-10-23 to 2026-10-29. Plan: [docs/plans/step-2.md](../plans/step-2.md), approved 2026-10-23.
+Date: 2026-10-23 to 2026-10-29. Plan: [docs/plans/step-2.md](https://github.com/nvipero/agentic-sdlc/blob/5758ab5/docs/plans/step-2.md), approved 2026-10-23.
 Host details in the outputs below are redacted: home path → `~`, private IPs → `<private-ip>`.
 
 ## TL;DR
