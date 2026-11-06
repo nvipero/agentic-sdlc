@@ -8,6 +8,18 @@ This repository is the factory itself: role skills, agents, commands, the projec
 - The plan goes into the issue, the evidence into the pull request. A dependency is a GitHub "blocked by" link on the issue.
 - Something new found while working becomes a backlog issue, not a note in a document.
 
+## Issue status
+
+Set it with `scripts/backlog.sh status <issue> "<status>"`:
+
+- **In Progress** first, when the owner asks to start the issue, before any other work.
+- **In Review** when the pull request is opened and ready for the owner.
+- **Blocked** when the work waits on an owner decision or another issue; say what it waits for in an issue comment.
+- **Todo** again when the work stops unfinished without a pull request, with a one-line issue comment on why and where it stopped.
+- **Done** comes from closing the issue.
+
+At the start of a session, run `scripts/backlog.sh stale` and tell the owner about any issue it lists: that is work an earlier session left behind.
+
 ## Keeping the docs current
 
 Before opening a pull request:

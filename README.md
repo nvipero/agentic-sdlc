@@ -37,6 +37,7 @@ The full steps, with the commands, are in [docs/setup.md](docs/setup.md).
 | `templates/project/` | Everything copied into a new project repository |
 | `scripts/setup-github.sh` | Sets up GitHub protections, labels and the Projects board (six issue-only views, default view removed) for a repository |
 | `scripts/exit-check.sh`, `scripts/redact.sh` | Exit check, and redaction of its output before publishing |
+| `scripts/backlog.sh` | Sets an issue's status in the factory's backlog project, and lists work left In Progress or Blocked |
 | `docs/` | The documents above; `docs/evidence/` holds verification evidence |
 | `CLAUDE.md` | Working rules for changes to the factory, read by Claude Code at the start of every session |
 
