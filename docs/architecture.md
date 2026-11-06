@@ -8,7 +8,7 @@
 | Agents | Claude Code inside the project's dev container on the owner's Mac |
 | Container runtime | A Docker engine with the `docker` CLI; tested on Rancher Desktop with dockerd (moby) |
 | Deterministic gates | GitHub Actions |
-| Preview and production | Vercel |
+| Preview and production | Vercel, the only deployment target (`deploy.target`) |
 
 The factory (`agentic-sdlc`) and each project it builds live in separate repositories. A project is created from the factory's project template and has its own repo, issues and Projects board. `sdlc-pilot`, a Todo-app, is the test bed for factory changes.
 
@@ -81,6 +81,8 @@ roles:
   test-writer:   { model: sonnet }
   implementer:   { model: opus }
   code-reviewer: { model: opus }
+deploy:
+  target: vercel                    # where previews and production go: .github/scripts/deploy/<target>.sh
 acceptance:                         # how acceptance tests start the app
   start: "npm run dev -- --strictPort"   # run at the repository root
   url: "http://localhost:5173"
@@ -100,4 +102,4 @@ Model choices are initial guesses, to be tuned with more stories. The config is 
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
-- Vercel for preview and production deployments (Hobby, through the pipeline; no Git integration)
+- Vercel for preview and production deployments (`deploy.target: vercel`; Hobby, through the pipeline; no Git integration)

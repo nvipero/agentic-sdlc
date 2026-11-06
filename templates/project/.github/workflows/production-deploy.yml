@@ -1,13 +1,12 @@
-# Deploys main to the project's production address (<repo>.vercel.app: the
-# Vercel project is named after the repository) after tests passed on main's own
-# commit. workflow_run runs main's definition; the branch filter and the job
+# Deploys main to the project's production address after tests passed on main's
+# own commit. workflow_run runs main's definition; the branch filter and the job
 # conditions keep PR test runs out, because environment "production" (deployment
 # branch: main only) cannot tell them apart: its ref is always main. As in
-# preview-deploy, the artifact is data: only its regular files are copied into a
-# static-only Build Output. Only main's newest commit is deployed, and deploys
-# queue instead of replacing each other, so a quick series of merges ends on the
-# last one. After the deploy, the production address must serve it (a rollback
-# in the Vercel dashboard stops that until undone).
+# preview-deploy, the artifact is data, and the target script (deploy.target in
+# main's .factory/config.yaml) deploys only its regular files as a static site.
+# Only main's newest commit is deployed, and deploys queue instead of replacing
+# each other, so a quick series of merges ends on the last one. After the
+# deploy, the production address must serve it.
 name: production-deploy
 on:
   workflow_run:
@@ -66,7 +65,7 @@ jobs:
       queue: max
     environment:
       name: production
-      url: ${{ format('https://{0}.vercel.app', github.event.repository.name) }}
+      url: ${{ steps.live.outputs.url }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -74,10 +73,27 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/artifact
-      - name: Assemble a static-only output
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/scripts
+            .factory
+          path: main
+      - name: Deployment target
+        id: target
+        run: |
+          set -euo pipefail
+          [ -f main/.factory/config.yaml ] || { echo "::error::no .factory/config.yaml on main"; exit 1; }
+          target="$(ruby -ryaml -e 'c = YAML.load_file(ARGV[0]); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' main/.factory/config.yaml)"
+          [ -n "$target" ] || { echo "::error::deploy.target missing in .factory/config.yaml"; exit 1; }
+          [[ "$target" =~ ^[a-z0-9-]+$ && -f "main/.github/scripts/deploy/$target.sh" ]] || { echo "::error::no deploy script for target '$target'"; exit 1; }
+          echo "script=main/.github/scripts/deploy/$target.sh" >> "$GITHUB_OUTPUT"
+      - name: Check the build, assemble the output
         env:
+          SCRIPT: ${{ steps.target.outputs.script }}
           ART: ${{ runner.temp }}/artifact
-          OUT: ${{ runner.temp }}/deploy/.vercel/output
+          OUT: ${{ runner.temp }}/deploy
         run: |
           set -euo pipefail
           if [ -n "$(find "$ART" ! -type f ! -type d -print -quit)" ]; then
@@ -86,14 +102,14 @@ jobs:
           size_kb="$(du -sk "$ART" | cut -f1)"
           [ "$size_kb" -le 51200 ] || { echo "::error::the artifact is ${size_kb} KB (limit 50 MB)"; exit 1; }
           [ -f "$ART/index.html" ] || { echo "::error::the artifact has no index.html"; exit 1; }
-          mkdir -p "$OUT/static"
-          printf '{"version":3}\n' > "$OUT/config.json"
-          cp -R "$ART"/. "$OUT/static/"
+          bash "$SCRIPT" assemble "$ART" "$OUT"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - name: Vercel CLI
-        run: npm install --global --ignore-scripts vercel@64.3.1
+      - name: Target tools
+        env:
+          SCRIPT: ${{ steps.target.outputs.script }}
+        run: bash "$SCRIPT" install
       - name: Still main's head
         # Queued deploys may start out of order. Fails rather than passes, so the
         # production environment never records a deploy that did not happen.
@@ -107,32 +123,26 @@ jobs:
           [ "$head" = "$SHA" ] || { echo "::error::${SHA:0:7} superseded by ${head:0:7}: the newest commit deploys if its tests pass"; exit 1; }
       - name: Deploy
         id: deploy
-        working-directory: ${{ runner.temp }}/deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SCRIPT: ${{ steps.target.outputs.script }}
+          OUT: ${{ runner.temp }}/deploy
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          vercel deploy --prebuilt --prod --meta "sha=$SHA" --non-interactive --no-color > "$RUNNER_TEMP/deploy.out"
-          # stdout carries the deployment URL; take the first one.
-          url="$(grep -oE 'https://[a-z0-9-]+\.vercel\.app' "$RUNNER_TEMP/deploy.out" | head -1 || true)"
-          [ -n "$url" ] || { echo "::error::no deployment URL in the output"; cat "$RUNNER_TEMP/deploy.out"; exit 1; }
+          url="$(bash "$SCRIPT" production "$OUT" "$SHA")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: .github/scripts
-          path: main-scripts
       - name: The production address serves it
+        id: live
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SCRIPT: ${{ steps.target.outputs.script }}
           URL: ${{ steps.deploy.outputs.url }}
-          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
-          host="$(printf '%s' "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-').vercel.app"
-          bash main-scripts/.github/scripts/vercel-preview.sh live "$URL" "$host"
+          address="$(bash "$SCRIPT" live "$URL")"
+          echo "url=$address" >> "$GITHUB_OUTPUT"

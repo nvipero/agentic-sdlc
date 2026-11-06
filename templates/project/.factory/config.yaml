@@ -5,6 +5,8 @@ language:
 acceptance:          # how acceptance tests start the app; start runs at the repository root
   start: "npm run dev -- --strictPort"
   url: "http://localhost:5173"
+deploy:
+  target: vercel     # where previews and production go: .github/scripts/deploy/<target>.sh
 roles:
   researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }

@@ -32,7 +32,7 @@ Run the commands from the factory repository's root.
    scripts/setup-github.sh board <owner>/<repo-name>
    ```
    Then turn on the dependency graph by hand (no API): **Settings → Advanced Security → Dependency graph → Enable**. The dependency review gate needs it, and `up.sh` checks it.
-   Then the Vercel preview. Do these steps yourself, so nobody else sees the secrets. Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
+   Then the deployment target, named by `deploy.target` in `.factory/config.yaml`. The only target is `vercel`, set up as follows. Do these steps yourself, so nobody else sees the secrets. Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
    ```sh
    mkdir -p /tmp/vercel-link && cd /tmp/vercel-link
    npx vercel@64.3.1 login
@@ -45,7 +45,7 @@ Run the commands from the factory repository's root.
    npx vercel@64.3.1 deploy --prebuilt --prod
    npx vercel@64.3.1 logout && cd / && rm -rf /tmp/vercel-link
    ```
-   Name the Vercel project exactly like the repository, in lowercase letters, digits and hyphens: `production-deploy` derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
+   Name the Vercel project exactly like the repository, in lowercase letters, digits and hyphens: the `vercel` target script (`.github/scripts/deploy/vercel.sh`) derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
    ```sh
    for env in preview production; do
      scripts/setup-github.sh $env-env <owner>/<repo-name>
@@ -82,7 +82,7 @@ rsync -a --delete --exclude README.md --exclude config.yaml skills agents comman
 
 Claude Code loads the plugin when a session starts, so after the PR is merged and the host clone pulled, start a new session (`scripts/up.sh claude`) before the next `/factory:run`.
 
-`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way.
+`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way. `.github/` is copied with `rsync -a --delete templates/project/.github/ ../<repo-name>/.github/`, so a file the template no longer has goes too; `scripts/exit-check.sh` fails on any workflow or script on `main` that the template does not have.
 
 ## Renewing protections
 

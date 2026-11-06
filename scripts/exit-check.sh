@@ -366,12 +366,13 @@ done
 section "Step 4: gates on main"
 # The project's .github/ on main must match the factory template, so the gates are the reviewed ones.
 drift=""
-for f in CODEOWNERS scripts/guards.sh scripts/vercel-preview.sh workflows/guards.yml workflows/tests.yml workflows/label-audit.yml \
-         workflows/preview-deploy.yml workflows/preview-closed.yml workflows/preview-cleanup.yml workflows/production-deploy.yml; do
+template_files="$(cd "$FACTORY_DIR/templates/project/.github" && { echo CODEOWNERS; find workflows scripts -type f; } | sort)"
+for f in $template_files; do
   [ "$(git -C "$REPO" show "origin/main:.github/$f" 2>/dev/null | shasum -a 256)" = "$(shasum -a 256 < "$FACTORY_DIR/templates/project/.github/$f")" ] || drift="$drift $f"
 done
-extra="$(git -C "$REPO" ls-tree --name-only origin/main .github/workflows/ | sed 's|.github/workflows/||' | grep -vxE 'guards.yml|tests.yml|label-audit.yml|preview-deploy.yml|preview-closed.yml|preview-cleanup.yml|production-deploy.yml' | tr '\n' ' ')"
-[ -z "$drift" ] && [ -z "$extra" ] && pass "$NWO main: .github/ matches the factory template, no other workflows" \
+extra="$(git -C "$REPO" ls-tree -r --name-only origin/main .github/workflows/ .github/scripts/ | sed 's|^.github/||' | sort \
+  | comm -13 <(echo "$template_files") - | tr '\n' ' ')"
+[ -z "$drift" ] && [ -z "$extra" ] && pass "$NWO main: .github/ matches the factory template, no other workflows or scripts" \
   || fail "$NWO main: .github/ drift" "differs:${drift:- none}; extra: ${extra:-none}"
 owners="$(git -C "$REPO" show origin/main:.github/CODEOWNERS 2>/dev/null | grep -v '^#' | grep -oE '@[A-Za-z0-9_-]+' | sort -u | tr '\n' ' ')"
 [ "$owners" = "@$(gh api user --jq .login) " ] && pass "CODEOWNERS on main names only the owner" "$owners" || fail "CODEOWNERS owners" "$owners"
@@ -391,7 +392,10 @@ echo "$wf_check" | grep -qx "triggers=guards:pull_request_target label-audit:iss
   || fail "workflow triggers" "$(echo "$wf_check" | head -1)"
 echo "$wf_check" | grep -qx "interpolated=" && pass "no \${{ }} expression inside any run: block (event data only through env:)" \
   || fail "expressions in run: blocks" "$(echo "$wf_check" | tail -1)"
-# Repository secrets are checked above (none); the Vercel secrets live only in these two environments.
+# The deployment target; vercel is the only one, and its secrets live only in the two environments.
+target="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | ruby -ryaml -e 'c = YAML.load(STDIN.read); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' 2>/dev/null)"
+[ "$target" = vercel ] && pass "deploy.target on main is vercel" || fail "deploy.target on main" "${target:-missing}"
+# Repository secrets are checked above (none).
 for env in preview production; do
   env_branches="$(gh api "repos/$NWO/environments/$env/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"
   [ "$env_branches" = "branch:main" ] && pass "environment $env deploys from main only" || fail "$env environment branches" "$env_branches"
