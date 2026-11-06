@@ -22,6 +22,7 @@ templates/project/   everything copied into a new project repo
 docs/                how the factory works, and evidence from its verification
 scripts/             GitHub setup, exit checks and helpers (run on the host)
 README.md            overview and entry point
+CLAUDE.md            working rules for changes to the factory
 ```
 
 Changes to the factory start from an issue in the [backlog](https://github.com/users/nvipero/projects/2). If the factory is ever developed with the factory ([#43](https://github.com/nvipero/agentic-sdlc/issues/43)), story specs go to `specs/` as in projects.
