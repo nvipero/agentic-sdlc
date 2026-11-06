@@ -3,7 +3,7 @@
 # issues that are open work (In Progress or Blocked) without an open pull
 # request, which is what an interrupted session leaves behind.
 #
-#   scripts/backlog.sh status <issue> "Todo|In Progress|Blocked|In Review|Done"
+#   scripts/backlog.sh status <issue> "Todo|Blocked|In Progress|In Review|Done"
 #   scripts/backlog.sh stale
 set -euo pipefail
 
