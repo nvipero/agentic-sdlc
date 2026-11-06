@@ -2,7 +2,7 @@
 
 > **TL;DR:** Done. Two stories (https://github.com/nvipero/sdlc-pilot/issues/87 and https://github.com/nvipero/sdlc-pilot/issues/89) ran under the App for the first time: five disputes with the owner's decisions and resumed runs, a decision that keeps the work (F3), a spec change request before approval, the owner's change request on a PR that changed the spec (F2), and a feature removal (F5); both merged and deployed to production. Not exercised: questions, research and a test problem, because the spec writer settled every open point from the issue or earlier specs, and no wrong test came up. The run found one new defect class (problem 4: retrying assertions pass absence criteria against the old feature).
 
-Plan: `docs/plans/untested-paths.md`. Factory fixes: https://github.com/nvipero/agentic-sdlc/pull/11; pilot copy with `max_rounds: 1`: https://github.com/nvipero/sdlc-pilot/pull/86 (merged 2026-10-31).
+Plan: [docs/plans/untested-paths.md](https://github.com/nvipero/agentic-sdlc/blob/5758ab5/docs/plans/untested-paths.md). Factory fixes: https://github.com/nvipero/agentic-sdlc/pull/11; pilot copy with `max_rounds: 1`: https://github.com/nvipero/sdlc-pilot/pull/86 (merged 2026-10-31).
 
 Stories: A, edit a task's title, https://github.com/nvipero/sdlc-pilot/issues/87; B, removing a task is final, https://github.com/nvipero/sdlc-pilot/issues/89.
 
@@ -44,7 +44,7 @@ Stories: A, edit a task's title, https://github.com/nvipero/sdlc-pilot/issues/87
 - The implementation already passed the new tests (no implementer commit). The restarted `impl` gate's round 1 blocked (R1-1: Tab out of the page into the browser's own controls leaves the edit open), and `max_rounds: 1` escalated: `dispute` labeled 22:07:32 by the App.
 - Owner's decision 6549868436 at 22:16:56 ("2. Keep the code as it is. ..."), `dispute` unlabeled 22:17:00 by the owner.
 - Resumed run (F3): no writer call and no new commit (the head stays `93712b5`); the chain records "owner: decided implementation dispute: keep the code (6549868436)", and the restarted reviewer approved in round 1 with the decision in hand, repeating only the non-blocking note. `ready_for_review` 22:18:17 by the App, ready comment 22:18:19; state `impl=1/0/93712b5 decision=6549868436 request=5725128765`; all checks passing.
-- Merge: PR https://github.com/nvipero/sdlc-pilot/pull/88 merged by the owner at 22:21:44 (`25a974d`), the issue closed. `production-deploy` run 41247992048 succeeded; deployment 7465229620 (`25a974d`) to https://sdlc-pilot.vercel.app, and the job's check "sdlc-pilot.vercel.app serves dpl_7RUFPJVJ6PUpX5FLsbjYKmXtnxAN" passed. The re-run check of plan decision 7 was already done in `docs/verification/main-deploy.md`.
+- Merge: PR https://github.com/nvipero/sdlc-pilot/pull/88 merged by the owner at 22:21:44 (`25a974d`), the issue closed. `production-deploy` run 41247992048 succeeded; deployment 7465229620 (`25a974d`) to https://sdlc-pilot.vercel.app, and the job's check "sdlc-pilot.vercel.app serves dpl_7RUFPJVJ6PUpX5FLsbjYKmXtnxAN" passed. The re-run check of plan decision 7 was already done in `docs/evidence/production-deploy.md`.
 
 ### Story B, spec phase (2026-11-02)
 

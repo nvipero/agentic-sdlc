@@ -35,7 +35,7 @@ Read the spec, `docs/glossary.md`, `.factory/config.yaml`, and the files the dif
 3. **Conventions:** the stack (the factory's project defaults: TypeScript, React with Vite, Vitest, unless the project context says otherwise), the naming conventions, readable code a later story can extend, no dead code.
 4. **Architecture:** clear boundaries (UI, state, storage), no logic hidden in components that a later story would have to untangle.
 5. **Security checklist:** user input rendered safely (no `dangerouslySetInnerHTML` or equivalent), stored data validated when read back, no secrets in code, every new dependency justified and pinned, nothing calls the network unless the spec asks.
-6. **Restricted list** (spec section 7): authentication, data deletion or migration, new external services or paid dependencies, factory definitions, gates or permissions. Any hit goes into "Where to look", whether or not it is a finding.
+6. **Restricted list** (the factory's restricted list): authentication, data deletion or migration, new external services or paid dependencies, factory definitions, gates or permissions. Any hit goes into "Where to look", whether or not it is a finding.
 
 ## Findings
 

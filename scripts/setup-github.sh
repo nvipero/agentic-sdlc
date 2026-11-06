@@ -21,7 +21,7 @@ say() { echo "setup-github: $*" >&2; }
 
 RULESET_NAME="protect-main"
 
-# A project's ruleset (step 4, plan decision 5): every change through a pull
+# A project's ruleset (docs/security.md): every change through a pull
 # request with the code owner's (the owner's) approval, dismissed by a new push;
 # the gate checks required from GitHub Actions (app 15368) and CodeQL alerts
 # blocking. One bypass actor: the admin role, in pull request mode, so the
@@ -72,7 +72,7 @@ secret_scanning() {
 EOF
 }
 
-# A project's Actions (step 4, plan decision 11): only GitHub-owned actions,
+# A project's Actions (docs/security.md): only GitHub-owned actions,
 # pinned to a full SHA; a read-only GITHUB_TOKEN that cannot approve or create
 # pull requests; approval for every outside contributor's run; and
 # pull_request_target allowed for guards.yml only (GitHub blocks it on public
@@ -222,7 +222,7 @@ EOF
     --jq '.data.node.workflows.nodes[] | select(.enabled) | "enabled workflow: \(.name)"' >&2 \
     || say "could not list project workflows"
   say "board: https://github.com/users/$owner/projects/$number"
-  say "manual steps: auto-add rule with filter is:issue, and disable the Status workflows (see README)"
+  say "manual steps: auto-add rule with filter is:issue, and disable the Status workflows (see docs/setup.md)"
 }
 
 status() {

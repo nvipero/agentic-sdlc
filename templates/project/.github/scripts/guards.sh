@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The factory's own rules for a pull request (spec section 8). Runs from main's
+# The factory's own rules for a pull request (factory docs/gates.md). Runs from main's
 # definition in the guards workflow (pull_request_target): the PR's commits and
 # diff are read as data and never executed. Every value from the event arrives
 # in the environment; nothing here is evaluated as code.

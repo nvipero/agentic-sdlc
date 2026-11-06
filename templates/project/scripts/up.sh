@@ -68,7 +68,7 @@ remove_containers() {
   done
 }
 
-# The ruleset as setup-github.sh sets it (step 4, plan decision 5): every
+# The ruleset as setup-github.sh sets it (factory docs/security.md): every
 # ruleset active, the only bypass the admin role in pull request mode, and one
 # requiring the code owner's approval (dismissed on push), the gate checks from
 # GitHub Actions and CodeQL. Prints the first mismatch and returns non-zero.
@@ -95,7 +95,7 @@ ruleset_problem() {
   [ -n "$full" ] || { echo "no ruleset requires code owner review, the gate checks ($REQUIRED_CHECKS) and CodeQL"; return 1; }
 }
 
-# Actions as setup-github.sh sets them (step 4, plan decision 11). Prints the
+# Actions as setup-github.sh sets them (factory docs/security.md). Prints the
 # first mismatch and returns non-zero; prints nothing when they match.
 actions_settings_problem() {
   local nwo="$1" got

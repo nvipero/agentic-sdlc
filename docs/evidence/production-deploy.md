@@ -2,7 +2,7 @@
 
 > **TL;DR:** All exit checks pass. The first merge with the new workflows (sdlc-pilot PR [#85](https://github.com/nvipero/sdlc-pilot/pull/85)) deployed `main` to https://sdlc-pilot.vercel.app on its own: `tests` passed on `main`'s commit, `production-deploy` deployed the build and confirmed through Vercel's API that the production address serves it, and the page is byte-identical to the build. The project-scoped token can deploy to production and read the alias. The next PR still got its preview, and a re-run of the older `main` run did not deploy.
 
-Plan: `docs/plans/main-deploy.md`. Factory PR: https://github.com/nvipero/agentic-sdlc/pull/10. Pilot PR: https://github.com/nvipero/sdlc-pilot/pull/85, merged by the owner 2026-10-31.
+Plan: [docs/plans/main-deploy.md](https://github.com/nvipero/agentic-sdlc/blob/5758ab5/docs/plans/main-deploy.md). Factory PR: https://github.com/nvipero/agentic-sdlc/pull/10. Pilot PR: https://github.com/nvipero/sdlc-pilot/pull/85, merged by the owner 2026-10-31.
 
 ## Exit check
 

@@ -2,7 +2,7 @@
 
 > **TL;DR:** Done. Story C (https://github.com/nvipero/sdlc-pilot/issues/93, deadlines) ran the question path under the App for the first time: the spec writer stopped on the contradiction with the pilot's non-goal, asked one question, and traced the owner's answer in the spec. The new `## Choices` section listed 10 criteria the spec writer decided itself, each tested; the Tab case of the earlier drill became a criterion from the start. Merged and deployed. Not exercised: research. Two problems: many choices and criteria (10 and 18, 54 tests), and a slow first test run (fixed: `actionTimeout`).
 
-Plan: `docs/plans/spec-choices-and-sources.md`. Factory PRs: https://github.com/nvipero/agentic-sdlc/pull/16, https://github.com/nvipero/agentic-sdlc/pull/17; pilot copy: https://github.com/nvipero/sdlc-pilot/pull/92 (merged 2026-11-05).
+Plan: [docs/plans/spec-choices-and-sources.md](https://github.com/nvipero/agentic-sdlc/blob/5758ab5/docs/plans/spec-choices-and-sources.md). Factory PRs: https://github.com/nvipero/agentic-sdlc/pull/16, https://github.com/nvipero/agentic-sdlc/pull/17; pilot copy: https://github.com/nvipero/sdlc-pilot/pull/92 (merged 2026-11-05).
 
 ## Exit check
 
@@ -25,7 +25,7 @@ Plan: `docs/plans/spec-choices-and-sources.md`. Factory PRs: https://github.com/
 - Owner's answer at 21:48:35 (comment 6670433467, option A); `needs-human` unlabeled 21:48:49 by the App.
 - Spec writer `792fa3c` (one commit, after the answer): the Problem and why traces the non-goal to the owner's answer `(issue: #93, owner comment 6670433467)`; the spec reviewer approved in round 1 with no blocking finding on the non-goal (C5 item 5).
 - Ready comment at 21:51:23: "Choices for you to check" (10 lines, matching the spec's `## Choices`), "Assumptions: 6", and the context note from the owner's answer (non-goal to become "Reminders and notifications", glossary "Deadline" and "Late").
-- The choices extend the owner's earlier decisions for title editing to the deadline field: a click outside or Tab out cancels (`extends: (issue: #87, owner comment 6548428983)`), the save-failure behaviour (`extends: (main: …)`), keyboard operation. The Tab case of problem 3 in `docs/verification/untested-paths.md` is now a criterion (AC-18) from the start.
+- The choices extend the owner's earlier decisions for title editing to the deadline field: a click outside or Tab out cancels (`extends: (issue: #87, owner comment 6548428983)`), the save-failure behaviour (`extends: (main: …)`), keyboard operation. The Tab case of problem 3 in `docs/evidence/untested-paths-drill.md` is now a criterion (AC-18) from the start.
 
 ### Tests and implementation (2026-11-05)
 

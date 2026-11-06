@@ -1,6 +1,6 @@
 # Step 4 verification
 
-Plan: [docs/plans/step-4.md](../plans/step-4.md), approved 2026-10-30. Filled in build step by build step (plan section 6).
+Plan: [docs/plans/step-4.md](https://github.com/nvipero/agentic-sdlc/blob/5758ab5/docs/plans/step-4.md), approved 2026-10-30. Filled in build step by build step (plan section 6).
 
 ## TL;DR
 

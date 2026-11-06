@@ -1,6 +1,6 @@
 # Step 1 verification
 
-Date: 2026-10-22, evidence updated 2026-10-23. Plan: [docs/plans/step-1.md](../plans/step-1.md), revision 3.
+Date: 2026-10-22, evidence updated 2026-10-23. Plan: [docs/plans/step-1.md](https://github.com/nvipero/agentic-sdlc/blob/5758ab5/docs/plans/step-1.md), revision 3.
 Host details in the outputs below are redacted: home path → `~`, private IPs → `<private-ip>`.
 
 ## TL;DR
