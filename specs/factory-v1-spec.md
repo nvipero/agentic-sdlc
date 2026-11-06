@@ -13,7 +13,8 @@ Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog i
 Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`  
 Revision 14, 2026-10-31: backlog item 23, token usage statistics (owner request)  
 Revision 15, 2026-11-05: choices in specs, current behaviour from `main`, propose or ask, backlog items 24 and 25 (owner decisions); plan `docs/plans/spec-choices-and-sources.md`  
-Revision 16, 2026-11-06: backlog item 25 extended with pinned `main` citations, backlog item 26, a TL;DR only on text longer than about 15 lines (principle 13) (owner decisions); evidence `docs/verification/spec-choices-and-sources.md`
+Revision 16, 2026-11-06: backlog item 25 extended with pinned `main` citations, backlog item 26, a TL;DR only on text longer than about 15 lines (principle 13) (owner decisions); evidence `docs/verification/spec-choices-and-sources.md`  
+Revision 17, 2026-11-06: the backlog moved to GitHub Issues and the project [agentic-sdlc backlog](https://github.com/users/nvipero/projects/2); the v2 isolation plan dropped (owner decisions)
 
 ## TL;DR
 
@@ -57,34 +58,9 @@ Fixed for v1. Changing one requires an owner decision.
 - Deterministic gates in GitHub Actions, including guards that protect factory definitions, gates and acceptance tests.
 - Preview deployment per pull request; deployment of `main` to production on every merge (revision 12).
 
-### Out of v1 (backlog, rough order)
+### Out of v1
 
-1. Separate architecture and security reviewers (v1 code reviewer covers both with a checklist).
-2. Any role switchable to another model, including Codex.
-3. Optional roles: architect (ADRs and infrastructure as code), designer, story-level researcher for technical unknowns.
-4. Gatekeeper role that evaluates and implements justified changes to gates, always visible to the human.
-5. Codebase-wide security auditor running outside the pipeline on a schedule, reporting findings as issues.
-6. Stack-fit check: researcher or architect raises justified reasons to use something other than the default stack.
-7. Retro agent and evals for the factory itself. The retro agent cannot change skills or instructions. Its output is a proposal: observed problem, evidence (links to issues, PRs, disputes, gate failures) and suggested change. First it posts proposals to the project issue tracker with the label `factory-feedback` and the human decides whether to move them to the factory repo. Later it may create issues in the factory repo directly with a separate token limited to issues only. Changes are always made in the factory repo through a PR the human approves. The retro agent does not need to run in the project container.
-8. Parallel alternative implementations for uncertain stories.
-9. CODEOWNERS rules and finer-grained permissions per role, built on the agent identity introduced in step 4.
-10. Factory distributed as a Claude Code plugin instead of a copied template.
-11. Fresh container per story, managed by an orchestrator outside the container. Merged with the layered sandbox (a researcher container with open web access, a strict development container, and a deterministic host gatekeeper between them) as the **first step of v2** (owner decision, 2026-10-29).
-12. Orchestrator triggered by labels instead of a manual command.
-13. Generating project-specific dev containers through a skill.
-14. Custom dashboard.
-15. Using the factory to develop the factory itself.
-16. Optional spec-first pull request merged before implementation.
-17. 1Password service account limited to the factory vault only, so that even the start script cannot read other vaults (availability and cost to be checked).
-18. Private project support through a GitHub organization on the Team plan, with the step 1 exit check repeated in a private repository.
-19. Inspection mode: attach VS Code to the container only while agents are stopped, with credential forwarding disabled and VS Code hosts allowlisted only for that mode.
-20. Mutation testing as a gate on unit test strength, if review and coverage prove too weak (owner decision, 2026-10-29: not in v1, it is slow).
-21. Dependency updates by Dependabot, weekly and grouped: npm and GitHub Actions in project repositories, the Node base image digest and Actions in the factory repository; the guards then let `dependabot[bot]` change only manifests and lock files. The Claude Code and Playwright pins stay a manual monthly check (owner decision, 2026-10-30).
-22. ~~Production deployment of `main` through the pipeline.~~ Done in revision 12 (section 8, "Production").
-23. Token usage statistics: how many tokens each story uses, split by role and phase (spec, research, tests, implementation, review rounds, disputes), and how that shows up in the owner's subscription quota, which Claude Code shows only as a percentage. For understanding the cost first, and for finding where optimising pays off if it is needed (owner request, 2026-10-31).
-24. Unspecified behaviour in the implementation: the implementer returns behaviour no criterion covers to the orchestrator, which has the test writer test it if it fits the approved spec, or removes it and opens a follow-up story draft for the owner; both listed in the pull request (owner, 2026-11-05).
-25. A spec that `main` overtakes during a story: another merge changes behaviour the spec relies on before the story merges. Matters with parallel stories (item 11). Includes pinning the spec's `(main: <path>)` citations to the story branch's base commit (`main@<sha>`), so that a check can compare them with `main` and a later reader sees the version the spec relied on (owner, 2026-11-06).
-26. Context updates without the owner's typing: after a story merges, the orchestrator hands the status comment's context notes to the researcher, which writes the update to `docs/product-context.md` and `docs/glossary.md`, and the App opens the pull request; the owner only reviews and merges it (section 5, "Project context", item 4 stays). Fits with label triggers (item 12) (owner, 2026-11-06).
+The backlog is in [GitHub Issues](https://github.com/nvipero/agentic-sdlc/issues), ordered in the project [agentic-sdlc backlog](https://github.com/users/nvipero/projects/2). Each former backlog item says "Was spec v1 backlog item N" in its issue.
 
 ## 4. Architecture
 
@@ -119,7 +95,7 @@ A future private project needs a paid plan (a GitHub organization on Team) for e
 ### Container lifecycle
 
 - One dev container per project. The human starts it with the project's start script (`scripts/up.sh`) when working on the project and stops it afterwards.
-- Stories run one at a time on their branch in `/workspace`. V1 has no story worktrees: the read-only paths exist only in `/workspace`, and v1 is not optimised for parallel stories. Parallel stories come with the fresh container per story (backlog item 11).
+- Stories run one at a time on their branch in `/workspace`. V1 has no story worktrees: the read-only paths exist only in `/workspace`, and v1 is not optimised for parallel stories. Parallel stories come with the fresh container per story ([#48](https://github.com/nvipero/agentic-sdlc/issues/48)).
 - The workspace is a clone of the project repo in a Docker volume, not the host clone. The container is recreated on every start, and the volumes persist. The workspace is never deleted automatically: `scripts/up.sh reset-workspace` archives it before replacing it.
 - Agents cannot start, stop or control containers. The container has no access to the Docker socket.
 - Inside the container, Claude Code runs without per-command permission prompts. Limits come from the container boundary, the network allowlist, read-only mounts, managed settings in the image and role tool restrictions.
@@ -338,15 +314,15 @@ Each step ends with an exit check, and the next starts only after the owner has 
 
 ## 12. Known risks
 
-- **Building the factory becomes the project.** Mitigation: strict scope and exit checks per step. V1 has grown during planning, so further additions go to the backlog.
+- **Building the factory becomes the project.** Mitigation: strict scope and exit checks per step. V1 has grown during planning, so further additions go to the [backlog](https://github.com/users/nvipero/projects/2).
 - **Dev container setup takes longer than expected.** It is the biggest single piece of new work in v1, but adding it later would cost more.
 - **Subscription limits.** Agent runs share the Team plan quota with the owner's other work.
 - **Agent loops.** Mitigation: turn limits and dispute rules.
 - **Specs approved without reading.** Mitigation: questions, choices and assumptions are surfaced separately.
 - **After the owner approves, the App could technically merge.** Only the deny rule in managed settings prevents it; the owner's approval is the decision that matters, so this is accepted. Before step 4 the agents acted as the owner and could merge without approval; agent commits from then carry the noreply address of an unrelated GitHub account (`factory-agent`) as author and are not rewritten.
-- **Roles share the App.** Only commit trailers and the guards tell the roles apart; separate identities per role need separate sandboxes (backlog 9 and 11).
+- **Roles share the App.** Only commit trailers and the guards tell the roles apart; separate identities per role need separate sandboxes ([#49](https://github.com/nvipero/agentic-sdlc/issues/49), [#48](https://github.com/nvipero/agentic-sdlc/issues/48)).
 - **Interaction limit expires** after six months. Mitigation: `up.sh` checks it on every run.
-- **Copied templates drift** from the factory as it evolves. Accepted in v1. Plugin distribution is in the backlog.
+- **Copied templates drift** from the factory as it evolves. Accepted in v1. Plugin distribution is [#39](https://github.com/nvipero/agentic-sdlc/issues/39).
 
 ## 13. Open questions for the owner
 

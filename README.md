@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result. The full design is in [specs/factory-v1-spec.md](specs/factory-v1-spec.md).
 
-Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the owner's issue to a merge with no human code edits; problems for the next iteration are in `docs/verification/step-5.md`. `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a Vercel preview, and every merge deploys `main` to production.
+Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the owner's issue to a merge with no human code edits; its evidence is in `docs/verification/step-5.md`. Further work is in the [backlog](https://github.com/users/nvipero/projects/2). `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a Vercel preview, and every merge deploys `main` to production.
 
 ## What is here
 
@@ -49,6 +49,7 @@ Status: v1 done (2026-10-31). Step 5, the first full run, took a story from the 
 
 - **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/), `type(scope): description`. Types: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
 - **Branches:** [Conventional Branch 1.1.0](https://conventionalbranch.org/), `<type>/<description>` in lowercase letters, digits and hyphens. `feat/` and `fix/` are allowed short forms.
+- **Backlog:** changes to the factory start from an issue in the [agentic-sdlc backlog](https://github.com/users/nvipero/projects/2) project, top of the list first; the owner sets the order. Mark a dependency with GitHub's "blocked by" link on the issue.
 - The same conventions apply in project repos, including agents' story branches (spec section 5, "Naming conventions").
 
 ## Starting a new project
