@@ -12,7 +12,8 @@ Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verifica
 Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`  
 Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`  
 Revision 14, 2026-10-31: backlog item 23, token usage statistics (owner request)  
-Revision 15, 2026-11-05: choices in specs, current behaviour from `main`, propose or ask, backlog items 24 and 25 (owner decisions); plan `docs/plans/spec-choices-and-sources.md`
+Revision 15, 2026-11-05: choices in specs, current behaviour from `main`, propose or ask, backlog items 24 and 25 (owner decisions); plan `docs/plans/spec-choices-and-sources.md`  
+Revision 16, 2026-11-06: backlog item 25 extended with pinned `main` citations, backlog item 26 (owner decisions); evidence `docs/verification/spec-choices-and-sources.md`
 
 ## TL;DR
 
@@ -82,7 +83,8 @@ Fixed for v1. Changing one requires an owner decision.
 22. ~~Production deployment of `main` through the pipeline.~~ Done in revision 12 (section 8, "Production").
 23. Token usage statistics: how many tokens each story uses, split by role and phase (spec, research, tests, implementation, review rounds, disputes), and how that shows up in the owner's subscription quota, which Claude Code shows only as a percentage. For understanding the cost first, and for finding where optimising pays off if it is needed (owner request, 2026-10-31).
 24. Unspecified behaviour in the implementation: the implementer returns behaviour no criterion covers to the orchestrator, which has the test writer test it if it fits the approved spec, or removes it and opens a follow-up story draft for the owner; both listed in the pull request (owner, 2026-11-05).
-25. A spec that `main` overtakes during a story: another merge changes behaviour the spec relies on before the story merges. Matters with parallel stories (item 11).
+25. A spec that `main` overtakes during a story: another merge changes behaviour the spec relies on before the story merges. Matters with parallel stories (item 11). Includes pinning the spec's `(main: <path>)` citations to the story branch's base commit (`main@<sha>`), so that a check can compare them with `main` and a later reader sees the version the spec relied on (owner, 2026-11-06).
+26. Context updates without the owner's typing: after a story merges, the orchestrator hands the status comment's context notes to the researcher, which writes the update to `docs/product-context.md` and `docs/glossary.md`, and the App opens the pull request; the owner only reviews and merges it (section 5, "Project context", item 4 stays). Fits with label triggers (item 12) (owner, 2026-11-06).
 
 ## 4. Architecture
 
