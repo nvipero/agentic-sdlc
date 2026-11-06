@@ -12,7 +12,8 @@ Revision 11, 2026-10-31, with step 5: v1 done; step 5 evidence in `docs/verifica
 Revision 12, 2026-10-31, after v1: deployment of `main` to production (backlog item 22, owner decision); plan `docs/plans/main-deploy.md`  
 Revision 13, 2026-10-31: fixes on the paths not yet run (research kept after questions, owner change requests through the spec, decisions that keep the work, the label for a first test problem, removal stories); plan `docs/plans/untested-paths.md`  
 Revision 14, 2026-10-31: backlog item 23, token usage statistics (owner request)  
-Revision 15, 2026-11-05: choices in specs, current behaviour from `main`, propose or ask, backlog items 24 and 25 (owner decisions); plan `docs/plans/spec-choices-and-sources.md`
+Revision 15, 2026-11-05: choices in specs, current behaviour from `main`, propose or ask, backlog items 24 and 25 (owner decisions); plan `docs/plans/spec-choices-and-sources.md`  
+Revision 16, 2026-11-06: backlog item 25 extended with pinned `main` citations, backlog item 26, a TL;DR only on text longer than about 15 lines (principle 13) (owner decisions); evidence `docs/verification/spec-choices-and-sources.md`
 
 ## TL;DR
 
@@ -40,7 +41,7 @@ Fixed for v1. Changing one requires an owner decision.
 10. **Work can move upstream as well as downstream.** Any role may return work to an earlier role with a reason. All handoffs go through the orchestrator and are recorded in the issue or PR, so the full chain is visible when the human steps in. The chain lives in one status comment that is edited in place; new comments are posted only when they have value to the human or another agent (questions, disputes, a result ready for review), because every comment is a notification.
 11. **Disputes escalate on lack of progress,** not on a fixed round count alone.
 12. **The human's attention is the scarcest resource.** Humans are pulled in only at defined points. When they are, they get a focused list of what deserves their judgement, not everything.
-13. **Text is sized for its reader.** Output for humans is short enough to actually read, and a question to the human carries only the question. Pull request descriptions and long documents start with a TL;DR as a quote block (`> **TL;DR:** ...`, owner, 2026-10-31); issue comments do not need one. Output for agents may be as detailed as needed.
+13. **Text is sized for its reader.** Output for humans is short enough to actually read, and a question to the human carries only the question. A pull request description or document longer than about 15 lines, or with more than two sections, starts with a TL;DR as a quote block (`> **TL;DR:** ...`, owner, 2026-10-31); a shorter one is plain text, because a TL;DR over a few lines only repeats them (owner, 2026-11-06). Issue comments do not need one. Output for agents may be as detailed as needed.
 14. **Role knowledge is portable.** Each role's know-how lives in an Agent Skill (agentskills.io format). Role definitions are thin wrappers that choose the model, tools and skill, so a role can move to another model or tool later.
 15. **Trust, but verify.** When a check after the fact is cheap, it is added even if an earlier control (permissions, rules, gates) should already be enough. Controls are layered, not either-or (owner decision, 2026-10-30).
 
@@ -82,7 +83,8 @@ Fixed for v1. Changing one requires an owner decision.
 22. ~~Production deployment of `main` through the pipeline.~~ Done in revision 12 (section 8, "Production").
 23. Token usage statistics: how many tokens each story uses, split by role and phase (spec, research, tests, implementation, review rounds, disputes), and how that shows up in the owner's subscription quota, which Claude Code shows only as a percentage. For understanding the cost first, and for finding where optimising pays off if it is needed (owner request, 2026-10-31).
 24. Unspecified behaviour in the implementation: the implementer returns behaviour no criterion covers to the orchestrator, which has the test writer test it if it fits the approved spec, or removes it and opens a follow-up story draft for the owner; both listed in the pull request (owner, 2026-11-05).
-25. A spec that `main` overtakes during a story: another merge changes behaviour the spec relies on before the story merges. Matters with parallel stories (item 11).
+25. A spec that `main` overtakes during a story: another merge changes behaviour the spec relies on before the story merges. Matters with parallel stories (item 11). Includes pinning the spec's `(main: <path>)` citations to the story branch's base commit (`main@<sha>`), so that a check can compare them with `main` and a later reader sees the version the spec relied on (owner, 2026-11-06).
+26. Context updates without the owner's typing: after a story merges, the orchestrator hands the status comment's context notes to the researcher, which writes the update to `docs/product-context.md` and `docs/glossary.md`, and the App opens the pull request; the owner only reviews and merges it (section 5, "Project context", item 4 stays). Fits with label triggers (item 12) (owner, 2026-11-06).
 
 ## 4. Architecture
 
@@ -326,7 +328,7 @@ Each step ends with an exit check, and the next starts only after the owner has 
 ## 11. Definition of done for v1
 
 - A story written by the human reaches a merged PR without the human editing code.
-- The human was asked only at defined points. Each pull request description and long document started with a TL;DR, and each question to the human carried only the question (principle 13).
+- The human was asked only at defined points. Each pull request description and document longer than about 15 lines started with a TL;DR, and each question to the human carried only the question (principle 13).
 - The spec's problem and why section is traceable to the approved project context.
 - All gates ran and were required for merge.
 - No agent modified acceptance tests, factory definitions or gates.
