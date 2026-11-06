@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result.
 
-Status: v1 done (2026-10-31); [history](docs/history.md). `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents run in a sandboxed dev container and act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a Vercel preview, and every merge deploys `main` to production. Further work is in the [backlog](https://github.com/users/nvipero/projects/2).
+Status: v1 done (2026-10-31); [history](docs/history.md). `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents run in a sandboxed dev container and act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a preview deployment, and every merge deploys `main` to production. Further work is in the [backlog](https://github.com/users/nvipero/projects/2).
 
 ## Documentation
 
@@ -21,10 +21,10 @@ The docs describe the factory as it is now; a change updates them in the same pu
 
 ## Getting started
 
-1. Have a Docker engine (tested: Rancher Desktop with dockerd), the devcontainer CLI, `gh` (with the `project` scope), the 1Password CLI, `git`, `jq`, `openssl` and `curl` on your Mac.
+1. Install the tools listed in [docs/setup.md](docs/setup.md).
 2. Create an empty public repository and install the factory's GitHub App on it.
 3. Copy `templates/project/` and the factory definitions into it and push the first commit.
-4. Run `scripts/setup-github.sh` for protections, labels and the board, then set up the Vercel project and its token.
+4. Run `scripts/setup-github.sh` for protections, labels and the board, then set up the deployment target and its token.
 5. Start the agents' container with `scripts/up.sh` in the project, then `/factory:context` and `/factory:run <issue>`.
 
 The full steps, with the commands, are in [docs/setup.md](docs/setup.md).
