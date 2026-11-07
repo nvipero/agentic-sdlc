@@ -8,7 +8,7 @@
 | Agents | Claude Code inside the project's dev container on the owner's Mac |
 | Container runtime | A Docker engine with the `docker` CLI; tested on Rancher Desktop with dockerd (moby) |
 | Deterministic gates | GitHub Actions |
-| Preview and production | Vercel or Cloudflare Workers, the project's deployment target (`deploy.target`) |
+| Preview and production | Vercel or Cloudflare Workers, the frontend component's host ([components](#components)) |
 
 The factory (`agentic-sdlc`) and each project it builds live in separate repositories. A project is created from the factory's project template and has its own repo, issues and Projects board. `sdlc-pilot`, a Todo-app, is the test bed for factory changes.
 
@@ -46,8 +46,13 @@ tests/acceptance/    acceptance tests by feature, tagged per story     (test wri
                      criterion; their own npm package
 src/, public/,       production code, static files, unit tests, and    (implementer)
 tests/unit/          the root project files (package.json, lockfile,
-                     tsconfig, Vite and lint configuration, index.html)
-.gitignore                                                             (human)
+                     tsconfig, Vite and lint configuration, index.html,
+                     deno.json)
+<component paths>    the database and API components ([components](#components)),   (implementer)
+                     with the files their host names; for supabase:
+                     supabase/migrations/, supabase/functions/,
+                     config.toml, seed.sql (created with supabase init)
+.gitignore, dot files outside the component paths                      (human)
 ```
 
 `.factory/` is a Claude Code plugin named `factory`, loaded from the read-only `/workspace/.factory` through managed settings, so its commands are `/factory:<name>` and its roles `factory:<role>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
@@ -81,9 +86,8 @@ roles:
   test-writer:   { model: sonnet }
   implementer:   { model: opus }
   code-reviewer: { model: opus }
-deploy:
-  target: vercel                    # where previews and production go: vercel or cloudflare (.github/scripts/deploy/<target>.sh)
-  spa: false                        # true: unknown paths serve index.html (single-page application); cloudflare only
+components:                         # the parts of the service (below)
+  web: { kind: frontend, path: ., host: vercel, spa: false }
 acceptance:                         # how acceptance tests start the app
   start: "npm run dev -- --strictPort"   # run at the repository root
   url: "http://localhost:5173"
@@ -99,8 +103,28 @@ The acceptance tests are written before the app exists, so the `acceptance` cont
 
 Model choices are initial guesses, to be tuned with more stories. The config is owned by the human.
 
+### Components
+
+`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, from `main`'s `config.yaml` in the guards and the deploy workflows (the `tests` workflow reads the PR's checkout, only to find the Deno paths); the orchestrator reads the file itself, because the container has no Ruby.
+
+```yaml
+components:
+  web:       { kind: frontend, path: .,                   host: vercel, spa: false }
+  db:        { kind: database, path: supabase/migrations, host: supabase }
+  functions: { kind: api,      path: supabase/functions,  host: supabase }
+```
+
+Supported now, and anything else fails with a message:
+
+- **`frontend`:** exactly one, at `path: .` (the root rules: `src/`, `public/`, `tests/unit/`, root project files), on `vercel` or `cloudflare` (`.github/scripts/deploy/<host>.sh`). `spa: true` serves `index.html` for unknown paths, `cloudflare` only.
+- **`database` and `api`:** at most one of each, on a host with a descriptor `.github/scripts/hosts/<host>.yaml`: the path the host fixes for each kind, the files the implementer owns besides the paths, the files listed for "Where to look", and the kinds tested with Deno. Only `supabase` now; they are not deployed yet ([#59](https://github.com/nvipero/agentic-sdlc/issues/59)).
+- **Role guidance per host:** `skills/implementer/references/<host>.md` and `skills/code-reviewer/references/<host>.md`. The role skills hold only what applies to any database or API.
+
+Components in other repositories, more than one API, a diagram generated from the components and more hosts are backlog issues ([#65](https://github.com/nvipero/agentic-sdlc/issues/65), [#66](https://github.com/nvipero/agentic-sdlc/issues/66), [#67](https://github.com/nvipero/agentic-sdlc/issues/67)).
+
 ## Project defaults
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
-- Vercel for preview and production deployments (`deploy.target: vercel`; Hobby, through the pipeline; no Git integration), or a Cloudflare Worker with static assets only (`deploy.target: cloudflare`; through the pipeline; no Git integration)
+- Optionally Supabase as the `database` and `api` components' host: Postgres migrations with row level security, Deno Edge Functions with Deno's test runner (Deno 2.1, as Supabase's Edge Runtime; dependencies from npm only, so the firewall needs no other host). Deploying it, a database for the acceptance tests and preview backends are not supported yet ([#58](https://github.com/nvipero/agentic-sdlc/issues/58), [#59](https://github.com/nvipero/agentic-sdlc/issues/59), [#60](https://github.com/nvipero/agentic-sdlc/issues/60)).
+- Vercel for preview and production deployments (frontend `host: vercel`; Hobby, through the pipeline; no Git integration), or a Cloudflare Worker with static assets only (frontend `host: cloudflare`; through the pipeline; no Git integration)

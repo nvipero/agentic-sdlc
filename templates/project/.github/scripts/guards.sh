@@ -15,8 +15,9 @@ note() { printf -- '- %s\n' "$*" >> "$SUMMARY"; }
 heading() { printf '\n### %s\n\n' "$*" >> "$SUMMARY"; }
 
 OWNER_LABEL=tests-change-approved
+MIGRATION_LABEL=migration-approved
 PROTECTED='.factory/ .claude/ .github/ .devcontainer/ scripts/ CLAUDE.md'
-TEST_CONFIG='package.json tsconfig.json vite.config.ts vite.config.js vitest.config.ts vitest.config.js tests/acceptance/package.json tests/acceptance/playwright.config.ts'
+TEST_CONFIG='package.json tsconfig.json vite.config.ts vite.config.js vitest.config.ts vitest.config.js deno.json tests/acceptance/package.json tests/acceptance/playwright.config.ts'
 
 # --- Inputs: validated before use ---------------------------------------------
 [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "bad PR number" >&2; exit 1; }
@@ -66,12 +67,37 @@ allowed() {   # allowed <role> <path>
     implementer)
       case "$2" in
         src/*|public/*|tests/unit/*) return 0 ;;
+      esac
+      local o
+      for o in ${OWNED[@]+"${OWNED[@]}"}; do
+        case "$o" in
+          */) [[ "$2" == "$o"* ]] && return 0 ;;
+          *) [ "$2" = "$o" ] && return 0 ;;
+        esac
+      done
+      case "$2" in
         */*|.*|CLAUDE.md|README.md) return 1 ;;
         *) return 0 ;;
       esac ;;
     *) return 1 ;;
   esac
 }
+
+heading "Components"
+# The components in main's .factory/config.yaml (components.sh): what the
+# implementer owns besides the root rules, the databases, the files to list.
+SCRIPTS="$(dirname "$0")"
+OWNED=() DATABASES=() LISTED=()
+if comp_owned="$(bash "$SCRIPTS/components.sh" owned)" \
+   && comp_db="$(bash "$SCRIPTS/components.sh" database)" \
+   && comp_listed="$(bash "$SCRIPTS/components.sh" listed)"; then
+  while IFS= read -r l; do [ -n "$l" ] && OWNED+=("$l"); done <<<"$comp_owned"
+  while IFS= read -r l; do [ -n "$l" ] && DATABASES+=("$l"); done <<<"$comp_db"
+  while IFS= read -r l; do [ -n "$l" ] && LISTED+=("$l"); done <<<"$comp_listed"
+else
+  fail "main's .factory/config.yaml has no valid components (components.sh)"
+fi
+note "implementer's component paths: ${OWNED[*]:-none}"
 
 heading "Commits"
 FIRST_IMPL=
@@ -140,16 +166,19 @@ for f in ${changed[@]+"${changed[@]}"}; do
 done
 [ -n "$hit" ] || note "none changed"
 
+# owner_labels <label>: how many times the owner added the label to the story's issue.
+owner_labels() {
+  [ -n "$ISSUE" ] || { echo 0; return; }
+  gh api --paginate "repos/$REPO/issues/$ISSUE/events" \
+    --jq ".[] | select(.event == \"labeled\" and .label.name == \"$1\" and .actor.login == \"$REPO_OWNER\") | .id" | grep -c . || true
+}
+
 # --- Acceptance tests --------------------------------------------------------------
 heading "Acceptance tests"
 if [ -z "$FIRST_IMPL" ]; then
   note "no implementer commit yet: the test set is not approved yet"
 else
-  approvals=0
-  if [ -n "$ISSUE" ]; then
-    approvals="$(gh api --paginate "repos/$REPO/issues/$ISSUE/events" \
-      --jq ".[] | select(.event == \"labeled\" and .label.name == \"$OWNER_LABEL\" and .actor.login == \"$REPO_OWNER\") | .id" | grep -c . || true)"
-  fi
+  approvals="$(owner_labels "$OWNER_LABEL")"
   if [ "$TEST_RUNS" -gt "$approvals" ]; then
     fail "$TEST_RUNS change(s) to tests/acceptance/ after the tests were approved, $approvals \`$OWNER_LABEL\` label(s) added by the owner"
   else
@@ -170,6 +199,30 @@ for f in ${changed[@]+"${changed[@]}"}; do
   for p in $TEST_CONFIG; do [ "$f" = "$p" ] && { note "changed: \`$f\`"; cfg=1; }; done
 done
 [ -n "$cfg" ] || note "unchanged"
+
+# --- Databases and hosts' files (components.sh, migration-check.sh) --------------
+heading "Migrations"
+need=
+for d in ${DATABASES[@]+"${DATABASES[@]}"}; do
+  rc=0
+  out="$(bash "$SCRIPTS/migration-check.sh" "$BASE_SHA" "$HEAD_SHA" "$d")" || rc=$?
+  while IFS= read -r line; do [ -n "$line" ] && note "$line"; done <<<"$out"
+  if [ "$rc" -ne 0 ]; then fail "migration-check.sh failed on \`$d\` ($rc)"; fi
+  if grep -q '^approval:' <<<"$out"; then need=1; fi
+done
+if [ -n "$need" ]; then
+  if [ "$(owner_labels "$MIGRATION_LABEL")" -gt 0 ]; then
+    note "approved by the owner's \`$MIGRATION_LABEL\`"
+  else
+    fail "a migration needs the owner's \`$MIGRATION_LABEL\` on the issue (lines marked approval above)"
+  fi
+fi
+[ "${#DATABASES[@]}" -gt 0 ] || note "no database component"
+for f in ${LISTED[@]+"${LISTED[@]}"}; do
+  while IFS= read -r line; do
+    note "look: \`$f\`: ${line:0:160}"
+  done < <(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- "$f" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' || true)
+done
 
 printf '\n**Result:** %s\n' "$([ "$FAILS" -eq 0 ] && echo "all guards pass" || echo "$FAILS failure(s)")" >> "$SUMMARY"
 [ "$FAILS" -eq 0 ]

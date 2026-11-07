@@ -1,0 +1,13 @@
+# Host "supabase" for components (factory docs/architecture.md, "Components"):
+# what the Supabase CLI fixes. Data only, read by components.sh. The roles'
+# guidance is in the skills' references/supabase.md: keep implementer_files and
+# the implementer's "Also yours" line the same.
+paths:                  # the one path each kind may have on this host
+  database: supabase/migrations
+  api: supabase/functions
+implementer_files:      # the implementer's besides the component paths; supabase/.gitignore stays the owner's
+  - supabase/config.toml
+  - supabase/seed.sql
+listed_files:           # changes listed by line for the reviewer's "Where to look"
+  - supabase/config.toml
+deno: [api]             # kinds tested with Deno; the command is fixed in the tests workflow

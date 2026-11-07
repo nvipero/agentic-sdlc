@@ -18,8 +18,8 @@ How a story travels from an issue to a merge, who does what, and when the human 
 ## Labels
 
 - Type: `user-story`, `bug`, `chore`, `trivial`
-- State: `ready-for-factory`, `needs-human`, `spec-approved`, `dispute`, `tests-change-approved`
-- `spec-approved` and `tests-change-approved` are owner-only ([security](security.md#trusted-input-and-owner-only-labels)).
+- State: `ready-for-factory`, `needs-human`, `spec-approved`, `dispute`, `tests-change-approved`, `migration-approved`
+- `spec-approved`, `tests-change-approved` and `migration-approved` are owner-only ([security](security.md#trusted-input-and-owner-only-labels)).
 - `tests-change-approved` covers one change: the orchestrator removes it after the reopened test gate approves, and the guard counts the owner's label events against the later changes to approved tests.
 
 ## Project context (once per project, updated as needed)
@@ -56,7 +56,7 @@ Both the factory repo and project repos follow these. Agents follow them too.
 ## Spec to merge
 
 1. The test writer turns the approved acceptance criteria into automated acceptance tests, in files named by feature and tagged with the story's criteria (`@issue-<n>-ac-<k>`), and updates existing tests whose behaviour the story changes. The orchestrator runs them: they must fail because the behaviour is missing. The code reviewer checks coverage; the same review loop rules apply.
-2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
+2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit, component (Deno) and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
 4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.
 5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once; after the first implementer commit its change also needs the human's `tests-change-approved` (the guard counts it); after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.
@@ -76,11 +76,11 @@ Each role is an Agent Skill plus a thin role definition stating model, tools and
 | Spec writer | Issue, context, research answers, codebase | Spec, research requests, questions | `specs/` | Guess silently, research itself, or write a spec it cannot justify |
 | Spec reviewer | Spec, issue, context | Findings | Comments only | Edit files |
 | Test writer | Approved spec | Acceptance tests | `tests/acceptance/` | Write production code |
-| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, root project files | Touch acceptance tests, specs or anything outside the story |
+| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, the database and API components, root project files | Touch acceptance tests, specs or anything outside the story |
 | Code reviewer | Tests or PR diff, spec, test results | Findings, approval, "Where to look" | Nothing: the orchestrator posts its output | Edit files |
 
 The orchestrator is a Claude Code command (`/factory:run <issue>`) run in the main session, which delegates to role subagents. The researcher's interview runs in the main session through `/factory:context`, because subagents cannot ask the human questions; its research-request mode is a subagent. Each producing role commits its own work; the orchestrator pushes.
 
 ## Restricted list
 
-Always requires the human: authentication and authorisation changes, data deletion or migration, new external services or paid dependencies, and any change to factory definitions, gates or permissions.
+Always requires the human: authentication and authorisation changes, data deletion or migration, new external services or paid dependencies, and any change to factory definitions, gates or permissions. Every migration goes into "Where to look"; a destructive or authorisation-weakening one, or a change to an existing one, also needs the owner's `migration-approved` on the issue before the guards pass.

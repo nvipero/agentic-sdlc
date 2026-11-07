@@ -33,7 +33,7 @@ jobs:
             exit 1
           fi
           case "$LABEL" in
-            spec-approved|tests-change-approved)
+            spec-approved|tests-change-approved|migration-approved)
               [[ "$ISSUE" =~ ^[0-9]+$ ]] || exit 1
               gh api -X DELETE "repos/$REPO/issues/$ISSUE/labels/$LABEL" >/dev/null
               echo "::error::owner-only label '$LABEL' added to #$ISSUE by $SENDER; removed"

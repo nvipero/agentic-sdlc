@@ -112,7 +112,7 @@ actions_off() {
 }
 
 # Environments "preview" and "production" hold the deployment target's secrets
-# (deploy.target in .factory/config.yaml; VERCEL_* for vercel, CLOUDFLARE_* for
+# (the frontend component's host in .factory/config.yaml; VERCEL_* for vercel, CLOUDFLARE_* for
 # cloudflare). Only main may deploy to them: preview-deploy and production-deploy
 # run on workflow_run, which uses main. The owner adds the secrets with gh secret
 # set --env <name>, so nobody else sees them.
@@ -151,6 +151,7 @@ needs-human|fbca04|State: waiting for the human (questions or approval)
 spec-approved|5319e7|State: the human approved the spec
 dispute|b60205|State: agents disagree; the human decides
 tests-change-approved|f9d0c4|State: the human allows implementation to change acceptance tests
+migration-approved|d93f0b|State: the human allows a destructive, authorisation-weakening or edited migration
 EOF
 }
 

@@ -21,6 +21,7 @@ Run the commands from the factory repository's root.
    rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
    cd ../<repo-name> && git add -A && git commit -m "chore: initialize project from factory template" && git push -u origin main
    ```
+   Before that commit, set `components` in the new repository's `.factory/config.yaml` ([components](architecture.md#components)): the frontend's `host` is the deployment target below. **A project with a Supabase backend:** also run `npx supabase init` in the new repository (the container has no Supabase CLI) and uncomment the `db` and `functions` components. `supabase init` writes `supabase/config.toml`, which the implementer may then change, and `supabase/.gitignore`, which stays yours.
 4. **Apply the GitHub setup from this repo.** Run the ruleset after the first push, because it blocks direct pushes to `main`:
    ```sh
    scripts/setup-github.sh ruleset <owner>/<repo-name>
@@ -32,7 +33,7 @@ Run the commands from the factory repository's root.
    scripts/setup-github.sh board <owner>/<repo-name>
    ```
    Then turn on the dependency graph by hand (no API): **Settings → Advanced Security → Dependency graph → Enable**. The dependency review gate needs it, and `up.sh` checks it.
-   Then the deployment target, named by `deploy.target` in `.factory/config.yaml`: `vercel` or `cloudflare`. Do these steps yourself, so nobody else sees the secrets, and set only the chosen target's secrets: `exit-check.sh` expects exactly those. When switching targets, delete the other target's secrets from both environments.
+   Then the deployment target, the frontend component's `host` in `.factory/config.yaml`: `vercel` or `cloudflare`. Do these steps yourself, so nobody else sees the secrets, and set only the chosen target's secrets: `exit-check.sh` expects exactly those. When switching targets, delete the other target's secrets from both environments.
 
    **`vercel`.** Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
    ```sh
@@ -111,7 +112,7 @@ rsync -a --delete --exclude README.md --exclude config.yaml skills agents comman
 
 Claude Code loads the plugin when a session starts, so after the PR is merged and the host clone pulled, start a new session (`scripts/up.sh claude`) before the next `/factory:run`.
 
-`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way. `.github/` is copied with `rsync -a --delete templates/project/.github/ ../<repo-name>/.github/`, so a file the template no longer has goes too; `scripts/exit-check.sh` fails on any workflow or script on `main` that the template does not have.
+`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way. `.github/` is copied with `rsync -a --delete templates/project/.github/ ../<repo-name>/.github/`, so a file the template no longer has goes too; `scripts/exit-check.sh` fails on any workflow or script on `main` that the template does not have. A label added to `setup-github.sh labels` reaches the project when you run `scripts/setup-github.sh labels <owner>/<repo-name>` again.
 
 ## Renewing protections
 

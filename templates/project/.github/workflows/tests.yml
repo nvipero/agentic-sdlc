@@ -27,6 +27,17 @@ jobs:
         run: npx --no-install tsc --noEmit
       - name: Unit tests
         run: npx --no-install vitest run
+      - name: Deno tests
+        # Components tested with Deno (.github/scripts/components.sh deno), with the
+        # image's Deno (DENO_VERSION in .devcontainer/Dockerfile). The paths and their
+        # reader come from the checkout (Ruby on the runner); the Deno pin and flags are fixed here.
+        run: |
+          set -euo pipefail
+          paths="$(bash .github/scripts/components.sh deno)"
+          if [ -z "$paths" ] || [ -z "$(find $paths -name '*_test.ts' 2>/dev/null | head -1)" ]; then
+            echo "no Deno tests"; exit 0
+          fi
+          npx -y deno@2.1.4 test --allow-env $paths
       - name: Build
         run: npx --no-install vite build
       - if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
