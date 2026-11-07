@@ -83,6 +83,7 @@ allowed() {   # allowed <role> <path>
   esac
 }
 
+heading "Components"
 # The components in main's .factory/config.yaml (components.sh): what the
 # implementer owns besides the root rules, the databases, the files to list.
 SCRIPTS="$(dirname "$0")"
@@ -96,6 +97,7 @@ if comp_owned="$(bash "$SCRIPTS/components.sh" owned)" \
 else
   fail "main's .factory/config.yaml has no valid components (components.sh)"
 fi
+note "implementer's component paths: ${OWNED[*]:-none}"
 
 heading "Commits"
 FIRST_IMPL=
@@ -218,7 +220,7 @@ fi
 for f in ${LISTED[@]+"${LISTED[@]}"}; do
   while IFS= read -r line; do
     note "look: \`$f\`: ${line:0:160}"
-  done < <(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- "$f" | grep -E '^[+-][^+-]' || true)
+  done < <(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- "$f" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' || true)
 done
 
 printf '\n**Result:** %s\n' "$([ "$FAILS" -eq 0 ] && echo "all guards pass" || echo "$FAILS failure(s)")" >> "$SUMMARY"

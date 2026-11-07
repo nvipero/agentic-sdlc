@@ -46,7 +46,8 @@ ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION} \
 RUN npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
  && rm -rf /root/.npm /var/lib/apt/lists/*
 
-# Deno for the tests of Supabase Edge Functions, from npm, so the firewall needs
+# Deno for the tests of components a host tests with Deno (Supabase Edge
+# Functions; .github/scripts/hosts/), from npm, so the firewall needs
 # no other host. DENO_VERSION is the Deno of Supabase's Edge Runtime (2.1) and
 # the tests workflow's pin. --version checks that the binary works; no update
 # check, which would try dl.deno.land through the firewall.

@@ -1,5 +1,7 @@
 # Host "supabase" for components (factory docs/architecture.md, "Components"):
-# what the Supabase CLI fixes. Data only, read by components.sh.
+# what the Supabase CLI fixes. Data only, read by components.sh. The roles'
+# guidance is in the skills' references/supabase.md: keep implementer_files and
+# the implementer's "Also yours" line the same.
 paths:                  # the one path each kind may have on this host
   database: supabase/migrations
   api: supabase/functions

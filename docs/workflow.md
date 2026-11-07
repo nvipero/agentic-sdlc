@@ -56,7 +56,7 @@ Both the factory repo and project repos follow these. Agents follow them too.
 ## Spec to merge
 
 1. The test writer turns the approved acceptance criteria into automated acceptance tests, in files named by feature and tagged with the story's criteria (`@issue-<n>-ac-<k>`), and updates existing tests whose behaviour the story changes. The orchestrator runs them: they must fail because the behaviour is missing. The code reviewer checks coverage; the same review loop rules apply.
-2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit, Edge Function and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
+2. The implementer writes the code on the story branch. The orchestrator checks the paths, runs the unit, component (Deno) and acceptance tests itself (its run is the one that counts), and opens a draft PR that closes the issue.
 3. The code reviewer reviews against the spec, conventions, architecture boundaries and the security checklist.
 4. Implementer and reviewer may debate. On escalation the issue gets `dispute` and a short comment: the disagreement, both positions, what each option costs.
 5. **A wrong acceptance test** goes through the orchestrator: the implementer never changes `tests/acceptance/`, and returns a test problem instead. The test writer decides once; after the first implementer commit its change also needs the human's `tests-change-approved` (the guard counts it); after that, the human decides, and adds `tests-change-approved` if the test changes. Any change to approved tests reopens the coverage review.

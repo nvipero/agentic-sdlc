@@ -29,8 +29,8 @@ jobs:
         run: npx --no-install vitest run
       - name: Deno tests
         # Components tested with Deno (.github/scripts/components.sh deno), with the
-        # image's Deno (DENO_VERSION in .devcontainer/Dockerfile). Only the paths come
-        # from the checkout; the command is fixed here.
+        # image's Deno (DENO_VERSION in .devcontainer/Dockerfile). The paths and their
+        # reader come from the checkout (Ruby on the runner); the Deno pin and flags are fixed here.
         run: |
           set -euo pipefail
           paths="$(bash .github/scripts/components.sh deno)"

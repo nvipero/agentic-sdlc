@@ -26,6 +26,7 @@ config="${2:-$dir/../../.factory/config.yaml}"
 exec ruby -ryaml -e '
   cmd, config, dir = ARGV
   def die(m); abort("components: #{m} (factory docs/architecture.md, \"Components\")"); end
+  begin
   c = YAML.safe_load(config == "-" ? STDIN.read : File.read(config))
   die "no configuration" unless c.is_a?(Hash)
   die "deploy is replaced by components.<name>.host and .spa" if c.key?("deploy")
@@ -69,6 +70,9 @@ exec ruby -ryaml -e '
     when "database" then other.select { |x| x[:kind] == "database" }.map { |x| x[:path] }
     when "deno" then other.select { |x| (hosts[x[:host]]["deno"] || []).include?(x[:kind]) }.map { |x| x[:path] }
     else die "unknown command #{cmd}"
+  end
+  rescue Psych::Exception, NoMethodError, TypeError => e
+    die "unreadable: #{e.message.lines.first.strip}"
   end
   puts out
 ' "$cmd" "$config" "$dir"
