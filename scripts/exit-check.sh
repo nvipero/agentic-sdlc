@@ -324,6 +324,7 @@ t="$(tools_of code-reviewer)"
   && fail "code reviewer has no write or web tool" "$t" || pass "code reviewer has no write or web tool" "$t"
 expect_fail "node cannot write to the browsers path" "touch /ms-playwright/exit-check" "Permission denied"
 # A throwaway package as node: the pinned @playwright/test from the registry, Chromium from the image.
+expect_ok "Deno runs as node with the image's version" 'deno --version | grep -q "^deno $DENO_VERSION "'
 expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -eo pipefail; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
   echo "{\"private\":true}" > package.json
   npm i -D --save-exact --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION" >/dev/null 2>&1
@@ -392,6 +393,11 @@ echo "$wf_check" | grep -qx "triggers=guards:pull_request_target label-audit:iss
   || fail "workflow triggers" "$(echo "$wf_check" | head -1)"
 echo "$wf_check" | grep -qx "interpolated=" && pass "no \${{ }} expression inside any run: block (event data only through env:)" \
   || fail "expressions in run: blocks" "$(echo "$wf_check" | tail -1)"
+# Deno: the tests workflow runs the image's version.
+deno_image="$(sed -nE 's/^ARG DENO_VERSION=(.+)$/\1/p' "$FACTORY_DIR/templates/project/.devcontainer/Dockerfile")"
+deno_ci="$(grep -oE 'deno@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/tests.yml" | head -1)"
+[ -n "$deno_image" ] && [ "$deno_ci" = "deno@$deno_image" ] && pass "tests runs the image's Deno" "$deno_image" \
+  || fail "Deno pins" "image ${deno_image:-none}, tests ${deno_ci:-none}"
 # The deployment target, and exactly its secrets, only in the two environments.
 target="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | ruby -ryaml -e 'c = YAML.load(STDIN.read); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' 2>/dev/null)"
 case "$target" in
