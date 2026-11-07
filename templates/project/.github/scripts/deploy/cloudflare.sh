@@ -8,7 +8,7 @@
 #   cloudflare.sh assemble <dir> <out>        the deployable output in <out>; run without secrets
 #   cloudflare.sh preview <out> <pr>          deploy <out> as the PR's Preview; prints its URL
 #   cloudflare.sh address <pr> <url>          the PR's stable address: the Preview URL itself
-#   cloudflare.sh prune <pr> [<keep-url>]     without <keep-url>, delete the PR's Preview
+#   cloudflare.sh prune <pr> [<keep-url>]     without <keep-url>, delete the PR's Preview; needs only curl
 #   cloudflare.sh production <out> <sha>      deploy <out> to production; prints the version's URL
 #   cloudflare.sh live <url>                  fail unless production serves that version; prints the address
 #
@@ -103,8 +103,10 @@ case "${1:-}" in
     [ "$code" = 404 ] && { echo "no Preview pr-$pr" >&2; exit 0; }
     [ "$code" = 200 ] || { echo "reading Preview pr-$pr: HTTP $code" >&2; cat "$body" >&2; exit 1; }
     urls="$(jq -r '.result.urls[]?' "$body")"
-    # Away from the checkout: Wrangler would read a wrangler.* or .env file there.
-    (cd "$(mktemp -d)" && wrangler preview delete --worker-name "$w" --name "pr-$pr" --skip-confirmation)
+    # The API call wrangler preview delete makes: preview-cleanup installs no tools.
+    code="$(cfapi DELETE "/workers/workers/$w/previews/pr-$pr" "$body" || true)"
+    [ "$code" = 200 ] || { echo "deleting Preview pr-$pr: HTTP $code" >&2; cat "$body" >&2; exit 1; }
+    echo "Preview pr-$pr deleted"
     # A deleted Preview has been seen serving for hours on a static-assets Worker
     # (github.com/cloudflare/developer-platform/issues/73). Behind Access, a login
     # redirect is all the public gets either way, so this sees only public serving.
