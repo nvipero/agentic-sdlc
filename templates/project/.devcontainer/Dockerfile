@@ -48,10 +48,11 @@ RUN npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
 
 # Deno for the tests of Supabase Edge Functions, from npm, so the firewall needs
 # no other host. DENO_VERSION is the Deno of Supabase's Edge Runtime (2.1) and
-# the tests workflow's pin. Run once as root, which links the binary into the
-# root-owned global directory before the node user runs it.
+# the tests workflow's pin. --version checks that the binary works; no update
+# check, which would try dl.deno.land through the firewall.
 ARG DENO_VERSION=2.1.4
-ENV DENO_VERSION=${DENO_VERSION}
+ENV DENO_VERSION=${DENO_VERSION} \
+    DENO_NO_UPDATE_CHECK=1
 RUN npm install --global "deno@${DENO_VERSION}" \
  && deno --version \
  && rm -rf /root/.npm

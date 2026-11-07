@@ -324,6 +324,7 @@ t="$(tools_of code-reviewer)"
   && fail "code reviewer has no write or web tool" "$t" || pass "code reviewer has no write or web tool" "$t"
 expect_fail "node cannot write to the browsers path" "touch /ms-playwright/exit-check" "Permission denied"
 # A throwaway package as node: the pinned @playwright/test from the registry, Chromium from the image.
+expect_ok "Deno runs as node with the image's version" 'deno --version | grep -q "^deno $DENO_VERSION "'
 expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -eo pipefail; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
   echo "{\"private\":true}" > package.json
   npm i -D --save-exact --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION" >/dev/null 2>&1

@@ -225,7 +225,7 @@ When the code reviewer approves and your last test run passed:
 2. Write the description with `gh pr edit <pr> --body-file <file>`:
    - if the description would be longer than about 15 lines, first `> **TL;DR:**` one or two sentences, as a quote block: what the story now does (principle 13);
    - what changed, a few lines;
-   - your test results: unit and acceptance, passed and total;
+   - your test results: unit, Edge Function (if any) and acceptance, passed and total;
    - the reviewer's "Where to look" section, unchanged;
    - `Closes #<n>`.
 3. **The gates on GitHub** ("trust, but verify": your own runs passed, the pipeline decides): `gh pr checks <pr> --required --watch --fail-fast --interval 30`, at most 20 minutes. The required checks are `guards`, `unit-and-build`, `acceptance` and `dependency-review`.

@@ -12,43 +12,58 @@
 #
 # Approval: an existing migration changed, renamed or removed (one on main is
 # applied, or will be at deploy); an added migration with a destructive or
-# authorisation-weakening statement. Matched on the SQL with comments removed:
-# a heuristic, so dynamic SQL inside a do block is not seen (docs/risks.md).
+# authorisation-weakening statement. Approval is matched on the raw SQL, comments
+# included, so a "--" inside a string cannot hide the rest of a line: a comment
+# that names a drop costs a label. It is still a heuristic: SQL built at run time
+# (execute format(...)) is not seen (docs/risks.md).
 set -euo pipefail
 
 base="${1:?base commit}" head="${2:?head commit}"
 need=0
 
-# classify <path>: prints "approval|look <statement>" for the added SQL file's
-# statements that match, with comments removed, lowercase, whitespace collapsed.
+# classify <path>: "approval <statement>" and "look <statement>" lines for an added
+# SQL file, lowercase and whitespace collapsed; look lines without comments.
 classify() {
   git show "$head:$1" | perl -0777 -ne '
-    s{/\*.*?\*/}{ }gs; s{--[^\n]*}{}g; $_ = lc; s{\s+}{ }g;
+    $_ = lc; my $raw = $_;
+    $raw =~ s{\s+}{ }g;
+    for my $s (split /;/, $raw) {
+      $s =~ s/^ +| +$//g;
+      print "approval ", substr($s, 0, 160), "\n"
+        if $s =~ /\bdrop\b(?! (default|not null|identity|expression|index)\b)|\btruncate\b|\bdelete from\b|\brename\b|\balter (column )?("[^"]*"|[a-z0-9_]+) (set data )?type\b|\bdisable row level security\b/;
+    }
+    s{/\*.*?\*/}{ }gs; s{--[^\n]*}{}g; s{\s+}{ }g;
     for my $s (split /;/) {
-      $s =~ s/^ +| +$//g; next unless length $s;
-      if ($s =~ /\bdrop (table|column|schema|type|view|materialized view|function|policy)\b|\btruncate\b|\bdelete from\b|\balter column [a-z0-9_"]+ (set data )?type\b|\brename (to|column)\b|\bdisable row level security\b/) {
-        print "approval ", substr($s, 0, 160), "\n";
-      } elsif ($s =~ /\bgrant\b|\brevoke\b|\bcreate policy\b|\balter policy\b|\bsecurity definer\b|\bcron\.schedule\b|\bnet\.http_/) {
-        print "look ", substr($s, 0, 160), "\n";
-      }
+      $s =~ s/^ +| +$//g;
+      print "look ", substr($s, 0, 160), "\n"
+        if $s =~ /\bgrant\b|\brevoke\b|\bcreate policy\b|\balter policy\b|\bsecurity definer\b|\bcron\.schedule\b|\bnet\.http_/;
     }'
 }
 
-while IFS=$'\t' read -r status path rest; do
+# NUL-separated, so no path is quoted: status, path, and for a rename or copy the new path.
+while IFS= read -r -d '' status; do
+  IFS= read -r -d '' path
+  new=
+  case "$status" in R*|C*) IFS= read -r -d '' new ;; esac
   case "$status" in
     A)
-      case "$path" in *.sql) ;; *) continue ;; esac
+      case "$path" in
+        *.sql) ;;
+        *) echo "look: non-SQL file in the migrations: \`$path\`"; continue ;;
+      esac
       echo "look: new migration \`$path\`"
+      out="$(classify "$path")" || { echo "approval: cannot read \`$path\`"; need=1; continue; }
       while read -r kind s; do
+        [ -n "$kind" ] || continue
         echo "$kind: \`$path\`: $s"
         if [ "$kind" = approval ]; then need=1; fi
-      done < <(classify "$path")
+      done <<<"$out"
       ;;
-    R*) echo "approval: existing migration \`$path\` renamed to \`$rest\`"; need=1 ;;
+    R*|C*) echo "approval: existing migration \`$path\` renamed or copied to \`$new\`"; need=1 ;;
     D) echo "approval: existing migration \`$path\` removed"; need=1 ;;
-    *) echo "approval: existing migration \`$path\` changed"; need=1 ;;
+    *) echo "approval: existing migration \`$path\` changed ($status)"; need=1 ;;
   esac
-done < <(git diff --name-status -M "$base...$head" -- supabase/migrations)
+done < <(git diff --name-status -M -z "$base...$head" -- supabase/migrations)
 
 while IFS= read -r line; do
   echo "look: \`supabase/config.toml\`: ${line:0:160}"
