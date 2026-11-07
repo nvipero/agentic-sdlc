@@ -32,7 +32,9 @@ Run the commands from the factory repository's root.
    scripts/setup-github.sh board <owner>/<repo-name>
    ```
    Then turn on the dependency graph by hand (no API): **Settings → Advanced Security → Dependency graph → Enable**. The dependency review gate needs it, and `up.sh` checks it.
-   Then the deployment target, named by `deploy.target` in `.factory/config.yaml`. The only target is `vercel`, set up as follows. Do these steps yourself, so nobody else sees the secrets. Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
+   Then the deployment target, named by `deploy.target` in `.factory/config.yaml`: `vercel` or `cloudflare`. Do these steps yourself, so nobody else sees the secrets, and set only the chosen target's secrets: `exit-check.sh` expects exactly those. When switching targets, delete the other target's secrets from both environments.
+
+   **`vercel`.** Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
    ```sh
    mkdir -p /tmp/vercel-link && cd /tmp/vercel-link
    npx vercel@64.3.1 login
@@ -47,11 +49,38 @@ Run the commands from the factory repository's root.
    ```
    Name the Vercel project exactly like the repository, in lowercase letters, digits and hyphens: the `vercel` target script (`.github/scripts/deploy/vercel.sh`) derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
    ```sh
+   cd <factory>                # this repository's root: setup-github.sh is here
+   repo=<owner>/<repo-name>
    for env in preview production; do
-     scripts/setup-github.sh $env-env <owner>/<repo-name>
-     gh secret set VERCEL_TOKEN --env $env --repo <owner>/<repo-name>
-     gh secret set VERCEL_ORG_ID --env $env --repo <owner>/<repo-name>
-     gh secret set VERCEL_PROJECT_ID --env $env --repo <owner>/<repo-name>
+     scripts/setup-github.sh $env-env $repo
+     gh secret set VERCEL_TOKEN --env $env --repo $repo
+     gh secret set VERCEL_ORG_ID --env $env --repo $repo
+     gh secret set VERCEL_PROJECT_ID --env $env --repo $repo
+   done
+   ```
+
+   **`cloudflare`.** Do not connect Cloudflare's Git integration (Workers Builds): the pipeline deploys. The Worker is named exactly like the repository, in lowercase letters, digits and hyphens: the `cloudflare` target script (`.github/scripts/deploy/cloudflare.sh`) derives it from the repository's name. Create the Worker under your own login, because creating one needs more than the pipeline's token may do; its placeholder is production until the first merge:
+   ```sh
+   repo=<repo-name>   # the Worker's name
+   mkdir -p /tmp/cf-worker/public && cd /tmp/cf-worker
+   printf '<!doctype html><meta charset="utf-8"><title>Not deployed yet</title><p>Production appears here after the first merge to main.</p>\n' > public/index.html
+   printf '{"name":"%s","compatibility_date":"2026-10-01","workers_dev":true,"preview_urls":true,"assets":{"directory":"./public"}}\n' "$repo" > wrangler.jsonc
+   npx wrangler@4.152.0 login
+   npx wrangler@4.152.0 deploy
+   npx wrangler@4.152.0 logout && cd / && rm -rf /tmp/cf-worker
+   ```
+   Then, in the Cloudflare dashboard:
+   - Create an account-owned API token with the **Editor** role on that one Worker ([roles and permissions](https://developers.cloudflare.com/workers/authorization/)), and store it and the account ID in 1Password. The same token serves both environments.
+   - Put the Worker's Previews behind Cloudflare Access, allowing only your own email, and leave production public ([workers.dev and Access](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)). The first time, this sets up a Zero Trust organisation.
+
+   Then:
+   ```sh
+   cd <factory>                # this repository's root: setup-github.sh is here
+   repo=<owner>/<repo-name>
+   for env in preview production; do
+     scripts/setup-github.sh $env-env $repo
+     gh secret set CLOUDFLARE_API_TOKEN --env $env --repo $repo
+     gh secret set CLOUDFLARE_ACCOUNT_ID --env $env --repo $repo
    done
    ```
 5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:

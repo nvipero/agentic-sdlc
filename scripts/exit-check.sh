@@ -392,15 +392,20 @@ echo "$wf_check" | grep -qx "triggers=guards:pull_request_target label-audit:iss
   || fail "workflow triggers" "$(echo "$wf_check" | head -1)"
 echo "$wf_check" | grep -qx "interpolated=" && pass "no \${{ }} expression inside any run: block (event data only through env:)" \
   || fail "expressions in run: blocks" "$(echo "$wf_check" | tail -1)"
-# The deployment target; vercel is the only one, and its secrets live only in the two environments.
+# The deployment target, and exactly its secrets, only in the two environments.
 target="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | ruby -ryaml -e 'c = YAML.load(STDIN.read); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' 2>/dev/null)"
-[ "$target" = vercel ] && pass "deploy.target on main is vercel" || fail "deploy.target on main" "${target:-missing}"
+case "$target" in
+  vercel) target_secrets="VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN" ;;
+  cloudflare) target_secrets="CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN" ;;
+  *) target_secrets= ;;
+esac
+[ -n "$target_secrets" ] && pass "deploy.target on main is $target" || fail "deploy.target on main" "${target:-missing}"
 # Repository secrets are checked above (none).
 for env in preview production; do
   env_branches="$(gh api "repos/$NWO/environments/$env/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"
   [ "$env_branches" = "branch:main" ] && pass "environment $env deploys from main only" || fail "$env environment branches" "$env_branches"
   env_secrets="$(gh api "repos/$NWO/environments/$env/secrets" --jq '[.secrets[].name] | sort | join(" ")')"
-  [ "$env_secrets" = "VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN" ] && pass "environment $env holds the Vercel secrets" "$env_secrets" || fail "$env secrets" "$env_secrets"
+  [ -n "$target_secrets" ] && [ "$env_secrets" = "$target_secrets" ] && pass "environment $env holds exactly the $target secrets" "$env_secrets" || fail "$env secrets" "$env_secrets"
 done
 delete_merged="$(gh api "repos/$NWO" --jq .delete_branch_on_merge)"
 [ "$delete_merged" = true ] && pass "merged branches are deleted automatically" || fail "delete branch on merge" "$delete_merged"

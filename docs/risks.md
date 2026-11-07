@@ -24,4 +24,9 @@ Accepted unless a backlog issue is linked. A security review does not report the
   - **Allowlisted names are resolved only at firewall start.** If a CDN rotates its addresses during a session (for example npm, or Anthropic's API), connections to the new addresses are rejected until the next `up.sh` run. This is inherited from the reference script.
   - All of GitHub is reachable. The repo-scoped token limits writes.
   - Rejected connections are counted, not logged ([#29](https://github.com/nvipero/agentic-sdlc/issues/29)).
+- **Cloudflare target (`deploy.target: cloudflare`):**
+  - Workers Previews are an open beta in Wrangler.
+  - A deleted Preview has been seen serving for hours on a static-assets Worker ([cloudflare/developer-platform#73](https://github.com/cloudflare/developer-platform/issues/73)). `preview-cleanup` warns when it happens; Access keeps it from the public meanwhile.
+  - Every production version also has its own public address, `<version>-<repo>.<subdomain>.workers.dev` (not indexed): Workers Previews need the same setting. Production is public anyway; an old version stays reachable after a rollback or a new deploy.
+  - `workers.dev` is a public suffix, so `<subdomain>.workers.dev` is one site: Previews and production of the same account share cookies set on that domain. On Vercel each project is its own site. A production custom domain would separate them.
 - **One unauthenticated GitHub API call per container start.** The firewall fetches `https://api.github.com/meta` before the token exists in the container. GitHub allows 60 unauthenticated API requests per hour per IP. Dozens of starts within an hour, or other unauthenticated GitHub traffic from the same IP, can use that up. The firewall then fails, and the network stays closed until the limit resets.
