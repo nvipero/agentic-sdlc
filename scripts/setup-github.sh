@@ -151,6 +151,7 @@ needs-human|fbca04|State: waiting for the human (questions or approval)
 spec-approved|5319e7|State: the human approved the spec
 dispute|b60205|State: agents disagree; the human decides
 tests-change-approved|f9d0c4|State: the human allows implementation to change acceptance tests
+migration-approved|d93f0b|State: the human allows a destructive or authorisation-changing migration
 EOF
 }
 

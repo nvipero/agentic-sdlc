@@ -46,8 +46,12 @@ tests/acceptance/    acceptance tests by feature, tagged per story     (test wri
                      criterion; their own npm package
 src/, public/,       production code, static files, unit tests, and    (implementer)
 tests/unit/          the root project files (package.json, lockfile,
-                     tsconfig, Vite and lint configuration, index.html)
-.gitignore                                                             (human)
+                     tsconfig, Vite and lint configuration, index.html,
+                     deno.json)
+supabase/            Supabase projects: migrations/, functions/ (Deno  (implementer)
+                     Edge Functions and their tests), seed.sql,
+                     config.toml; created by the owner with supabase init
+.gitignore, supabase/.gitignore                                        (human)
 ```
 
 `.factory/` is a Claude Code plugin named `factory`, loaded from the read-only `/workspace/.factory` through managed settings, so its commands are `/factory:<name>` and its roles `factory:<role>`. Managed settings allow no other source of skills, agents, hooks or plugins, so an agent cannot load a substitute.
@@ -103,4 +107,5 @@ Model choices are initial guesses, to be tuned with more stories. The config is 
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
+- Optionally Supabase as the backend: Postgres migrations with row level security, Deno Edge Functions with Deno's test runner (Deno 2.1, as Supabase's Edge Runtime; dependencies from npm only, so the firewall needs no other host). Deploying it, a database for the acceptance tests and preview backends are not supported yet ([#58](https://github.com/nvipero/agentic-sdlc/issues/58), [#59](https://github.com/nvipero/agentic-sdlc/issues/59), [#60](https://github.com/nvipero/agentic-sdlc/issues/60)).
 - Vercel for preview and production deployments (`deploy.target: vercel`; Hobby, through the pipeline; no Git integration), or a Cloudflare Worker with static assets only (`deploy.target: cloudflare`; through the pipeline; no Git integration)

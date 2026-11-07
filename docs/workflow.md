@@ -18,8 +18,8 @@ How a story travels from an issue to a merge, who does what, and when the human 
 ## Labels
 
 - Type: `user-story`, `bug`, `chore`, `trivial`
-- State: `ready-for-factory`, `needs-human`, `spec-approved`, `dispute`, `tests-change-approved`
-- `spec-approved` and `tests-change-approved` are owner-only ([security](security.md#trusted-input-and-owner-only-labels)).
+- State: `ready-for-factory`, `needs-human`, `spec-approved`, `dispute`, `tests-change-approved`, `migration-approved`
+- `spec-approved`, `tests-change-approved` and `migration-approved` are owner-only ([security](security.md#trusted-input-and-owner-only-labels)).
 - `tests-change-approved` covers one change: the orchestrator removes it after the reopened test gate approves, and the guard counts the owner's label events against the later changes to approved tests.
 
 ## Project context (once per project, updated as needed)
@@ -76,11 +76,11 @@ Each role is an Agent Skill plus a thin role definition stating model, tools and
 | Spec writer | Issue, context, research answers, codebase | Spec, research requests, questions | `specs/` | Guess silently, research itself, or write a spec it cannot justify |
 | Spec reviewer | Spec, issue, context | Findings | Comments only | Edit files |
 | Test writer | Approved spec | Acceptance tests | `tests/acceptance/` | Write production code |
-| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, root project files | Touch acceptance tests, specs or anything outside the story |
+| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, `supabase/` migrations and functions, root project files | Touch acceptance tests, specs or anything outside the story |
 | Code reviewer | Tests or PR diff, spec, test results | Findings, approval, "Where to look" | Nothing: the orchestrator posts its output | Edit files |
 
 The orchestrator is a Claude Code command (`/factory:run <issue>`) run in the main session, which delegates to role subagents. The researcher's interview runs in the main session through `/factory:context`, because subagents cannot ask the human questions; its research-request mode is a subagent. Each producing role commits its own work; the orchestrator pushes.
 
 ## Restricted list
 
-Always requires the human: authentication and authorisation changes, data deletion or migration, new external services or paid dependencies, and any change to factory definitions, gates or permissions.
+Always requires the human: authentication and authorisation changes, data deletion or migration, new external services or paid dependencies, and any change to factory definitions, gates or permissions. Every migration goes into "Where to look"; a destructive or authorisation-weakening one, or a change to an existing one, also needs the owner's `migration-approved` on the issue before the guards pass.

@@ -15,8 +15,9 @@ note() { printf -- '- %s\n' "$*" >> "$SUMMARY"; }
 heading() { printf '\n### %s\n\n' "$*" >> "$SUMMARY"; }
 
 OWNER_LABEL=tests-change-approved
+MIGRATION_LABEL=migration-approved
 PROTECTED='.factory/ .claude/ .github/ .devcontainer/ scripts/ CLAUDE.md'
-TEST_CONFIG='package.json tsconfig.json vite.config.ts vite.config.js vitest.config.ts vitest.config.js tests/acceptance/package.json tests/acceptance/playwright.config.ts'
+TEST_CONFIG='package.json tsconfig.json vite.config.ts vite.config.js vitest.config.ts vitest.config.js deno.json tests/acceptance/package.json tests/acceptance/playwright.config.ts'
 
 # --- Inputs: validated before use ---------------------------------------------
 [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "bad PR number" >&2; exit 1; }
@@ -66,6 +67,7 @@ allowed() {   # allowed <role> <path>
     implementer)
       case "$2" in
         src/*|public/*|tests/unit/*) return 0 ;;
+        supabase/migrations/*|supabase/functions/*|supabase/seed.sql|supabase/config.toml) return 0 ;;
         */*|.*|CLAUDE.md|README.md) return 1 ;;
         *) return 0 ;;
       esac ;;
@@ -140,16 +142,19 @@ for f in ${changed[@]+"${changed[@]}"}; do
 done
 [ -n "$hit" ] || note "none changed"
 
+# owner_labels <label>: how many times the owner added the label to the story's issue.
+owner_labels() {
+  [ -n "$ISSUE" ] || { echo 0; return; }
+  gh api --paginate "repos/$REPO/issues/$ISSUE/events" \
+    --jq ".[] | select(.event == \"labeled\" and .label.name == \"$1\" and .actor.login == \"$REPO_OWNER\") | .id" | grep -c . || true
+}
+
 # --- Acceptance tests --------------------------------------------------------------
 heading "Acceptance tests"
 if [ -z "$FIRST_IMPL" ]; then
   note "no implementer commit yet: the test set is not approved yet"
 else
-  approvals=0
-  if [ -n "$ISSUE" ]; then
-    approvals="$(gh api --paginate "repos/$REPO/issues/$ISSUE/events" \
-      --jq ".[] | select(.event == \"labeled\" and .label.name == \"$OWNER_LABEL\" and .actor.login == \"$REPO_OWNER\") | .id" | grep -c . || true)"
-  fi
+  approvals="$(owner_labels "$OWNER_LABEL")"
   if [ "$TEST_RUNS" -gt "$approvals" ]; then
     fail "$TEST_RUNS change(s) to tests/acceptance/ after the tests were approved, $approvals \`$OWNER_LABEL\` label(s) added by the owner"
   else
@@ -170,6 +175,25 @@ for f in ${changed[@]+"${changed[@]}"}; do
   for p in $TEST_CONFIG; do [ "$f" = "$p" ] && { note "changed: \`$f\`"; cfg=1; }; done
 done
 [ -n "$cfg" ] || note "unchanged"
+
+# --- Supabase: migrations and configuration (supabase-check.sh) -------------------
+heading "Supabase"
+if git diff --quiet "$BASE_SHA...$HEAD_SHA" -- supabase; then
+  note "unchanged"
+else
+  rc=0
+  out="$(bash "$(dirname "$0")/supabase-check.sh" "$BASE_SHA" "$HEAD_SHA")" || rc=$?
+  while IFS= read -r line; do [ -n "$line" ] && note "$line"; done <<<"$out"
+  if [ "$rc" -eq 1 ]; then
+    if [ "$(owner_labels "$MIGRATION_LABEL")" -gt 0 ]; then
+      note "approved by the owner's \`$MIGRATION_LABEL\`"
+    else
+      fail "a migration needs the owner's \`$MIGRATION_LABEL\` on the issue (lines marked approval above)"
+    fi
+  elif [ "$rc" -ne 0 ]; then
+    fail "supabase-check.sh failed ($rc)"
+  fi
+fi
 
 printf '\n**Result:** %s\n' "$([ "$FAILS" -eq 0 ] && echo "all guards pass" || echo "$FAILS failure(s)")" >> "$SUMMARY"
 [ "$FAILS" -eq 0 ]

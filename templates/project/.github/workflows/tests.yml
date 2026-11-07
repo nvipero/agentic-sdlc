@@ -27,6 +27,10 @@ jobs:
         run: npx --no-install tsc --noEmit
       - name: Unit tests
         run: npx --no-install vitest run
+      - name: Edge Function tests
+        # Supabase projects: the image's Deno (DENO_VERSION in .devcontainer/Dockerfile).
+        if: ${{ hashFiles('supabase/functions/**/*_test.ts') != '' }}
+        run: npx -y deno@2.1.4 test --allow-env supabase/functions/
       - name: Build
         run: npx --no-install vite build
       - if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}

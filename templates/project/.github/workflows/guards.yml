@@ -1,6 +1,6 @@
 # The factory's own rules for a pull request. pull_request_target runs main's
-# definition of this file and of .github/scripts/guards.sh, so a PR cannot change
-# the gate that judges it. The PR's code is fetched as data and never run.
+# definition of this file and of .github/scripts/ (guards.sh, supabase-check.sh),
+# so a PR cannot change the gate that judges it. The PR's code is fetched as data and never run.
 # Event values reach the script only through env:, never inside run:.
 name: guards
 on:

@@ -34,5 +34,5 @@ Applied to the factory and every project:
 
 ## Trusted input and owner-only labels
 
-- **Owner-only labels** (`spec-approved`, `tests-change-approved`) count only when the issue's newest `labeled` event for them has the owner's account as actor; GitHub permissions are not per label. The orchestrator and the guards check this, and the `label-audit` workflow removes such a label added by anyone else and fails on label definition changes by anyone but the owner ("trust, but verify").
+- **Owner-only labels** (`spec-approved`, `tests-change-approved`, `migration-approved`) count only when the issue's newest `labeled` event for them has the owner's account as actor; GitHub permissions are not per label. The orchestrator and the guards check this, and the `label-audit` workflow removes such a label added by anyone else and fails on label definition changes by anyone but the owner ("trust, but verify").
 - **Trusted input** to the agents is text written by the owner that nobody else edited last (GraphQL `author` and `editor`), because the App can edit other accounts' text.

@@ -46,6 +46,16 @@ ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION} \
 RUN npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
  && rm -rf /root/.npm /var/lib/apt/lists/*
 
+# Deno for the tests of Supabase Edge Functions, from npm, so the firewall needs
+# no other host. DENO_VERSION is the Deno of Supabase's Edge Runtime (2.1) and
+# the tests workflow's pin. Run once as root, which links the binary into the
+# root-owned global directory before the node user runs it.
+ARG DENO_VERSION=2.1.4
+ENV DENO_VERSION=${DENO_VERSION}
+RUN npm install --global "deno@${DENO_VERSION}" \
+ && deno --version \
+ && rm -rf /root/.npm
+
 # Policy files: root-owned, read-only for the node user. The directories are
 # created first: COPY --chmod would otherwise give them mode 0644 as well,
 # and Claude Code would skip unreadable managed settings.

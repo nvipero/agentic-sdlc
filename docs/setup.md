@@ -21,6 +21,7 @@ Run the commands from the factory repository's root.
    rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
    cd ../<repo-name> && git add -A && git commit -m "chore: initialize project from factory template" && git push -u origin main
    ```
+   **A project with a Supabase backend:** before that commit, run `npx supabase init` in the new repository (the container has no Supabase CLI). It writes `supabase/config.toml`, which the implementer may then change, and `supabase/.gitignore`, which stays yours.
 4. **Apply the GitHub setup from this repo.** Run the ruleset after the first push, because it blocks direct pushes to `main`:
    ```sh
    scripts/setup-github.sh ruleset <owner>/<repo-name>
