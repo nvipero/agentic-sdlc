@@ -49,11 +49,13 @@ Run the commands from the factory repository's root.
    ```
    Name the Vercel project exactly like the repository, in lowercase letters, digits and hyphens: the `vercel` target script (`.github/scripts/deploy/vercel.sh`) derives the production address from the repository's name. Create a token at vercel.com/account/settings/tokens, scoped to that project only, and store it in 1Password. Vercel has no narrower scope, so the same token serves both environments. Then:
    ```sh
+   cd <factory>                # this repository's root: setup-github.sh is here
+   repo=<owner>/<repo-name>
    for env in preview production; do
-     scripts/setup-github.sh $env-env <owner>/<repo-name>
-     gh secret set VERCEL_TOKEN --env $env --repo <owner>/<repo-name>
-     gh secret set VERCEL_ORG_ID --env $env --repo <owner>/<repo-name>
-     gh secret set VERCEL_PROJECT_ID --env $env --repo <owner>/<repo-name>
+     scripts/setup-github.sh $env-env $repo
+     gh secret set VERCEL_TOKEN --env $env --repo $repo
+     gh secret set VERCEL_ORG_ID --env $env --repo $repo
+     gh secret set VERCEL_PROJECT_ID --env $env --repo $repo
    done
    ```
 
@@ -73,10 +75,12 @@ Run the commands from the factory repository's root.
 
    Then:
    ```sh
+   cd <factory>                # this repository's root: setup-github.sh is here
+   repo=<owner>/<repo-name>
    for env in preview production; do
-     scripts/setup-github.sh $env-env <owner>/<repo-name>
-     gh secret set CLOUDFLARE_API_TOKEN --env $env --repo <owner>/<repo-name>
-     gh secret set CLOUDFLARE_ACCOUNT_ID --env $env --repo <owner>/<repo-name>
+     scripts/setup-github.sh $env-env $repo
+     gh secret set CLOUDFLARE_API_TOKEN --env $env --repo $repo
+     gh secret set CLOUDFLARE_ACCOUNT_ID --env $env --repo $repo
    done
    ```
 5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:
