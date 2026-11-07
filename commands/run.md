@@ -185,12 +185,12 @@ After every implementer call, in addition to the commit check (section 10):
 
 If one fails, record it, tell the owner in this session, push, and stop. Do not repair it yourself.
 
-**Supabase changes.** If `git diff --quiet origin/main...HEAD -- supabase` fails, run `bash .github/scripts/supabase-check.sh origin/main HEAD` (the guards run the same script). Pass its `look:` lines to the code reviewer with the implementation checks. If it exits 1, the `approval:` lines need the owner's `migration-approved` on the issue (owner-only, section 1), because the guards fail without it and adding the label does not re-run them. If the label is missing: push, ask the owner in this session to add it or to say what changes, with the `approval:` lines, and wait; check the label before going on. If the owner wants a change, it goes to the implementer as `fix`. The label stays for the story: the guards count it for every later migration change in the PR too.
+**Database and API components.** Read `components` in `.factory/config.yaml` (factory `docs/architecture.md`, "Components"). For each `database` component whose path the diff touches (`git diff --quiet origin/main...HEAD -- <path>` fails), run `bash .github/scripts/migration-check.sh origin/main HEAD <path>` (the guards run the same script). For each file the components' host descriptors list (`listed_files` in `.github/scripts/hosts/<host>.yaml`), take its changed lines from `git diff -U0 origin/main...HEAD -- <file>`. Pass the `look:` lines and those changes to the code reviewer with the implementation checks. If the check exits 1, the `approval:` lines need the owner's `migration-approved` on the issue (owner-only, section 1), because the guards fail without it and adding the label does not re-run them. If the label is missing: push, ask the owner in this session to add it or to say what changes, with the `approval:` lines, and wait; check the label before going on. If the owner wants a change, it goes to the implementer as `fix`. The label stays for the story: the guards count it for every later migration change in the PR too.
 
 ### Test run, phase `implementation`
 
 1. At the root: `npm ci`, `npm test`, `npm run build --if-present`.
-2. If `supabase/functions/` has a `*_test.ts` file: `deno test --allow-env supabase/functions/` at the root (the image's Deno, the version the `tests` workflow uses).
+2. For the components whose host descriptor names their kind under `deno`, if their paths have a `*_test.ts` file: `deno test --allow-env <their paths>` at the root (the image's Deno, the version the `tests` workflow uses).
 3. In `tests/acceptance/`: the version check from section 7, `npm ci` (it replaces any existing `node_modules`), then `npx playwright test --reporter=line`, all tests.
 
 Everything must pass. Record the summary lines in a chain line. A failure goes back to the implementer as a finding without a review; it counts as a round, except the first failure of the changed tests after a reopened test gate, which is expected.
@@ -225,7 +225,7 @@ When the code reviewer approves and your last test run passed:
 2. Write the description with `gh pr edit <pr> --body-file <file>`:
    - if the description would be longer than about 15 lines, first `> **TL;DR:**` one or two sentences, as a quote block: what the story now does (principle 13);
    - what changed, a few lines;
-   - your test results: unit, Edge Function (if any) and acceptance, passed and total;
+   - your test results: unit, components (if any) and acceptance, passed and total;
    - the reviewer's "Where to look" section, unchanged;
    - `Closes #<n>`.
 3. **The gates on GitHub** ("trust, but verify": your own runs passed, the pipeline decides): `gh pr checks <pr> --required --watch --fail-fast --interval 30`, at most 20 minutes. The required checks are `guards`, `unit-and-build`, `acceptance` and `dependency-review`.
@@ -245,7 +245,7 @@ Check **every** commit the role made, not only the one it reported: `git log --n
   - spec writer: only `specs/`;
   - researcher: only `docs/research/`;
   - test writer: only `tests/acceptance/`;
-  - implementer: only `src/`, `public/`, `tests/unit/`, `supabase/migrations/`, `supabase/functions/`, `supabase/seed.sql`, `supabase/config.toml`, and files at the repository root whose names do not start with a dot, other than `CLAUDE.md` and `README.md`.
+  - implementer: only `src/`, `public/`, `tests/unit/`, the paths of the `database` and `api` components and their hosts' `implementer_files` (`.github/scripts/hosts/<host>.yaml`), and files at the repository root whose names do not start with a dot, other than `CLAUDE.md` and `README.md`.
 - Git parses the role as a trailer on each commit: `git log --no-merges --format='%h %(trailers:key=Factory-Role,valueonly,separator=)' "$before"..HEAD` shows the role's name on every line.
 - Each commit's author name is `factory <role>` (`git log --no-merges --format='%h %an' "$before"..HEAD`). A wrong name is not a stop: record it in the status comment. The guards rely on the trailer, not the name.
 - `git status --porcelain` is empty afterwards.

@@ -112,7 +112,7 @@ actions_off() {
 }
 
 # Environments "preview" and "production" hold the deployment target's secrets
-# (deploy.target in .factory/config.yaml; VERCEL_* for vercel, CLOUDFLARE_* for
+# (the frontend component's host in .factory/config.yaml; VERCEL_* for vercel, CLOUDFLARE_* for
 # cloudflare). Only main may deploy to them: preview-deploy and production-deploy
 # run on workflow_run, which uses main. The owner adds the secrets with gh secret
 # set --env <name>, so nobody else sees them.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deployment target "vercel" (deploy.target in .factory/config.yaml), for
+# Deployment target "vercel" (the frontend's host in .factory/config.yaml), for
 # preview-deploy, preview-cleanup (environment "preview") and production-deploy
 # (environment "production"), all main's definitions.
 #
@@ -13,7 +13,7 @@
 #
 # <dir> holds the checked build (regular files only, with index.html). Only its
 # files are copied into a static-only Build Output: no functions, routes or
-# project settings from the build. deploy.spa in .factory/config.yaml is not
+# project settings from the build. The frontend's spa in .factory/config.yaml is not
 # supported here: assemble fails on it rather than ignoring it.
 #
 # Addresses: a PR's preview at <owner>-<repo>-pr-<n>.vercel.app, production at
@@ -61,10 +61,8 @@ case "${1:-}" in
     dir="${2:-}" out="${3:-}"
     [ -f "$dir/index.html" ] || { echo "no index.html in '$dir'" >&2; exit 1; }
     [ -n "$out" ] || { echo "no output directory" >&2; exit 1; }
-    config="$(cd "$(dirname "$0")/../../.." && pwd)/.factory/config.yaml"
-    spa="$(ruby -ryaml -e 'c = YAML.load_file(ARGV[0]); d = c.is_a?(Hash) ? c["deploy"] : nil
-      puts(d.is_a?(Hash) && d["spa"] == true ? "true" : "false")' "$config")"
-    [ "$spa" = false ] || { echo "deploy.spa is not supported on vercel" >&2; exit 1; }
+    spa="$(bash "$(dirname "$0")/../components.sh" frontend)"
+    [ "${spa#* }" = false ] || { echo "spa is not supported on vercel" >&2; exit 1; }
     mkdir -p "$out/.vercel/output/static"
     printf '{"version":3}\n' > "$out/.vercel/output/config.json"
     cp -R "$dir"/. "$out/.vercel/output/static/"

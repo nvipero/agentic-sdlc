@@ -11,8 +11,8 @@ stories are issues, specs are Markdown files in `specs/`, and work happens in pu
 | `specs/` | spec writer |
 | `tests/acceptance/` (its own npm package) | test writer |
 | `src/`, `public/`, `tests/unit/`, and the project's root files (`package.json`, lockfile, `tsconfig.json`, Vite and lint configuration, `index.html`, `deno.json`) | implementer |
-| `supabase/migrations/`, `supabase/functions/`, `supabase/seed.sql`, `supabase/config.toml` (Supabase projects) | implementer |
-| `.gitignore`, `supabase/.gitignore` | owner |
+| the paths of the database and API components in `.factory/config.yaml` (`components`), and the files their host names in `.github/scripts/hosts/` | implementer |
+| `.gitignore`, and dot files outside the component paths | owner |
 
 ## Read-only for agents
 

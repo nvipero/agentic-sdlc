@@ -2,7 +2,7 @@
 # own commit. workflow_run runs main's definition; the branch filter and the job
 # conditions keep PR test runs out, because environment "production" (deployment
 # branch: main only) cannot tell them apart: its ref is always main. As in
-# preview-deploy, the artifact is data, and the target script (deploy.target in
+# preview-deploy, the artifact is data, and the target script (the frontend's host in
 # main's .factory/config.yaml) deploys only its regular files as a static site.
 # Only main's newest commit is deployed, and deploys queue instead of replacing
 # each other, so a quick series of merges ends on the last one. After the
@@ -84,11 +84,8 @@ jobs:
         id: target
         run: |
           set -euo pipefail
-          [ -f main/.factory/config.yaml ] || { echo "::error::no .factory/config.yaml on main"; exit 1; }
-          target="$(ruby -ryaml -e 'c = YAML.load_file(ARGV[0]); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' main/.factory/config.yaml)"
-          [ -n "$target" ] || { echo "::error::deploy.target missing in .factory/config.yaml"; exit 1; }
-          [[ "$target" =~ ^[a-z0-9-]+$ && -f "main/.github/scripts/deploy/$target.sh" ]] || { echo "::error::no deploy script for target '$target'"; exit 1; }
-          echo "script=main/.github/scripts/deploy/$target.sh" >> "$GITHUB_OUTPUT"
+          host="$(bash main/.github/scripts/components.sh frontend | cut -d" " -f1)"
+          echo "script=main/.github/scripts/deploy/$host.sh" >> "$GITHUB_OUTPUT"
       - name: Check the build, assemble the output
         env:
           SCRIPT: ${{ steps.target.outputs.script }}

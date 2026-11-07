@@ -4,7 +4,7 @@
 # runs in environment "preview" (deployment branch: main only), the only place
 # the target's secrets exist. Nothing from the PR is executed here: the artifact
 # is untrusted data, checked to hold only regular files, and the target script
-# (deploy.target in main's .factory/config.yaml, .github/scripts/deploy/<target>.sh)
+# (the frontend component's host in main's .factory/config.yaml, .github/scripts/deploy/<host>.sh)
 # deploys only those files as a static site. The PR number and head come from
 # the event, not from the artifact. One preview per PR, at a stable address:
 # each new deployment takes it, then the PR's older deployments are removed. The
@@ -72,11 +72,8 @@ jobs:
         id: target
         run: |
           set -euo pipefail
-          [ -f main/.factory/config.yaml ] || { echo "::error::no .factory/config.yaml on main"; exit 1; }
-          target="$(ruby -ryaml -e 'c = YAML.load_file(ARGV[0]); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' main/.factory/config.yaml)"
-          [ -n "$target" ] || { echo "::error::deploy.target missing in .factory/config.yaml"; exit 1; }
-          [[ "$target" =~ ^[a-z0-9-]+$ && -f "main/.github/scripts/deploy/$target.sh" ]] || { echo "::error::no deploy script for target '$target'"; exit 1; }
-          echo "script=main/.github/scripts/deploy/$target.sh" >> "$GITHUB_OUTPUT"
+          host="$(bash main/.github/scripts/components.sh frontend | cut -d" " -f1)"
+          echo "script=main/.github/scripts/deploy/$host.sh" >> "$GITHUB_OUTPUT"
       - name: Check the build, assemble the output
         env:
           SCRIPT: ${{ steps.target.outputs.script }}

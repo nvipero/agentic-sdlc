@@ -398,14 +398,15 @@ deno_image="$(sed -nE 's/^ARG DENO_VERSION=(.+)$/\1/p' "$FACTORY_DIR/templates/p
 deno_ci="$(grep -oE 'deno@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/tests.yml" | head -1)"
 [ -n "$deno_image" ] && [ "$deno_ci" = "deno@$deno_image" ] && pass "tests runs the image's Deno" "$deno_image" \
   || fail "Deno pins" "image ${deno_image:-none}, tests ${deno_ci:-none}"
-# The deployment target, and exactly its secrets, only in the two environments.
-target="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | ruby -ryaml -e 'c = YAML.load(STDIN.read); d = c.is_a?(Hash) ? c["deploy"] : nil; puts(d.is_a?(Hash) ? d["target"].to_s : "")' 2>/dev/null)"
+# The deployment target (the frontend component's host), and exactly its secrets, only in the two environments.
+frontend="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" frontend - 2>&1)" || true
+target="${frontend%% *}"
 case "$target" in
   vercel) target_secrets="VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN" ;;
   cloudflare) target_secrets="CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN" ;;
   *) target_secrets= ;;
 esac
-[ -n "$target_secrets" ] && pass "deploy.target on main is $target" || fail "deploy.target on main" "${target:-missing}"
+[ -n "$target_secrets" ] && pass "the frontend's host on main is $target" || fail "the frontend's host on main" "${frontend:-missing}"
 # Repository secrets are checked above (none).
 for env in preview production; do
   env_branches="$(gh api "repos/$NWO/environments/$env/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"

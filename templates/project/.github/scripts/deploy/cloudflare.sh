@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deployment target "cloudflare" (deploy.target in .factory/config.yaml): a
+# Deployment target "cloudflare" (the frontend's host in .factory/config.yaml): a
 # Cloudflare Worker with static assets only, for preview-deploy, preview-cleanup
 # (environment "preview") and production-deploy (environment "production"), all
 # main's definitions.
@@ -15,8 +15,8 @@
 # <dir> holds the checked build (regular files only, with index.html). Its files
 # are copied as assets, except _headers, _redirects and .assetsignore, which
 # Cloudflare would read as rules. The Wrangler configuration is written here,
-# without "main": no code from the build runs at the edge. deploy.spa in
-# .factory/config.yaml turns on the single-page-application fallback.
+# without "main": no code from the build runs at the edge. The frontend's
+# spa in .factory/config.yaml turns on the single-page-application fallback.
 #
 # Addresses: the Worker is named after the repository. A PR's Preview at
 # pr-<n>-<worker>.<subdomain>.workers.dev (Workers Previews, not version URLs:
@@ -48,11 +48,10 @@ cfapi() {   # cfapi <method> <path below the account> <body file>: prints the HT
         "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID$2"
 }
 
-# deploy.spa from the .factory/config.yaml next to this script's .github/.
+# The frontend's spa from the .factory/config.yaml next to this script's .github/.
 spa() {
-  local config; config="$(cd "$(dirname "$0")/../../.." && pwd)/.factory/config.yaml"
-  ruby -ryaml -e 'c = YAML.load_file(ARGV[0]); d = c.is_a?(Hash) ? c["deploy"] : nil
-    puts(d.is_a?(Hash) && d["spa"] == true ? "true" : "false")' "$config"
+  local f; f="$(bash "$(dirname "$0")/../components.sh" frontend)" || return 1
+  echo "${f#* }"
 }
 
 case "${1:-}" in
@@ -66,7 +65,8 @@ case "${1:-}" in
     mkdir -p "$out/public"
     cp -R "$dir"/. "$out/public/"
     rm -f "$out/public/_headers" "$out/public/_redirects" "$out/public/.assetsignore"
-    if [ "$(spa)" = true ]; then nf=single-page-application; else nf=404-page; fi
+    fallback="$(spa)"
+    if [ "$fallback" = true ]; then nf=single-page-application; else nf=404-page; fi
     jq -n --arg name "$(worker)" --arg date "$COMPAT_DATE" --arg nf "$nf" \
       '{name: $name, compatibility_date: $date, workers_dev: true, preview_urls: true,
         assets: {directory: "./public", not_found_handling: $nf}, previews: {}}' > "$out/wrangler.jsonc"

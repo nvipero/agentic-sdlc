@@ -24,8 +24,8 @@ Accepted unless a backlog issue is linked. A security review does not report the
   - **Allowlisted names are resolved only at firewall start.** If a CDN rotates its addresses during a session (for example npm, or Anthropic's API), connections to the new addresses are rejected until the next `up.sh` run. This is inherited from the reference script.
   - All of GitHub is reachable. The repo-scoped token limits writes.
   - Rejected connections are counted, not logged ([#29](https://github.com/nvipero/agentic-sdlc/issues/29)).
-- **Migration check is a heuristic.** `supabase-check.sh` matches destructive and authorisation-weakening statements in the SQL text, so SQL built at run time (`execute format(...)` in a `do` block or a function) is not seen, and a comment that names a `drop` costs a label; the code reviewer's Supabase checklist is the second line.
-- **Cloudflare target (`deploy.target: cloudflare`):**
+- **Migration check is a heuristic.** `migration-check.sh` matches destructive and authorisation-weakening statements in the SQL text, so SQL built at run time (`execute format(...)` in a `do` block or a function) is not seen, and a comment that names a `drop` costs a label; the code reviewer's database checklist is the second line.
+- **Cloudflare target (frontend `host: cloudflare`):**
   - Workers Previews are an open beta in Wrangler.
   - A deleted Preview has been seen serving for hours on a static-assets Worker ([cloudflare/developer-platform#73](https://github.com/cloudflare/developer-platform/issues/73)). `preview-cleanup` warns when it happens; Access keeps it from the public meanwhile.
   - Every production version also has its own public address, `<version>-<repo>.<subdomain>.workers.dev` (not indexed): Workers Previews need the same setting. Production is public anyway; an old version stays reachable after a rollback or a new deploy.

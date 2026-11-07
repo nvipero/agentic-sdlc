@@ -76,7 +76,7 @@ Each role is an Agent Skill plus a thin role definition stating model, tools and
 | Spec writer | Issue, context, research answers, codebase | Spec, research requests, questions | `specs/` | Guess silently, research itself, or write a spec it cannot justify |
 | Spec reviewer | Spec, issue, context | Findings | Comments only | Edit files |
 | Test writer | Approved spec | Acceptance tests | `tests/acceptance/` | Write production code |
-| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, `supabase/` migrations and functions, root project files | Touch acceptance tests, specs or anything outside the story |
+| Implementer | Spec, tests | Code, unit tests | `src/`, `public/`, `tests/unit/`, the database and API components, root project files | Touch acceptance tests, specs or anything outside the story |
 | Code reviewer | Tests or PR diff, spec, test results | Findings, approval, "Where to look" | Nothing: the orchestrator posts its output | Edit files |
 
 The orchestrator is a Claude Code command (`/factory:run <issue>`) run in the main session, which delegates to role subagents. The researcher's interview runs in the main session through `/factory:context`, because subagents cannot ask the human questions; its research-request mode is a subagent. Each producing role commits its own work; the orchestrator pushes.

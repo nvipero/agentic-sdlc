@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Supabase changes between two commits, for the guards (factory docs/gates.md) and
-# for /factory:run's implementation checks. Reads git objects only; runs nothing
-# from the repository.
+# Migration changes in one database component's directory between two commits,
+# for the guards (factory docs/gates.md) and for /factory:run's implementation
+# checks. Postgres SQL, whichever host runs it. Reads git objects only; runs
+# nothing from the repository.
 #
-#   supabase-check.sh <base> <head>
+#   migration-check.sh <base> <head> <dir>
 #
 # Prints one line per finding:
 #   approval: <why>   needs the owner's migration-approved label on the issue
@@ -18,7 +19,7 @@
 # (execute format(...)) is not seen (docs/risks.md).
 set -euo pipefail
 
-base="${1:?base commit}" head="${2:?head commit}"
+base="${1:?base commit}" head="${2:?head commit}" dir="${3:?migrations directory}"
 need=0
 
 # classify <path>: "approval <statement>" and "look <statement>" lines for an added
@@ -63,10 +64,6 @@ while IFS= read -r -d '' status; do
     D) echo "approval: existing migration \`$path\` removed"; need=1 ;;
     *) echo "approval: existing migration \`$path\` changed ($status)"; need=1 ;;
   esac
-done < <(git diff --name-status -M -z "$base...$head" -- supabase/migrations)
-
-while IFS= read -r line; do
-  echo "look: \`supabase/config.toml\`: ${line:0:160}"
-done < <(git diff -U0 "$base...$head" -- supabase/config.toml | grep -E '^[+-][^+-]' || true)
+done < <(git diff --name-status -M -z "$base...$head" -- "$dir")
 
 exit "$need"

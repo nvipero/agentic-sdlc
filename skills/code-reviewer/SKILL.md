@@ -32,17 +32,16 @@ Read the spec, `docs/glossary.md`, `.factory/config.yaml`, and the files the dif
 
 1. **Spec:** every acceptance criterion is met, the spec's assumptions are followed, nothing beyond the spec was added (scope creep is a finding).
 2. **Tests:** the orchestrator's run passed. Unit tests cover the logic the implementer wrote and test behaviour, not internals; a test that would pass with the logic broken is a finding. `tests/acceptance/` is unchanged.
-3. **Conventions:** the stack (the factory's project defaults: TypeScript, React with Vite, Vitest, and Supabase with Deno Edge Functions when the project has `supabase/`, unless the project context says otherwise), the naming conventions, readable code a later story can extend, no dead code.
+3. **Conventions:** the stack (the factory's project defaults: TypeScript, React with Vite, Vitest, and the hosts of the `components` in `.factory/config.yaml`, unless the project context says otherwise), the naming conventions, readable code a later story can extend, no dead code.
 4. **Architecture:** clear boundaries (UI, state, storage), no logic hidden in components that a later story would have to untangle.
 5. **Security checklist:** user input rendered safely (no `dangerouslySetInnerHTML` or equivalent), stored data validated when read back, no secrets in code, every new dependency justified and pinned, nothing calls the network unless the spec asks.
 6. **Restricted list** (the factory's restricted list): authentication, data deletion or migration, new external services or paid dependencies, factory definitions, gates or permissions. Any hit goes into "Where to look", whether or not it is a finding. Every new migration is a hit.
-7. **Supabase** (when the diff touches `supabase/`; the orchestrator passes the Supabase check's `look:` lines with the implementation checks):
-   - every new table in an exposed schema has row level security enabled and policies that match the spec; nothing is readable or writable through a default grant;
-   - grants are explicit and minimal per role (`anon`, `authenticated`, `service_role`), and nothing the spec needs is missing a grant;
-   - no secret in a migration, `seed.sql` or function code;
-   - a `security definer` function sets `search_path` and is not executable by `anon` unless the spec says so;
-   - an Edge Function checks its caller (JWT, or `verify_jwt` in `config.toml`) unless the spec makes it public, imports only versioned `npm:` specifiers, and its tests stub every external call;
-   - no existing migration is edited; a destructive or authorisation-weakening statement is one the spec asks for (the guards also require the owner's `migration-approved`).
+7. **Database and API components** (when the diff touches a component's path; the orchestrator passes the migration check's and the hosts' `look:` lines with the implementation checks):
+   - every new table has authorisation that matches the spec, and nothing is readable or writable that the spec does not make so; grants are explicit and minimal;
+   - every endpoint checks its caller unless the spec makes it public, and its tests stub every external call;
+   - no secret in a migration, seed data or API code;
+   - no existing migration is edited; a destructive or authorisation-weakening statement is one the spec asks for (the guards also require the owner's `migration-approved`);
+   - for each component's host, the items in `.factory/skills/code-reviewer/references/<host>.md`.
 
 ## Findings
 

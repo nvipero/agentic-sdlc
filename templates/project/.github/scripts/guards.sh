@@ -67,13 +67,35 @@ allowed() {   # allowed <role> <path>
     implementer)
       case "$2" in
         src/*|public/*|tests/unit/*) return 0 ;;
-        supabase/migrations/*|supabase/functions/*|supabase/seed.sql|supabase/config.toml) return 0 ;;
+      esac
+      local o
+      for o in ${OWNED[@]+"${OWNED[@]}"}; do
+        case "$o" in
+          */) [[ "$2" == "$o"* ]] && return 0 ;;
+          *) [ "$2" = "$o" ] && return 0 ;;
+        esac
+      done
+      case "$2" in
         */*|.*|CLAUDE.md|README.md) return 1 ;;
         *) return 0 ;;
       esac ;;
     *) return 1 ;;
   esac
 }
+
+# The components in main's .factory/config.yaml (components.sh): what the
+# implementer owns besides the root rules, the databases, the files to list.
+SCRIPTS="$(dirname "$0")"
+OWNED=() DATABASES=() LISTED=()
+if comp_owned="$(bash "$SCRIPTS/components.sh" owned)" \
+   && comp_db="$(bash "$SCRIPTS/components.sh" database)" \
+   && comp_listed="$(bash "$SCRIPTS/components.sh" listed)"; then
+  while IFS= read -r l; do [ -n "$l" ] && OWNED+=("$l"); done <<<"$comp_owned"
+  while IFS= read -r l; do [ -n "$l" ] && DATABASES+=("$l"); done <<<"$comp_db"
+  while IFS= read -r l; do [ -n "$l" ] && LISTED+=("$l"); done <<<"$comp_listed"
+else
+  fail "main's .factory/config.yaml has no valid components (components.sh)"
+fi
 
 heading "Commits"
 FIRST_IMPL=
@@ -176,24 +198,28 @@ for f in ${changed[@]+"${changed[@]}"}; do
 done
 [ -n "$cfg" ] || note "unchanged"
 
-# --- Supabase: migrations and configuration (supabase-check.sh) -------------------
-heading "Supabase"
-if git diff --quiet "$BASE_SHA...$HEAD_SHA" -- supabase; then
-  note "unchanged"
-else
+# --- Databases and hosts' files (components.sh, migration-check.sh) --------------
+heading "Migrations"
+need=
+for d in ${DATABASES[@]+"${DATABASES[@]}"}; do
   rc=0
-  out="$(bash "$(dirname "$0")/supabase-check.sh" "$BASE_SHA" "$HEAD_SHA")" || rc=$?
+  out="$(bash "$SCRIPTS/migration-check.sh" "$BASE_SHA" "$HEAD_SHA" "$d")" || rc=$?
   while IFS= read -r line; do [ -n "$line" ] && note "$line"; done <<<"$out"
-  if [ "$rc" -eq 1 ]; then
-    if [ "$(owner_labels "$MIGRATION_LABEL")" -gt 0 ]; then
-      note "approved by the owner's \`$MIGRATION_LABEL\`"
-    else
-      fail "a migration needs the owner's \`$MIGRATION_LABEL\` on the issue (lines marked approval above)"
-    fi
-  elif [ "$rc" -ne 0 ]; then
-    fail "supabase-check.sh failed ($rc)"
+  if [ "$rc" -eq 1 ]; then need=1; elif [ "$rc" -ne 0 ]; then fail "migration-check.sh failed on \`$d\` ($rc)"; fi
+done
+if [ -n "$need" ]; then
+  if [ "$(owner_labels "$MIGRATION_LABEL")" -gt 0 ]; then
+    note "approved by the owner's \`$MIGRATION_LABEL\`"
+  else
+    fail "a migration needs the owner's \`$MIGRATION_LABEL\` on the issue (lines marked approval above)"
   fi
 fi
+[ "${#DATABASES[@]}" -gt 0 ] || note "no database component"
+for f in ${LISTED[@]+"${LISTED[@]}"}; do
+  while IFS= read -r line; do
+    note "look: \`$f\`: ${line:0:160}"
+  done < <(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- "$f" | grep -E '^[+-][^+-]' || true)
+done
 
 printf '\n**Result:** %s\n' "$([ "$FAILS" -eq 0 ] && echo "all guards pass" || echo "$FAILS failure(s)")" >> "$SUMMARY"
 [ "$FAILS" -eq 0 ]
