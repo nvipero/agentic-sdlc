@@ -207,7 +207,8 @@ for d in ${DATABASES[@]+"${DATABASES[@]}"}; do
   rc=0
   out="$(bash "$SCRIPTS/migration-check.sh" "$BASE_SHA" "$HEAD_SHA" "$d")" || rc=$?
   while IFS= read -r line; do [ -n "$line" ] && note "$line"; done <<<"$out"
-  if [ "$rc" -eq 1 ]; then need=1; elif [ "$rc" -ne 0 ]; then fail "migration-check.sh failed on \`$d\` ($rc)"; fi
+  if [ "$rc" -ne 0 ]; then fail "migration-check.sh failed on \`$d\` ($rc)"; fi
+  if grep -q '^approval:' <<<"$out"; then need=1; fi
 done
 if [ -n "$need" ]; then
   if [ "$(owner_labels "$MIGRATION_LABEL")" -gt 0 ]; then

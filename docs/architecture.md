@@ -105,7 +105,7 @@ Model choices are initial guesses, to be tuned with more stories. The config is 
 
 ### Components
 
-`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, always from `main`'s `config.yaml` where a PR could otherwise choose; the orchestrator reads the file itself, because the container has no Ruby.
+`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, from `main`'s `config.yaml` in the guards and the deploy workflows (the `tests` workflow reads the PR's checkout, only to find the Deno paths); the orchestrator reads the file itself, because the container has no Ruby.
 
 ```yaml
 components:
