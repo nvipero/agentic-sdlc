@@ -59,9 +59,10 @@ Run the commands from the factory repository's root.
 
    **`cloudflare`.** Do not connect Cloudflare's Git integration (Workers Builds): the pipeline deploys. The Worker is named exactly like the repository, in lowercase letters, digits and hyphens: the `cloudflare` target script (`.github/scripts/deploy/cloudflare.sh`) derives it from the repository's name. Create the Worker under your own login, because creating one needs more than the pipeline's token may do; its placeholder is production until the first merge:
    ```sh
+   repo=<repo-name>   # the Worker's name
    mkdir -p /tmp/cf-worker/public && cd /tmp/cf-worker
    printf '<!doctype html><meta charset="utf-8"><title>Not deployed yet</title><p>Production appears here after the first merge to main.</p>\n' > public/index.html
-   printf '{"name":"<repo-name>","compatibility_date":"2026-10-01","workers_dev":true,"preview_urls":true,"assets":{"directory":"./public"}}\n' > wrangler.jsonc
+   printf '{"name":"%s","compatibility_date":"2026-10-01","workers_dev":true,"preview_urls":true,"assets":{"directory":"./public"}}\n' "$repo" > wrangler.jsonc
    npx wrangler@4.152.0 login
    npx wrangler@4.152.0 deploy
    npx wrangler@4.152.0 logout && cd / && rm -rf /tmp/cf-worker
