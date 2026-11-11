@@ -83,7 +83,8 @@ jobs:
           DO_NOT_TRACK: "1"
         run: |
           set -euo pipefail
-          if ! bash .github/scripts/components.sh list | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
+          components="$(bash .github/scripts/components.sh list)"
+          if ! awk '$3 == "supabase" { found = 1 } END { exit !found }' <<<"$components"; then
             echo "no Supabase components"; exit 0
           fi
           npm install --global supabase@3.1.0

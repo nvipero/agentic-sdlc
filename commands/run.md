@@ -254,7 +254,7 @@ If not, record the problem in the status comment, tell the owner in this session
 
 ### The Supabase stack
 
-With a component on host `supabase` in `.factory/config.yaml`, the acceptance tests need its local stack: run `env="$(bash .github/scripts/supabase-stack.sh native)"` at the repository root before every acceptance run. It starts the stack from `supabase/supabase.lock` (or finds it running) and resets the database to the branch's migrations and `supabase/seed.sql`, so each run starts from the branch's own data. Each Bash call is a new shell: run the stack script, `export $env` and the Playwright commands in one call, so the web server and the tests get the stack's addresses and keys. The `tests` workflow runs the same script on Docker.
+With a component on host `supabase` in `.factory/config.yaml`, the acceptance tests need its local stack: run `env="$(bash .github/scripts/supabase-stack.sh native)"` at the repository root before every acceptance run. It starts the stack from `supabase/supabase.lock` with the branch's `supabase/config.toml` (stopping a running one first) and resets the database to the branch's migrations and `supabase/seed.sql`, so each run starts from the branch's own data. Each Bash call is a new shell: run the stack script, `export $env` and the Playwright commands in one call, so the web server and the tests get the stack's addresses and keys. The `tests` workflow runs the same script on Docker.
 
 If the script fails, the environment is broken, not the tests: record its message in the status comment, tell the owner in this session, push, and stop. Never send it to a role as a finding.
 
