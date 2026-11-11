@@ -327,11 +327,12 @@ expect_fail "node cannot write to the browsers path" "touch /ms-playwright/exit-
 expect_ok "Deno runs as node with the image's version" 'deno --version | grep -q "^deno $DENO_VERSION "'
 expect_ok "Supabase CLI runs as node with the image's version" '[ "$(supabase --version)" = "$SUPABASE_VERSION" ] && echo "supabase $SUPABASE_VERSION"'
 # A throwaway project from the image's lock: the native stack starts with the archives in the image
-# (the firewall rejects any download) and serves the API; destroyed afterwards.
+# (the firewall rejects any download) and serves the API; destroyed afterwards. CLAUDECODE=1 as in
+# an agent session, where the CLI would otherwise switch to JSON output.
 expect_ok "Supabase local stack starts as node from the image's lock and serves the API" 'set -eo pipefail; d="$(mktemp -d)"; cd "$d"
   trap "supabase stack destroy --yes >/dev/null 2>&1; cd /; rm -rf $d" EXIT
   supabase init >/dev/null && cp /etc/factory/supabase.lock supabase/supabase.lock
-  env="$(bash /workspace/.github/scripts/supabase-stack.sh native)"; export $env
+  env="$(CLAUDECODE=1 bash /workspace/.github/scripts/supabase-stack.sh native)"; export $env
   curl -sf -o /dev/null "$REST_URL/" -H "apikey: $VITE_SUPABASE_ANON_KEY"; echo "API at $VITE_SUPABASE_URL"'
 expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -eo pipefail; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
   echo "{\"private\":true}" > package.json

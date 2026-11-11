@@ -23,14 +23,16 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 run() { "$@" >"$log" 2>&1 || { echo "supabase-stack: $* failed:" >&2; tail -20 "$log" >&2; exit 1; }; }
 
+# --agent no on every call: inside an agent session (CLAUDECODE) the CLI detects
+# an agent and prints JSON instead of its text output.
 # A running stack keeps the supabase/config.toml it started with: stop it first,
 # so every run uses the branch's. Nothing to stop is fine.
-supabase stop >/dev/null 2>&1 || true
+supabase stop --agent no >/dev/null 2>&1 || true
 # Studio, pgmeta, analytics and the pooler are not in the image (.devcontainer/Dockerfile).
 # --eager: every service runs before the tests start, and none stops when idle.
-run supabase start --runtime "$runtime" --frozen --eager -x studio,analytics,pooler
-run supabase db reset
-status="$(supabase status --env --override-name API_URL=VITE_SUPABASE_URL,ANON_KEY=VITE_SUPABASE_ANON_KEY,PUBLISHABLE_KEY=VITE_SUPABASE_PUBLISHABLE_KEY 2>"$log")" \
+run supabase start --agent no --runtime "$runtime" --frozen --eager -x studio,analytics,pooler
+run supabase db reset --agent no
+status="$(supabase status --agent no --env --override-name API_URL=VITE_SUPABASE_URL,ANON_KEY=VITE_SUPABASE_ANON_KEY,PUBLISHABLE_KEY=VITE_SUPABASE_PUBLISHABLE_KEY 2>"$log")" \
   || { echo "supabase-stack: supabase status failed:" >&2; tail -20 "$log" >&2; exit 1; }
 # Unquoted and checked, so the lines work both with export and in $GITHUB_ENV.
 vars="$(sed -E "s/^([A-Z0-9_]+)='(.*)'$/\1=\2/" <<<"$status")"
