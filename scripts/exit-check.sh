@@ -325,6 +325,14 @@ t="$(tools_of code-reviewer)"
 expect_fail "node cannot write to the browsers path" "touch /ms-playwright/exit-check" "Permission denied"
 # A throwaway package as node: the pinned @playwright/test from the registry, Chromium from the image.
 expect_ok "Deno runs as node with the image's version" 'deno --version | grep -q "^deno $DENO_VERSION "'
+expect_ok "Supabase CLI runs as node with the image's version" '[ "$(supabase --version)" = "$SUPABASE_VERSION" ] && echo "supabase $SUPABASE_VERSION"'
+# A throwaway project from the image's lock: the native stack starts with the archives in the image
+# (the firewall rejects any download) and serves the API; destroyed afterwards.
+expect_ok "Supabase local stack starts as node from the image's lock and serves the API" 'set -eo pipefail; d="$(mktemp -d)"; cd "$d"
+  trap "supabase stack destroy --yes >/dev/null 2>&1; cd /; rm -rf $d" EXIT
+  supabase init >/dev/null && cp /etc/factory/supabase.lock supabase/supabase.lock
+  env="$(bash /workspace/.github/scripts/supabase-stack.sh native)"; export $env
+  curl -sf -o /dev/null "$REST_URL/" -H "apikey: $VITE_SUPABASE_ANON_KEY"; echo "API at $VITE_SUPABASE_URL"'
 expect_ok "Chromium starts headless as node with the image's Playwright version" 'set -eo pipefail; d="$(mktemp -d)"; trap "rm -rf $d" EXIT; cd "$d"
   echo "{\"private\":true}" > package.json
   npm i -D --save-exact --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION" >/dev/null 2>&1
@@ -398,6 +406,18 @@ deno_image="$(sed -nE 's/^ARG DENO_VERSION=(.+)$/\1/p' "$FACTORY_DIR/templates/p
 deno_ci="$(grep -oE 'deno@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/tests.yml" | head -1)"
 [ -n "$deno_image" ] && [ "$deno_ci" = "deno@$deno_image" ] && pass "tests runs the image's Deno" "$deno_image" \
   || fail "Deno pins" "image ${deno_image:-none}, tests ${deno_ci:-none}"
+# Supabase: the tests workflow runs the image's CLI, and a project with Supabase components
+# commits the image's lock (its CLI version resolves exactly that one).
+sb_image="$(sed -nE 's/^ARG SUPABASE_VERSION=(.+)$/\1/p' "$FACTORY_DIR/templates/project/.devcontainer/Dockerfile")"
+sb_ci="$(grep -oE 'supabase@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/tests.yml" | head -1)"
+[ -n "$sb_image" ] && [ "$sb_ci" = "supabase@$sb_image" ] && pass "tests runs the image's Supabase CLI" "$sb_image" \
+  || fail "Supabase CLI pins" "image ${sb_image:-none}, tests ${sb_ci:-none}"
+if git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" list - 2>/dev/null | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
+  [ "$(git -C "$REPO" show origin/main:supabase/supabase.lock 2>/dev/null | shasum -a 256)" = "$(git -C "$REPO" show origin/main:.devcontainer/supabase.lock 2>/dev/null | shasum -a 256)" ] \
+    && pass "supabase/supabase.lock on main is the image's lock" || fail "supabase/supabase.lock on main" "missing, or not .devcontainer/supabase.lock (factory docs/setup.md)"
+else
+  skip "supabase/supabase.lock on main is the image's lock" "no Supabase components on main"
+fi
 # The deployment target (the frontend component's host), and exactly its secrets, only in the two environments.
 frontend="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" frontend - 2>&1)" || true
 target="${frontend%% *}"

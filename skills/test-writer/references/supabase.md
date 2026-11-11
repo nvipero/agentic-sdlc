@@ -1,0 +1,9 @@
+# Host `supabase`
+
+For components with `host: supabase` in `.factory/config.yaml`. The acceptance tests run against Supabase's local stack, in the container and in the `tests` workflow.
+
+- **The stack:** at the repository root, in the same Bash call as Playwright: `env="$(bash .github/scripts/supabase-stack.sh native)" && export $env && cd tests/acceptance && npm ci && npx playwright test --grep @issue-<n>-`. It starts the stack from `supabase/supabase.lock` and resets the database to the branch's migrations and `supabase/seed.sql`. If it fails, the environment is broken: return `failure: app does not start` with its message.
+- **Addresses and keys from the environment**, never literals: the ports change per stack. The web server inherits `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; a test that needs them reads `process.env`. They are the local stack's demo values, not secrets.
+- **One database for the whole run,** and Playwright runs tests in parallel: each test creates its own data and users with unique names (`crypto.randomUUID()` in the email or title) and never depends on another test's data. Use the seed only for reference data the spec names. No cleanup: the next run starts from a reset.
+- **Users** sign up through the app when the criterion is about signing up; otherwise through the auth API (`POST ${VITE_SUPABASE_URL}/auth/v1/signup` with the anon key as `apikey`), then sign in through the app. Email confirmation is off in the local stack unless `supabase/config.toml` turns it on. Never the service role key: tests act as users.
+- **External services** (Google, an AI API) are never reached: the stack sets no secrets for them. For a criterion that depends on one, replace the Edge Function's response in the browser with `page.route('**/functions/v1/<name>', …)` and test what the app shows; the function itself is covered by its Deno tests.

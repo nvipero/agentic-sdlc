@@ -21,7 +21,12 @@ Run the commands from the factory repository's root.
    rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
    cd ../<repo-name> && git add -A && git commit -m "chore: initialize project from factory template" && git push -u origin main
    ```
-   Before that commit, set `components` in the new repository's `.factory/config.yaml` ([components](architecture.md#components)): the frontend's `host` is the deployment target below. **A project with a Supabase backend:** also run `npx supabase init` in the new repository (the container has no Supabase CLI) and uncomment the `db` and `functions` components. `supabase init` writes `supabase/config.toml`, which the implementer may then change, and `supabase/.gitignore`, which stays yours.
+   Before that commit, set `components` in the new repository's `.factory/config.yaml` ([components](architecture.md#components)): the frontend's `host` is the deployment target below. **A project with a Supabase backend:** also uncomment the `db` and `functions` components, and in the new repository run `supabase init` with the image's CLI version and copy in the image's lock:
+   ```sh
+   npx -y "supabase@$(sed -nE 's/^ARG SUPABASE_VERSION=//p' .devcontainer/Dockerfile)" init
+   cp .devcontainer/supabase.lock supabase/supabase.lock
+   ```
+   `supabase init` writes `supabase/config.toml`, which the implementer may then change, and `supabase/.gitignore`, which stays yours. `supabase/supabase.lock` pins the local stack's service versions for the acceptance tests ([gates](gates.md)) and is yours too: the image holds exactly those services, and the exit check fails when it differs from `.devcontainer/supabase.lock`.
 4. **Apply the GitHub setup from this repo.** Run the ruleset after the first push, because it blocks direct pushes to `main`:
    ```sh
    scripts/setup-github.sh ruleset <owner>/<repo-name>
@@ -112,7 +117,7 @@ rsync -a --delete --exclude README.md --exclude config.yaml skills agents comman
 
 Claude Code loads the plugin when a session starts, so after the PR is merged and the host clone pulled, start a new session (`scripts/up.sh claude`) before the next `/factory:run`.
 
-`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way. `.github/` is copied with `rsync -a --delete templates/project/.github/ ../<repo-name>/.github/`, so a file the template no longer has goes too; `scripts/exit-check.sh` fails on any workflow or script on `main` that the template does not have. A label added to `setup-github.sh labels` reaches the project when you run `scripts/setup-github.sh labels <owner>/<repo-name>` again.
+`README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way. When `.devcontainer/supabase.lock` changes (a new `SUPABASE_VERSION`), a project with Supabase components also copies it to `supabase/supabase.lock` in the same PR, or its stack does not start. `.github/` is copied with `rsync -a --delete templates/project/.github/ ../<repo-name>/.github/`, so a file the template no longer has goes too; `scripts/exit-check.sh` fails on any workflow or script on `main` that the template does not have. A label added to `setup-github.sh labels` reaches the project when you run `scripts/setup-github.sh labels <owner>/<repo-name>` again.
 
 ## Renewing protections
 

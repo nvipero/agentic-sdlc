@@ -58,6 +58,32 @@ RUN npm install --global "deno@${DENO_VERSION}" \
  && deno --version \
  && rm -rf /root/.npm
 
+# The Supabase CLI and its local stack on the native runtime (no container
+# engine), for the acceptance tests of projects with Supabase components
+# (.github/scripts/supabase-stack.sh). supabase.lock pins the services; the
+# archives are fetched here, at build time, so the firewall never opens their
+# hosts, and a project's supabase/supabase.lock must equal it. Studio (with
+# pgmeta), analytics and the pooler are dropped, about 1 GB: supabase-stack.sh
+# leaves them out. Telemetry is off: it would only meet the firewall.
+# SUPABASE_VERSION is the tests workflow's pin.
+ARG SUPABASE_VERSION=3.1.0
+ENV SUPABASE_VERSION=${SUPABASE_VERSION} \
+    SUPABASE_EXPERIMENTAL_STACK=1 \
+    SUPABASE_TELEMETRY_DISABLED=1 \
+    DO_NOT_TRACK=1
+RUN npm install --global "supabase@${SUPABASE_VERSION}" \
+ && rm -rf /root/.npm \
+ && install -d -m 0755 /etc/factory
+COPY --chmod=0644 supabase.lock /etc/factory/supabase.lock
+USER node
+RUN d="$(mktemp -d)" && cd "$d" && supabase init >/dev/null \
+ && cp /etc/factory/supabase.lock supabase/supabase.lock \
+ && supabase stack install --runtime native --frozen \
+ && cd / && rm -rf "$d" \
+ && cd /home/node/.supabase/cache/stack/slim-services \
+ && rm -rf studio pgmeta analytics pooler
+USER root
+
 # Policy files: root-owned, read-only for the node user. The directories are
 # created first: COPY --chmod would otherwise give them mode 0644 as well,
 # and Claude Code would skip unreadable managed settings.
