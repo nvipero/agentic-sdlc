@@ -25,6 +25,12 @@ Accepted unless a backlog issue is linked. A security review does not report the
   - All of GitHub is reachable. The repo-scoped token limits writes.
   - Rejected connections are counted, not logged ([#29](https://github.com/nvipero/agentic-sdlc/issues/29)).
 - **Migration check is a heuristic.** `migration-check.sh` matches destructive and authorisation-weakening statements in the SQL text, so SQL built at run time (`execute format(...)` in a `do` block or a function) is not seen, and a comment that names a `drop` costs a label; the code reviewer's database checklist is the second line.
+- **Supabase local stack (components on host `supabase`):**
+  - It is the CLI's experimental stack (`SUPABASE_EXPERIMENTAL_STACK`): a CLI update may change its commands or output (3.x already renamed `status -o env` to `status --env`). The CLI and the lock are pinned and updated together, deliberately ([#68](https://github.com/nvipero/agentic-sdlc/issues/68)).
+  - The container runs it on the native runtime and the `acceptance` gate on Docker: a difference between the two fails the gate for code that passed in the container. That costs a round; it never lets something wrong through.
+  - Every Edge Function request starts a new worker ([supabase/cli#7274](https://github.com/supabase/cli/issues/7274)), measured at 0.4–0.6 s per first call.
+  - Neither runtime is the hosted platform: platform differences show only after deployment ([#59](https://github.com/nvipero/agentic-sdlc/issues/59)).
+  - The image grows by about 1 GB for every project, including those without Supabase.
 - **Cloudflare target (frontend `host: cloudflare`):**
   - Workers Previews are an open beta in Wrangler.
   - A deleted Preview has been seen serving for hours on a static-assets Worker ([cloudflare/developer-platform#73](https://github.com/cloudflare/developer-platform/issues/73)). `preview-cleanup` warns when it happens; Access keeps it from the public meanwhile.

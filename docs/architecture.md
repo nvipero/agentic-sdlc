@@ -52,6 +52,8 @@ tests/unit/          the root project files (package.json, lockfile,
                      with the files their host names; for supabase:
                      supabase/migrations/, supabase/functions/,
                      config.toml, seed.sql (created with supabase init)
+supabase/supabase.lock  the local stack's service versions, a copy of  (human)
+                     .devcontainer/supabase.lock
 .gitignore, dot files outside the component paths                      (human)
 ```
 
@@ -69,6 +71,7 @@ A project's `.factory/` is a copy of the factory's `skills/`, `agents/` and `com
 - Agents cannot start, stop or control containers. The container has no access to the Docker socket.
 - **Network:** outbound traffic is limited to an HTTPS allowlist (Anthropic, GitHub, npm). The firewall fails closed.
 - **Browser for acceptance tests:** Playwright's Chromium is installed in the image at build time, pinned with `PLAYWRIGHT_VERSION` in the Dockerfile, so no browser download passes the firewall. A project's `tests/acceptance/package.json` pins `@playwright/test` to the same version; changing it means changing the Dockerfile, which rebuilds the image.
+- **Supabase local stack for acceptance tests:** the Supabase CLI (`SUPABASE_VERSION`) and its native runtime's service archives, pinned by `.devcontainer/supabase.lock`, are in the image, so a project with Supabase components runs its acceptance tests against a local stack in the container, with no container engine and no download (`.github/scripts/supabase-stack.sh`). Studio, analytics and the pooler are left out; the rest adds about 1 GB to every project's image. The stack listens on loopback, its keys are the CLI's published demo values, and the CLI's telemetry is off. It is the CLI's experimental stack ([risks](risks.md)).
 - **Claude Code policy:** set in `/etc/claude-code/managed-settings.json` inside the image. It disables connectors, artifacts, non-essential traffic and updates, and denies merge commands. Claude Code runs without per-command permission prompts (bypass mode), and the deny rules still apply. Limits come from the container boundary, the network allowlist, read-only mounts, managed settings in the image and role tool restrictions.
 
 Credentials and GitHub protections are in [security](security.md).
@@ -105,7 +108,7 @@ Model choices are initial guesses, to be tuned with more stories. The config is 
 
 ### Components
 
-`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, from `main`'s `config.yaml` in the guards and the deploy workflows (the `tests` workflow reads the PR's checkout, only to find the Deno paths); the orchestrator reads the file itself, because the container has no Ruby.
+`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, from `main`'s `config.yaml` in the guards and the deploy workflows (the `tests` workflow reads the PR's checkout, only to find the Deno paths and whether to start the Supabase stack); the orchestrator reads the file itself, because the container has no Ruby.
 
 ```yaml
 components:
@@ -126,5 +129,5 @@ Components in other repositories, more than one API, a diagram generated from th
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
-- Optionally Supabase as the `database` and `api` components' host: Postgres migrations with row level security, Deno Edge Functions with Deno's test runner (Deno 2.1, as Supabase's Edge Runtime; dependencies from npm only, so the firewall needs no other host). Deploying it, a database for the acceptance tests and preview backends are not supported yet ([#58](https://github.com/nvipero/agentic-sdlc/issues/58), [#59](https://github.com/nvipero/agentic-sdlc/issues/59), [#60](https://github.com/nvipero/agentic-sdlc/issues/60)).
+- Optionally Supabase as the `database` and `api` components' host: Postgres migrations with row level security, Deno Edge Functions with Deno's test runner (Deno 2.1, as Supabase's Edge Runtime; dependencies from npm only, so the firewall needs no other host). Acceptance tests run against Supabase's local stack, in the container and in the `tests` workflow ([gates](gates.md)). Deploying it and preview backends are not supported yet ([#59](https://github.com/nvipero/agentic-sdlc/issues/59), [#60](https://github.com/nvipero/agentic-sdlc/issues/60)).
 - Vercel for preview and production deployments (frontend `host: vercel`; Hobby, through the pipeline; no Git integration), or a Cloudflare Worker with static assets only (frontend `host: cloudflare`; through the pipeline; no Git integration)

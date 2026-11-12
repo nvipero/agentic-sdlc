@@ -151,11 +151,11 @@ Note `before="$(git rev-parse HEAD)"`. Call `factory:test-writer` with: the spec
 
 ### Test run, phase `tests`
 
-If the repository root has a `package.json`, run `npm ci` there first, so the app can start. Then, in `tests/acceptance/`:
+If the repository root has a `package.json`, run `npm ci` there first, so the app can start. With a component on host `supabase`, start its stack first and run the tests with its values (section 10, "The Supabase stack"). Then, in `tests/acceptance/`:
 1. **Version:** the `@playwright/test` version in `package.json` equals `$PLAYWRIGHT_VERSION`. If not, skip the rest of the run: the tests cannot run with the image's browsers. Send it to the test writer as a finding; it counts as a round.
 2. `npm ci`, then `npx playwright test --list`. It must succeed: a failure here is a broken test, which goes back to the test writer as a finding without a review.
 3. **Tags:** `npx playwright test --list --reporter=json | jq -r '[.. | objects | select(has("tags") and has("title")) | .tags[]] | unique | .[]'` lists the tags (without `@`). Every acceptance criterion id in the spec (`AC-<k>`) has a tag `issue-<n>-ac-<k>`, every `issue-<n>-ac-<k>` tag names a criterion in the spec, and every test has at least one tag. A mismatch goes back to the test writer as a finding.
-4. `npx playwright test --reporter=line --grep @issue-<n>-`. Record the summary line, and whether the web server started.
+4. `npx playwright test --reporter=line --grep @issue-<n>-`. Record the summary line, and whether the web server started (and, with a component on host `supabase`, the stack).
    - **Without implementer commits** the tests must **fail** because the behaviour does not exist yet: every criterion has at least one failing test, except those the test writer lists under `already_passing` (the code reviewer checks them). A criterion outside that list with no failing test goes to the test writer as a finding: its tests do not test the new behaviour. If the root has a `package.json`, the web server must have started: otherwise the failure says nothing, and it goes to the test writer as a broken test.
    - **With implementer commits** (a test gate reopened by a test problem), only record the result: the code may already meet the corrected test.
 
@@ -191,7 +191,7 @@ If one fails, record it, tell the owner in this session, push, and stop. Do not 
 
 1. At the root: `npm ci`, `npm test`, `npm run build --if-present`.
 2. For the components whose host descriptor names their kind under `deno`, if their paths have a `*_test.ts` file: `deno test --allow-env <their paths>` at the root (the image's Deno, the version the `tests` workflow uses).
-3. In `tests/acceptance/`: the version check from section 7, `npm ci` (it replaces any existing `node_modules`), then `npx playwright test --reporter=line`, all tests.
+3. With a component on host `supabase`, its stack (section 10, "The Supabase stack"). In `tests/acceptance/`: the version check from section 7, `npm ci` (it replaces any existing `node_modules`), then `npx playwright test --reporter=line`, all tests, with the stack's values.
 
 Everything must pass. Record the summary lines in a chain line. A failure goes back to the implementer as a finding without a review; it counts as a round, except the first failure of the changed tests after a reopened test gate, which is expected.
 
@@ -251,6 +251,12 @@ Check **every** commit the role made, not only the one it reported: `git log --n
 - `git status --porcelain` is empty afterwards.
 
 If not, record the problem in the status comment, tell the owner in this session, push, and stop. Do not repair it yourself.
+
+### The Supabase stack
+
+With a component on host `supabase` in `.factory/config.yaml`, the acceptance tests need its local stack: run `env="$(bash .github/scripts/supabase-stack.sh native)"` at the repository root before every acceptance run. It starts the stack from `supabase/supabase.lock` with the branch's `supabase/config.toml` (stopping a running one first) and resets the database to the branch's migrations and `supabase/seed.sql`, so each run starts from the branch's own data. Each Bash call is a new shell: run the stack script, `export $env` and the Playwright commands in one call, so the web server and the tests get the stack's addresses and keys. The `tests` workflow runs the same script on Docker.
+
+If the script fails, the environment is broken, not the tests: record its message in the status comment, tell the owner in this session, push, and stop. Never send it to a role as a finding.
 
 ### Recording a review
 

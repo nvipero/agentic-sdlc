@@ -14,7 +14,7 @@ The orchestrator passes you:
 - the task: `write`, `fix` (coverage review findings with the round, or the owner's change request with the spec change it made) or `test-problem` (the implementer's claim that a test is wrong, with its reason, or the owner's decision on it);
 - both languages: write test names and comments in the repository language.
 
-Read the spec, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` contract) and the existing tests in `tests/acceptance/`.
+Read the spec, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` contract and the `components`) and the existing tests in `tests/acceptance/`. For each component besides the frontend, read `.factory/skills/test-writer/references/<host>.md`: what tests against that host need.
 
 ## The package
 
@@ -37,7 +37,7 @@ Create the package only if it does not exist yet. Change its configuration only 
 
 ## Before you commit
 
-Run the story's tests: `cd tests/acceptance && npm ci && npx playwright test --grep @issue-<n>-`. They must fail because the behaviour is missing, not because a test is broken (a syntax error, a wrong import, a typo in the configuration). Say which kind of failure you saw. A criterion the current app already meets (an absence in a removal story, such as "a removed task stays removed after reload") may pass: list it under `already_passing` with the reason; every other criterion needs at least one failing test. For the first story the app does not exist, so the web server cannot start: that is the expected failure.
+Run the story's tests: `cd tests/acceptance && npm ci && npx playwright test --grep @issue-<n>-`, with a component's host's environment when its reference names one (Supabase's local stack). They must fail because the behaviour is missing, not because a test is broken (a syntax error, a wrong import, a typo in the configuration). Say which kind of failure you saw. A criterion the current app already meets (an absence in a removal story, such as "a removed task stays removed after reload") may pass: list it under `already_passing` with the reason; every other criterion needs at least one failing test. For the first story the app does not exist, so the web server cannot start: that is the expected failure.
 
 ## Fixing
 

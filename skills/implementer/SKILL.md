@@ -35,7 +35,7 @@ If the project has no `package.json` yet, set it up: Vite with React and TypeScr
 
 ## Before you commit
 
-- `npm ci` (or `npm install` the first time, to create the lockfile), `npm test`, the components' tests as their host's reference says, and the acceptance tests: `cd tests/acceptance && npm ci && npx playwright test`. Everything passes.
+- `npm ci` (or `npm install` the first time, to create the lockfile), `npm test`, the components' tests as their host's reference says, and the acceptance tests: `cd tests/acceptance && npm ci && npx playwright test`, with a component's host's environment when its reference names one (Supabase's local stack). Everything passes.
 - Fix what fails in your code. If an acceptance test fails and you believe the test is wrong, return `test_problem` instead.
 
 ## Fixing
