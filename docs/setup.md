@@ -121,7 +121,7 @@ Claude Code loads the plugin when a session starts, so after the PR is merged an
 
 ## Using the roles in an existing repository
 
-The `assist` plugin (`plugins/assist/`) brings the roles to a repository that is not a factory project, without the pipeline: `/assist:task <issue, description or plan file>` researches and plans with you, and after your approval an implementer writes tests first and the code, and a reviewer in its own context checks the diff against the plan. It ends with a diff for you to read; it pushes and opens a pull request only when you ask. The repository's own `CLAUDE.md`, README, test commands and CI are the contract, and nothing of the factory's is written into it: the approved plan and the run's state live in `~/.claude/assist/<repo>/<slug>.md`, and `/assist:task` with that file resumes an interrupted run.
+The `assist` plugin (`plugins/assist/`) brings the roles to a repository that is not a factory project, without the pipeline: `/assist:task <issue, description or plan file>` researches and plans with you, and after your approval an implementer writes tests first and the code, and a reviewer in its own context checks the diff against the plan. It ends with a diff for you to read; it pushes and opens a pull request only when you ask. The repository's own `CLAUDE.md`, README, test commands and CI are the contract, and nothing of the factory's is written into it: the approved plan and the run's state live in `~/.assist/<repo>/<slug>.md`, and `/assist:task` with that file resumes an interrupted run.
 
 It runs on the host with your permissions, without the container, guards or gates ([risks](risks.md#assist-plugin)). Use it only in repositories where agent use is agreed.
 
@@ -132,9 +132,16 @@ claude plugin marketplace add ~/Personal/github/agentic-sdlc
 claude plugin install assist@agentic-sdlc --scope user
 ```
 
+Then let sessions in any repository read and write the plan files without a prompt each time, and make every `git push` ask you first, also in auto mode (this merges into your user settings and keeps what is there):
+
+```sh
+mkdir -p ~/.assist
+tmp="$(mktemp)" && jq --arg dir "$HOME/.assist" '.permissions.additionalDirectories = ((.permissions.additionalDirectories // []) + [$dir] | unique) | .permissions.ask = ((.permissions.ask // []) + ["Bash(git push *)"] | unique)' ~/.claude/settings.json > "$tmp" && mv "$tmp" ~/.claude/settings.json
+```
+
 The plugin loads in place from the clone, so it is whatever the clone has checked out: a change takes effect at the next session start (or `/reload-plugins`) after you pull, and switching branches in the clone switches the plugin too. The marketplace is registered by absolute path: if the clone moves, run `claude plugin marketplace remove agentic-sdlc` and the two commands above again.
 
-Before the implementer starts, `/assist:task` asks you to switch the session to accept-edits or auto mode (Shift+Tab); otherwise every edit asks for permission. Your deny rules still apply to the subagents. Plugin agents cannot set their own permission mode, hooks or MCP servers.
+The implementer edits files and runs tests and git. Auto mode runs that without a prompt per step; accept-edits mode still asks for every test run and commit. Your deny and ask rules still apply to the subagents. Plugin agents cannot set their own permission mode, hooks or MCP servers.
 
 ## Renewing protections
 

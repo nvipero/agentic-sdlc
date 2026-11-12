@@ -15,7 +15,7 @@ Accepted unless a backlog issue is linked. A security review does not report the
 
 ### Assist plugin
 
-- **No sandbox.** `/assist:task` runs on the host with the owner's permissions: no container, network allowlist, guards, CI gates or enforced approval. Quality rests on the role separation, the orchestrator's own test run, the reviewer, and the owner reading the diff. Pushing is left to the owner by instruction only.
+- **No sandbox.** `/assist:task` runs on the host with the owner's permissions: no container, network allowlist, guards, CI gates or enforced approval. Quality rests on the role separation, the orchestrator's own test run, the reviewer, and the owner reading the diff. Pushing is left to the owner by instruction, and by an ask rule on `git push` in the owner's user settings ([setup](setup.md#using-the-roles-in-an-existing-repository)). This is an accepted exception to principles 4 and 5 (`docs/principles.md`), limited to repositories where the owner runs it.
 - **Client repositories.** Web searches are limited by instruction to libraries, versions and error messages. Evidence from runs in client repositories goes into this repository only as a redacted summary.
 
 ### Factory
