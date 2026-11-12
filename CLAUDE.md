@@ -33,4 +33,4 @@ Before opening a pull request:
 - Commits and branches: Conventional Commits and Conventional Branch, as in `docs/workflow.md`, "Naming conventions".
 - Everything written to the repository and GitHub is in English.
 - Never merge a pull request. The owner merges.
-- `skills/`, `agents/`, `commands/` and `templates/project/` reach a project only when it is synced (`docs/setup.md`); say in the pull request whether the pilot needs a sync.
+- `skills/`, `agents/`, `commands/` and `templates/project/` reach a project only when it is synced (`docs/setup.md`); say in the pull request whether the pilot needs a sync. `plugins/` reaches the owner's sessions on the host directly from this clone (`docs/setup.md`), at the next session start after the change is checked out.

@@ -34,6 +34,7 @@ The full steps, with the commands, are in [docs/setup.md](docs/setup.md).
 | Path | Contents |
 |---|---|
 | `skills/`, `agents/`, `commands/` | Role knowledge, role definitions and commands |
+| `plugins/assist/`, `.claude-plugin/` | The `assist` plugin, the roles for one task in any existing repository, and the local marketplace that installs it ([setup](docs/setup.md#using-the-roles-in-an-existing-repository)) |
 | `templates/project/` | Everything copied into a new project repository |
 | `scripts/setup-github.sh` | Sets up GitHub protections, labels and the Projects board (six issue-only views, default view removed) for a repository |
 | `scripts/exit-check.sh`, `scripts/redact.sh` | Exit check, and redaction of its output before publishing |

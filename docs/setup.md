@@ -119,6 +119,23 @@ Claude Code loads the plugin when a session starts, so after the PR is merged an
 
 `README.md` files are left out, because every Markdown file in a plugin's `agents/` or `commands/` loads as an agent or a command. `config.yaml` is left out too: a new project gets it from the template copy, and after that it belongs to the project. Bring template changes to it by hand in the same PR. Changes to `.devcontainer/`, `CLAUDE.md` or `scripts/up.sh` are copied from `templates/project/` the same way. When `.devcontainer/supabase.lock` changes (a new `SUPABASE_VERSION`), a project with Supabase components also copies it to `supabase/supabase.lock` in the same PR, or its stack does not start. `.github/` is copied with `rsync -a --delete templates/project/.github/ ../<repo-name>/.github/`, so a file the template no longer has goes too; `scripts/exit-check.sh` fails on any workflow or script on `main` that the template does not have. A label added to `setup-github.sh labels` reaches the project when you run `scripts/setup-github.sh labels <owner>/<repo-name>` again.
 
+## Using the roles in an existing repository
+
+The `assist` plugin (`plugins/assist/`) brings the roles to a repository that is not a factory project, without the pipeline: `/assist:task <issue, description or plan file>` researches and plans with you, and after your approval an implementer writes tests first and the code, and a reviewer in its own context checks the diff against the plan. It ends with a diff for you to read; it pushes and opens a pull request only when you ask. The repository's own `CLAUDE.md`, README, test commands and CI are the contract, and nothing of the factory's is written into it: the approved plan and the run's state live in `~/.claude/assist/<repo>/<slug>.md`, and `/assist:task` with that file resumes an interrupted run.
+
+It runs on the host with your permissions, without the container, guards or gates ([risks](risks.md#assist-plugin)). Use it only in repositories where agent use is agreed.
+
+Install it once at user scope, from the host clone of this repository:
+
+```sh
+claude plugin marketplace add ~/Personal/github/agentic-sdlc
+claude plugin install assist@agentic-sdlc --scope user
+```
+
+The plugin loads in place from the clone, so it is whatever the clone has checked out: a change takes effect at the next session start (or `/reload-plugins`) after you pull, and switching branches in the clone switches the plugin too. The marketplace is registered by absolute path: if the clone moves, run `claude plugin marketplace remove agentic-sdlc` and the two commands above again.
+
+Before the implementer starts, `/assist:task` asks you to switch the session to accept-edits or auto mode (Shift+Tab); otherwise every edit asks for permission. Your deny rules still apply to the subagents. Plugin agents cannot set their own permission mode, hooks or MCP servers.
+
 ## Renewing protections
 
 The interaction limit expires after six months. `up.sh` warns 14 days before it expires, and refuses to start once it has. To renew it, run `scripts/setup-github.sh interaction-limit <owner>/<repo>`.

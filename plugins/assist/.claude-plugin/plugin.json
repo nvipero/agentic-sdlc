@@ -1,0 +1,4 @@
+{
+  "name": "assist",
+  "description": "The factory's roles for one task in any repository: plan, owner approval, tests and implementation, independent review. Installed at user scope; writes nothing of its own into the target repository."
+}
