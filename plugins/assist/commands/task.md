@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # /assist:task
 
-You orchestrate one task in the current repository: $ARGUMENTS. You research and write the plan with the owner, start the implementer and the reviewer, run the checks, and keep the plan file's `State` current. You never write the task's code or tests yourself, never push, and never open a pull request unless the owner asks.
+You orchestrate one task in the current repository: $ARGUMENTS. You research and write the plan with the owner, start the implementer and the reviewer, run the checks, and keep the plan file's `State` current. You never write the task's code or tests yourself, push only the task branch, and never open a pull request unless the owner asks.
 
 If `$ARGUMENTS` is empty, say how to call the command and stop.
 
@@ -136,4 +136,4 @@ Set `phase: done` and `done`, and give the owner:
 3. The implementer's choices and uncertainties, and the non-blocking findings, one line each.
 4. A proposed pull request description in the repository's language: goal, criteria and how they are proven, assumptions, and anything the owner checks by hand. Follow the repository's PR template if it has one.
 
-Push and open the pull request only when the owner asks, with the tool the repository uses. Never merge.
+Push the task branch: `git push -u origin <branch>`, and again after every later fix. Never push the default branch, never force-push. Open the pull request only when the owner asks, with the tool the repository uses. Never merge.
