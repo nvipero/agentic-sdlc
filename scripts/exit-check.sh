@@ -202,8 +202,10 @@ left=$(( $(cat "$RUN_DIR/expires_at") - $(date +%s) ))
   || fail "token expiry" "$left seconds left"
 expect_ok "the token mount is read-only and holds only the token" \
   "! touch /etc/factory/token/probe 2>/dev/null && test \"\$(ls -A /etc/factory/token)\" = token && echo read-only, entries: \$(ls -A /etc/factory/token)"
-expect_ok "no private key anywhere the agent can read outside the project's dependencies" \
-  "h=\$(grep -rlsI -e 'BEGIN RSA PRIVATE KEY' -e 'BEGIN PRIVATE KEY' /etc /home/node /tmp /run /workspace --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null); echo \"none\${h:+: \$h}\"; test -z \"\$h\""
+# The Supabase stack's services (pinned by the image's lock) ship sample keys,
+# the same in every install, like node_modules.
+expect_ok "no private key anywhere the agent can read outside the project's and the Supabase stack's dependencies" \
+  "h=\$(grep -rlsI -e 'BEGIN RSA PRIVATE KEY' -e 'BEGIN PRIVATE KEY' /etc /home/node /tmp /run /workspace --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null | grep -v '^/home/node/.supabase/cache/stack/'); echo \"none\${h:+: \$h}\"; test -z \"\$h\""
 expect_ok "the token reaches exactly one repository" \
   "n=\$(gh api installation/repositories --jq '[.repositories[].full_name] | join(\" \")'); echo \$n; test \"\$n\" = $NWO"
 before="$(in_box "sha256sum /etc/factory/token/token | cut -c1-64" | tail -1)"
