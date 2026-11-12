@@ -121,7 +121,7 @@ Claude Code loads the plugin when a session starts, so after the PR is merged an
 
 ## Using the roles in an existing repository
 
-The `assist` plugin (`plugins/assist/`) brings the roles to a repository that is not a factory project, without the pipeline: `/assist:task <issue, description or plan file>` researches and plans with you, and after your approval an implementer writes tests first and the code, and a reviewer in its own context checks the diff against the plan. It ends with a diff for you to read; it pushes and opens a pull request only when you ask. The repository's own `CLAUDE.md`, README, test commands and CI are the contract, and nothing of the factory's is written into it: the approved plan and the run's state live in `~/.assist/<repo>/<slug>.md`, and `/assist:task` with that file resumes an interrupted run.
+The `assist` plugin (`plugins/assist/`) brings the roles to a repository that is not a factory project, without the pipeline: `/assist:task <issue, description or plan file>` researches and writes a plan that a reviewer checks before you see it, and after your approval an implementer writes tests first and the code, and a reviewer in its own context checks the diff against the plan. It ends with a diff for you to read; it pushes and opens a pull request only when you ask. The repository's own `CLAUDE.md`, README, test commands and CI are the contract, and nothing of the factory's is written into it: the approved plan and the run's state live in `~/.assist/<repo>/<slug>.md`, and `/assist:task` with that file resumes an interrupted run.
 
 It runs on the host with your permissions, without the container, guards or gates ([risks](risks.md#assist-plugin)). Use it only in repositories where agent use is agreed.
 

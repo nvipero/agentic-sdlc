@@ -25,6 +25,7 @@ Read the plan, the repository's `CLAUDE.md` / `AGENTS.md` (the root and those on
 - **Dependencies:** add one only if the plan allows it. Use the repository's package manager, pin it as the repository pins others, and update its lockfile.
 - **Stop instead of guessing.** If a criterion cannot be met or tested as the plan says (it conflicts with the code, a test cannot be written, the suite cannot run), commit your work in progress if any, and return `blocked` with the reason. Never weaken or delete an existing test to make your change pass.
 - **No secrets** in code, tests or fixtures; no real customer data in tests.
+- **Report progress** in the plan file: append one line to its `## Progress` section (create it just before `## State` if missing) at each step, `<time> <what>`: a test written and run red, green, a commit, a fix started, and before any command that may run long (a full suite, a model or data run), what it is and how long you expect it to take. Use the Edit tool, never touch `## State`, and write nothing else to the file.
 
 ## Fixing
 

@@ -22,7 +22,7 @@ If `$ARGUMENTS` is empty, say how to call the command and stop.
 
 ## Plan file
 
-`~/.assist/<repo>/<slug>.md`, where `<repo>` is the repository directory's name and `<slug>` 2–5 lowercase words from the task. It is outside the repository, so nothing of it reaches the client; `docs/setup.md` in the factory adds the directory to the owner's permissions once. Measurement scripts and their raw output go in the same directory. The file ends with:
+`~/.assist/<repo>/<slug>.md`, where `<repo>` is the repository directory's name and `<slug>` 2–5 lowercase words from the task. It is outside the repository, so nothing of it reaches the client; `docs/setup.md` in the factory adds the directory to the owner's permissions once. Measurement scripts and their raw output go in the same directory. The implementer appends one line per step to a `## Progress` section just before `## State`, so the owner can follow a long run with `tail -f <plan file>`. The file ends with:
 
 ```
 ## State
@@ -85,7 +85,11 @@ Goal: <one or two sentences>
 - **No tests in the repository** (baseline `none`): ask one question. Add a test framework (a new dev dependency the client sees in the diff), or no automated tests and a manual check per criterion that the owner runs and the pull request description lists.
 - **Measure first:** when the right values (thresholds, limits, choices) depend on data, say so in the plan, agree with the owner what is measured and on which data, and set `phase: measure`. Write the script in the plan file's directory and run it from the repository root with the repository's own interpreter and environment (for example `uv run python <path>` or `pnpm exec tsx <path>`). Use only the data the owner names. Raw output stays next to the script; the summary goes into `## Measurement`. Fix the criteria only after the owner has seen the result. Nothing from the measurement is committed unless the plan says so.
 
-Show the plan to the owner and change it until they approve it. Then set `phase: approved` and `approved`.
+### Plan review
+
+Before the owner sees the plan, start `assist:reviewer` with the gate `plan`, the plan file's path, the task as the owner gave it, and the round (1, or 2 for the one re-review). Revise the plan for each blocking finding, or note why not; review again at most once. Record the findings and your responses under `open findings` (ids `P<round>-<n>`).
+
+Show the plan to the owner with a short section on what the review found and what changed, and change the plan until they approve it. Then set `phase: approved` and `approved`.
 
 ## 3. Branch
 
@@ -114,7 +118,7 @@ If a check fails and it is the code, start the implementer with the task `fix` a
 
 ## 5. Review
 
-Start `assist:reviewer` with: the plan file's path, the round, both languages, your check results, the implementer's `choices` and `uncertain`, the commits (`git log --format='%h %s%n%b' <base>..HEAD`), and the diff `git diff <base>...HEAD -- . ':(exclude)*.lock' ':(exclude)*-lock.json' ':(exclude)*-lock.yaml'` (exclude the repository's other lock and generated files too). From round 2 on, also the previous findings, the implementer's responses, and the diff since `reviewed`.
+Start `assist:reviewer` with the gate `implementation`: the plan file's path, the round, both languages, your check results, the implementer's `choices` and `uncertain`, the commits (`git log --format='%h %s%n%b' <base>..HEAD`), and the diff `git diff <base>...HEAD -- . ':(exclude)*.lock' ':(exclude)*-lock.json' ':(exclude)*-lock.yaml'` (exclude the repository's other lock and generated files too). From round 2 on, also the previous findings, the implementer's responses, and the diff since `reviewed`.
 
 Before starting it, raise `round` by one and set `phase: review`. After it returns, set `reviewed` to `git rev-parse --short HEAD` and put the findings into `open findings`.
 
