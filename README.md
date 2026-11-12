@@ -2,7 +2,7 @@
 
 An agent-driven software factory. A user story travels from a GitHub issue to a merged pull request. Agents specify, test, implement and review it, and the human sets direction, answers questions and accepts the result.
 
-Status: v1 done (2026-10-31); [history](docs/history.md). `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. Agents run in a sandboxed dev container and act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a preview deployment, and every merge deploys `main` to production. Further work is in the [backlog](https://github.com/users/nvipero/projects/2).
+Status: v1 done (2026-10-31); [history](docs/history.md). `/factory:context` writes the project context, and `/factory:run` takes a story from spec to a pull request ready for your review: spec, your approval, acceptance tests, implementation, code review and the GitHub gates. In a factory project, agents run in a sandboxed dev container and act as a GitHub App, a PR merges only with your approval, every PR marked ready gets a preview deployment, and every merge deploys `main` to production. Further work is in the [backlog](https://github.com/users/nvipero/projects/2).
 
 ## Documentation
 
@@ -34,6 +34,7 @@ The full steps, with the commands, are in [docs/setup.md](docs/setup.md).
 | Path | Contents |
 |---|---|
 | `skills/`, `agents/`, `commands/` | Role knowledge, role definitions and commands |
+| `plugins/assist/`, `.claude-plugin/` | The `assist` plugin, the roles for one task in any existing repository, and the local marketplace that installs it ([setup](docs/setup.md#using-the-roles-in-an-existing-repository)) |
 | `templates/project/` | Everything copied into a new project repository |
 | `scripts/setup-github.sh` | Sets up GitHub protections, labels and the Projects board (six issue-only views, default view removed) for a repository |
 | `scripts/exit-check.sh`, `scripts/redact.sh` | Exit check, and redaction of its output before publishing |

@@ -33,6 +33,7 @@ Definition of done for v1:
 | 2026-10-31 to 11-03 | Running the paths not yet exercised | [Untested paths drill](evidence/untested-paths-drill.md) |
 | 2026-11-05 to 11-06 | Choices in specs, current behaviour from `main` | [Spec choices and sources](evidence/spec-choices-and-sources.md) |
 | 2026-11-06 | Backlog moved to GitHub Issues; docs replaced the versioned spec; the v2 isolation plan dropped in favour of a real project | [#51](https://github.com/nvipero/agentic-sdlc/pull/51), [#19](https://github.com/nvipero/agentic-sdlc/issues/19) |
+| 2026-11-12 | The `assist` plugin: the roles for one task in an existing repository, tried on a client task | [Assist trial](evidence/assist-trial.md), [#72](https://github.com/nvipero/agentic-sdlc/pull/72) |
 
 Plans for these steps were removed with the spec; they are in git history at 5758ab5 under `docs/plans/`. From now on a plan lives in its backlog issue and the evidence in its pull request.
 

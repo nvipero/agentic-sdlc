@@ -13,6 +13,13 @@ Accepted unless a backlog issue is linked. A security review does not report the
 
 ## Security limitations
 
+### Assist plugin
+
+- **No sandbox.** `/assist:task` runs on the host with the owner's permissions: no container, network allowlist, guards, CI gates or enforced approval. Quality rests on the role separation, the orchestrator's own test run, the reviewer, and the owner reading the diff. It pushes the task branch without asking (owner decision, 2026-11-12); that it never pushes the default branch rests on the instruction and on the repository's branch protection, where it has one. This is an accepted exception to principles 4 and 5 (`docs/principles.md`), limited to repositories where the owner runs it.
+- **Client repositories.** Web searches are limited by instruction to libraries, versions and error messages. Evidence from runs in client repositories goes into this repository only as a redacted summary.
+
+### Factory
+
 - **After the owner approves, the App could technically merge.** Only the deny rule in managed settings prevents it; the owner's approval is the decision that matters. Until 2026-10-30 ([history](history.md)) the agents acted as the owner and could merge without approval; agent commits from then carry the noreply address of an unrelated GitHub account (`factory-agent`) as author and are not rewritten.
 - **Roles share the App.** Only commit trailers and the guards tell the roles apart; separate identities per role need separate sandboxes ([#49](https://github.com/nvipero/agentic-sdlc/issues/49), [#48](https://github.com/nvipero/agentic-sdlc/issues/48)).
 - **Instruction files in role paths.** The guards protect only the root `CLAUDE.md` ([#20](https://github.com/nvipero/agentic-sdlc/issues/20)).

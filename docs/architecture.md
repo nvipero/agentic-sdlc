@@ -19,6 +19,8 @@ skills/              one Agent Skill per role (SKILL.md + references)
 agents/              thin role definitions: model, tools, skill
 commands/            factory commands such as /factory:run and /factory:context
 templates/project/   everything copied into a new project repo
+plugins/assist/      the assist plugin: the roles for one task in any existing repository
+.claude-plugin/      local marketplace that installs plugins/ at user scope on the host
 docs/                how the factory works, and evidence from its verification
 scripts/             GitHub setup, exit checks and helpers (run on the host)
 README.md            overview and entry point
