@@ -39,6 +39,12 @@ jobs:
           fi
           npx -y deno@2.1.4 test --allow-env $paths
       - name: Build
+        # main's build is production's: it gets the production Supabase project's
+        # address and publishable key, public values from repository variables (empty
+        # when not set). A PR's build gets neither, so no preview reaches production's data.
+        env:
+          VITE_SUPABASE_URL: ${{ github.event_name == 'push' && vars.VITE_SUPABASE_URL || '' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ github.event_name == 'push' && vars.VITE_SUPABASE_PUBLISHABLE_KEY || '' }}
         run: npx --no-install vite build
       - if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

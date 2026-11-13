@@ -36,7 +36,13 @@ Accepted unless a backlog issue is linked. A security review does not report the
   - It is the CLI's experimental stack (`SUPABASE_EXPERIMENTAL_STACK`): a CLI update may change its commands or output (3.x already renamed `status -o env` to `status --env`). The CLI and the lock are pinned and updated together, deliberately ([#68](https://github.com/nvipero/agentic-sdlc/issues/68)).
   - The container runs it on the native runtime and the `acceptance` gate on Docker: a difference between the two fails the gate for code that passed in the container. That costs a round; it never lets something wrong through.
   - Every Edge Function request starts a new worker ([supabase/cli#7274](https://github.com/supabase/cli/issues/7274)), measured at 0.4–0.6 s per first call.
-  - Neither runtime is the hosted platform: platform differences show only after deployment ([#59](https://github.com/nvipero/agentic-sdlc/issues/59)).
+  - Neither runtime is the hosted platform: platform differences show only after deployment.
+  - The acceptance stack has seed data only: a migration that passes it can fail on production's data (duplicates, locks, size). The deploy stops before the frontend; recovery is by hand ([setup](setup.md#supabase-production)).
+- **Supabase production deploy:**
+  - No rollback: Supabase has no down migrations, and the free plan has no backups. The owner exports data before a risky migration.
+  - `db push` with the token alone connects through Supabase's shared pooler with a temporary login role, because GitHub's runners have no IPv6. If that path breaks, the fallback is the database password as a second secret (`--password`).
+  - The function secret check reads only literal names (`Deno.env.get("NAME")`): a computed name is not seen, and a name read with a default must still be set.
+  - A long migration holds locks while production serves.
   - The image grows by about 1 GB for every project, including those without Supabase.
 - **Cloudflare target (frontend `host: cloudflare`):**
   - Workers Previews are an open beta in Wrangler.

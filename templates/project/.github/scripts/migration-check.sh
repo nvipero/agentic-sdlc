@@ -12,6 +12,11 @@
 # Exits 0 when the check ran, whatever it found; any other exit is an error, never
 # a result.
 #
+# Look also covers what changes a migration's deploy: a statement PostgreSQL runs
+# outside a transaction (concurrently, vacuum, cluster, alter system), the file's
+# own transaction control (begin, commit, rollback), and the
+# pg-delta transaction=false directive (factory docs/setup.md, "Supabase production").
+#
 # Approval: an existing migration changed, renamed or removed (one on main is
 # applied, or will be at deploy); an added migration with a destructive or
 # authorisation-weakening statement. Approval is matched on the raw SQL, comments
@@ -43,8 +48,10 @@ classify() {
       $s =~ s/^ +| +$//g;
       print "approval ", substr($s, 0, 160), "\n" if $s =~ $approval && !$seen{$s}++;
       print "look ", substr($s, 0, 160), "\n"
-        if $s =~ /\bgrant\b|\brevoke\b|\bcreate policy\b|\balter policy\b|\bsecurity definer\b|\bowner to\b|\bcron\.schedule\b|\bnet\.http_/;
-    }'
+        if $s =~ /\bgrant\b|\brevoke\b|\bcreate policy\b|\balter policy\b|\bsecurity definer\b|\bowner to\b|\bcron\.schedule\b|\bnet\.http_|\bvault\.|\bconcurrently\b|^(vacuum|cluster|alter system)\b|^(begin|commit|start transaction|abort|rollback|prepare transaction)\b/;
+    }
+    # Runs outside the one transaction a file gets at deploy, so a failure is not rolled back.
+    print "look pg-delta: transaction=false (no rollback at deploy)\n" if $raw =~ /--\s*pg-delta:\s*transaction=false/;'
 }
 
 # NUL-separated, so no path is quoted: status, path, and for a rename or copy the new path.

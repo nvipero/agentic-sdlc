@@ -6,7 +6,9 @@
 # main's .factory/config.yaml) deploys only its regular files as a static site.
 # Only main's newest commit is deployed, and deploys queue instead of replacing
 # each other, so a quick series of merges ends on the last one. After the
-# deploy, the production address must serve it.
+# deploy, the production address must serve it. A project's Supabase components
+# deploy first, in the same job (.github/scripts/supabase-deploy.sh), so a failure
+# there leaves production's frontend as it was.
 name: production-deploy
 on:
   workflow_run:
@@ -59,7 +61,7 @@ jobs:
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     concurrency:
       group: production
       queue: max
@@ -76,9 +78,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
           sparse-checkout: |
             .github/scripts
             .factory
+            supabase
           path: main
       - name: Deployment target
         id: target
@@ -118,6 +122,32 @@ jobs:
           set -euo pipefail
           head="$(gh api "repos/$REPO/commits/main" --jq .sha)"
           [ "$head" = "$SHA" ] || { echo "::error::${SHA:0:7} superseded by ${head:0:7}: the newest commit deploys if its tests pass"; exit 1; }
+      - name: Supabase CLI
+        # Installed without the token. The image's version (SUPABASE_VERSION in
+        # .devcontainer/Dockerfile).
+        working-directory: main
+        run: |
+          set -euo pipefail
+          if bash .github/scripts/components.sh list | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
+            npm install --global supabase@3.1.0
+          fi
+      - name: Supabase
+        # Components on host supabase, before the frontend that relies on them: checks,
+        # migrations, functions (the script's header). Only this step gets the token.
+        working-directory: main
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_YES: "1"
+          SUPABASE_TELEMETRY_DISABLED: "1"
+          DO_NOT_TRACK: "1"
+          ART: ${{ runner.temp }}/artifact
+        run: |
+          set -euo pipefail
+          if ! bash .github/scripts/components.sh list | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
+            echo "no Supabase components"; exit 0
+          fi
+          bash .github/scripts/supabase-deploy.sh "$ART"
       - name: Deploy
         id: deploy
         env:

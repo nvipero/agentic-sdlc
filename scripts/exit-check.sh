@@ -412,10 +412,14 @@ deno_ci="$(grep -oE 'deno@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workf
 # Supabase: the tests workflow runs the image's CLI, and a project with Supabase components
 # commits the image's lock (its CLI version resolves exactly that one).
 sb_image="$(sed -nE 's/^ARG SUPABASE_VERSION=(.+)$/\1/p' "$FACTORY_DIR/templates/project/.devcontainer/Dockerfile")"
-sb_ci="$(grep -oE 'supabase@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/tests.yml" | head -1)"
-[ -n "$sb_image" ] && [ "$sb_ci" = "supabase@$sb_image" ] && pass "tests runs the image's Supabase CLI" "$sb_image" \
-  || fail "Supabase CLI pins" "image ${sb_image:-none}, tests ${sb_ci:-none}"
-if git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" list - 2>/dev/null | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
+for wf in tests production-deploy; do
+  sb_ci="$(grep -oE 'supabase@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/$wf.yml" | sort -u)"
+  [ -n "$sb_image" ] && [ "$sb_ci" = "supabase@$sb_image" ] && pass "$wf runs the image's Supabase CLI" "$sb_image" \
+    || fail "Supabase CLI pins" "image ${sb_image:-none}, $wf $(echo ${sb_ci:-none})"
+done
+supabase_on_main=
+git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" list - 2>/dev/null | awk '$3 == "supabase" { found = 1 } END { exit !found }' && supabase_on_main=1
+if [ -n "$supabase_on_main" ]; then
   [ "$(git -C "$REPO" show origin/main:supabase/supabase.lock 2>/dev/null | shasum -a 256)" = "$(git -C "$REPO" show origin/main:.devcontainer/supabase.lock 2>/dev/null | shasum -a 256)" ] \
     && pass "supabase/supabase.lock on main is the image's lock" || fail "supabase/supabase.lock on main" "missing, or not .devcontainer/supabase.lock (factory docs/setup.md)"
 else
@@ -435,8 +439,20 @@ for env in preview production; do
   env_branches="$(gh api "repos/$NWO/environments/$env/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"
   [ "$env_branches" = "branch:main" ] && pass "environment $env deploys from main only" || fail "$env environment branches" "$env_branches"
   env_secrets="$(gh api "repos/$NWO/environments/$env/secrets" --jq '[.secrets[].name] | sort | join(" ")')"
-  [ -n "$target_secrets" ] && [ "$env_secrets" = "$target_secrets" ] && pass "environment $env holds exactly the $target secrets" "$env_secrets" || fail "$env secrets" "$env_secrets"
+  # production also holds the Supabase token when main has Supabase components.
+  want="$target_secrets"
+  [ "$env" = production ] && [ -n "$supabase_on_main" ] && want="$(printf '%s\n' $target_secrets SUPABASE_ACCESS_TOKEN | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ -n "$target_secrets" ] && [ "$env_secrets" = "$want" ] && pass "environment $env holds exactly the $target${supabase_on_main:+ and Supabase} secrets" "$env_secrets" || fail "$env secrets" "$env_secrets, expected $want"
 done
+# The production build's Supabase address and key: public, so repository variables.
+if [ -n "$supabase_on_main" ]; then
+  repo_vars="$(gh api --paginate "repos/$NWO/actions/variables" --jq '[.variables[].name] | sort | join(" ")')"
+  [[ " $repo_vars " == *" VITE_SUPABASE_PUBLISHABLE_KEY "* && " $repo_vars " == *" VITE_SUPABASE_URL "* ]] \
+    && pass "repository variables VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set" \
+    || fail "Supabase repository variables" "${repo_vars:-none} (factory docs/setup.md)"
+else
+  skip "Supabase repository variables are set" "no Supabase components on main"
+fi
 delete_merged="$(gh api "repos/$NWO" --jq .delete_branch_on_merge)"
 [ "$delete_merged" = true ] && pass "merged branches are deleted automatically" || fail "delete branch on merge" "$delete_merged"
 
