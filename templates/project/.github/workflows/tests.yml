@@ -39,13 +39,19 @@ jobs:
           fi
           npx -y deno@2.1.4 test --allow-env $paths
       - name: Build
-        # main's build is production's: it gets the production Supabase project's
-        # address and publishable key, public values from repository variables (empty
-        # when not set). A PR's build gets neither, so no preview reaches production's data.
+        # main's build is production's, a PR's build is its preview: each gets its
+        # Supabase project's address and publishable key, public values from repository
+        # variables (empty when not set, never the other project's). No preview reaches
+        # production's data.
         env:
-          VITE_SUPABASE_URL: ${{ github.event_name == 'push' && vars.VITE_SUPABASE_URL || '' }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ github.event_name == 'push' && vars.VITE_SUPABASE_PUBLISHABLE_KEY || '' }}
-        run: npx --no-install vite build
+          PROD_URL: ${{ github.event_name == 'push' && vars.VITE_SUPABASE_URL || '' }}
+          PROD_KEY: ${{ github.event_name == 'push' && vars.VITE_SUPABASE_PUBLISHABLE_KEY || '' }}
+          STAGING_URL: ${{ github.event_name == 'pull_request' && vars.STAGING_SUPABASE_URL || '' }}
+          STAGING_KEY: ${{ github.event_name == 'pull_request' && vars.STAGING_SUPABASE_PUBLISHABLE_KEY || '' }}
+        run: |
+          set -euo pipefail
+          export VITE_SUPABASE_URL="$PROD_URL$STAGING_URL" VITE_SUPABASE_PUBLISHABLE_KEY="$PROD_KEY$STAGING_KEY"
+          npx --no-install vite build
       - if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
