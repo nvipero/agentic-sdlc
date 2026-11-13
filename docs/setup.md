@@ -125,12 +125,12 @@ For a project with components on host `supabase`, `production-deploy` deploys th
    gh variable set VITE_SUPABASE_PUBLISHABLE_KEY --repo "$repo" --body "$key"
    ```
 4. What the pipeline never sets, before the merge that needs it:
-   - **Function secrets** (API keys, OAuth secrets). A deploy fails, naming them, while a secret a function reads by name is missing; for a name the code reads with a default and does not need, set any value. In the project's clone, with your own Supabase login (`login` opens the browser):
+   - **Function secrets** (API keys, OAuth secrets). A deploy fails, naming them, while a secret a function reads by name is missing; for a name the code reads with a default and does not need, set any value. In the project's clone, with your own Supabase login (`login` opens the browser). A command that changes the project needs `--yes` when it cannot ask, for example run through Claude Code's `!`:
      ```sh
      ref=<project reference>     # from step 1
      sb() { npx -y "supabase@$(sed -nE 's/^ARG SUPABASE_VERSION=//p' .devcontainer/Dockerfile)" "$@"; }
      sb login
-     sb secrets set --remote="$ref" NAME=value   # one NAME=value per secret the deploy named
+     sb secrets set --yes --remote="$ref" NAME=value   # one NAME=value per secret the deploy named
      sb secrets list --remote="$ref"
      ```
    - **Vault secrets** that migrations read: in the dashboard's SQL editor, `select vault.create_secret('<value>', '<name>');`.
