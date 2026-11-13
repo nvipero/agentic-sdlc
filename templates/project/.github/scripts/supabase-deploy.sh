@@ -5,7 +5,7 @@
 # checkout of the deployed commit; reads the components from its
 # .factory/config.yaml. Each step runs only for the kinds on host supabase:
 #
-#   1. the build points at this project: the only Supabase address in <artifact>
+#   1. the build points at no other project: any Supabase address in <artifact>
 #      is VITE_SUPABASE_URL (all)
 #   2. every function secret the code reads by literal name is set (api)
 #   3. the migrations, without Vault values or seed data (database)
@@ -40,10 +40,15 @@ sb() { supabase --agent no "$@"; }
 # could point the bundle elsewhere.
 # -a: an address in a binary asset counts too. Literal addresses only.
 hosts="$(grep -rahoE 'https://[a-z]{20}\.supabase\.co' "$art" | sort -u || true)"
-[ -n "$hosts" ] || die "the build has no Supabase address: if main's build is older than the repository variables, re-run all jobs of main's tests run (it rebuilds and deploys again)"
-[ "$hosts" = "$VITE_SUPABASE_URL" ] \
-  || die "the build's Supabase addresses are '$(tr '\n' ' ' <<<"$hosts")', expected only $VITE_SUPABASE_URL"
-echo "the build points at $VITE_SUPABASE_URL"
+# No address is fine until the frontend uses Supabase (components come before the
+# first story); a build older than the variables looks the same, so it is a warning.
+if [ -z "$hosts" ]; then
+  echo "::warning::the build has no Supabase address. If the app uses Supabase, main's build is older than the repository variables: re-run all jobs of main's tests run"
+else
+  [ "$hosts" = "$VITE_SUPABASE_URL" ] \
+    || die "the build's Supabase addresses are '$(tr '\n' ' ' <<<"$hosts")', expected only $VITE_SUPABASE_URL"
+  echo "the build points at $VITE_SUPABASE_URL"
+fi
 
 # 2. Literal names only, outside the Deno tests; Supabase sets SUPABASE_* itself.
 # Values are never read or printed.

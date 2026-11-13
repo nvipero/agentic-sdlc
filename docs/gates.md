@@ -23,7 +23,7 @@ For a PR that is not a draft, `tests` uploads its build; `preview-deploy` runs `
 
 With components on host `supabase`, the same job deploys them first, from the deployed commit, with a token scoped to the production Supabase project (`.github/scripts/supabase-deploy.sh`), and stops before the frontend on any failure:
 
-1. The build's only Supabase address is the repository variable `VITE_SUPABASE_URL`, from which the project is read. `tests` builds `main` with the variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; a PR's build gets neither, so no preview reaches production's data.
+1. Any Supabase address in the build is the repository variable `VITE_SUPABASE_URL`, from which the project is read (none is a warning: the frontend may not use Supabase yet). `tests` builds `main` with the variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; a PR's build gets neither, so no preview reaches production's data.
 2. `api`: every secret a function reads by literal name (`Deno.env.get("NAME")`, outside the Deno tests, except Supabase's own `SUPABASE_*`) is set in the project.
 3. `database`: `supabase db push` with `--skip-vault`, so Vault values in `supabase/config.toml`, the implementer's file, never reach production; no seed data. Then every local migration must be in the remote history, checked apart from `db push`, which `config.toml` can switch off.
 4. `api`: `supabase functions deploy --use-api --prune`: functions removed from `main` are deleted from production.
