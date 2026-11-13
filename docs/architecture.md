@@ -122,7 +122,7 @@ components:
 Supported now, and anything else fails with a message:
 
 - **`frontend`:** exactly one, at `path: .` (the root rules: `src/`, `public/`, `tests/unit/`, root project files), on `vercel` or `cloudflare` (`.github/scripts/deploy/<host>.sh`). `spa: true` serves `index.html` for unknown paths, `cloudflare` only.
-- **`database` and `api`:** at most one of each, on a host with a descriptor `.github/scripts/hosts/<host>.yaml`: the path the host fixes for each kind, the files the implementer owns besides the paths, the files listed for "Where to look", and the kinds tested with Deno. Only `supabase` now; they are not deployed yet ([#59](https://github.com/nvipero/agentic-sdlc/issues/59)).
+- **`database` and `api`:** at most one of each, on a host with a descriptor `.github/scripts/hosts/<host>.yaml`: the path the host fixes for each kind, the files the implementer owns besides the paths, the files listed for "Where to look", and the kinds tested with Deno. Only `supabase` now; `production-deploy` deploys them before the frontend ([gates](gates.md#production)).
 - **Role guidance per host:** `skills/implementer/references/<host>.md` and `skills/code-reviewer/references/<host>.md`. The role skills hold only what applies to any database or API.
 
 Components in other repositories, more than one API, a diagram generated from the components and more hosts are backlog issues ([#65](https://github.com/nvipero/agentic-sdlc/issues/65), [#66](https://github.com/nvipero/agentic-sdlc/issues/66), [#67](https://github.com/nvipero/agentic-sdlc/issues/67)).
@@ -131,5 +131,5 @@ Components in other repositories, more than one API, a diagram generated from th
 
 - TypeScript, React with Vite, Node.js
 - Vitest for unit tests, Playwright for acceptance tests
-- Optionally Supabase as the `database` and `api` components' host: Postgres migrations with row level security, Deno Edge Functions with Deno's test runner (Deno 2.1, as Supabase's Edge Runtime; dependencies from npm only, so the firewall needs no other host). Acceptance tests run against Supabase's local stack, in the container and in the `tests` workflow ([gates](gates.md)). Deploying it and preview backends are not supported yet ([#59](https://github.com/nvipero/agentic-sdlc/issues/59), [#60](https://github.com/nvipero/agentic-sdlc/issues/60)).
+- Optionally Supabase as the `database` and `api` components' host: Postgres migrations with row level security, Deno Edge Functions with Deno's test runner (Deno 2.1, as Supabase's Edge Runtime; dependencies from npm only, so the firewall needs no other host). Acceptance tests run against Supabase's local stack, in the container and in the `tests` workflow ([gates](gates.md)). `main` deploys to one production Supabase project; preview backends are not supported yet ([#60](https://github.com/nvipero/agentic-sdlc/issues/60)), so a Supabase app's preview has no backend.
 - Vercel for preview and production deployments (frontend `host: vercel`; Hobby, through the pipeline; no Git integration), or a Cloudflare Worker with static assets only (frontend `host: cloudflare`; through the pipeline; no Git integration)

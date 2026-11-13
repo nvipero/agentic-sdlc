@@ -38,7 +38,7 @@ Run the commands from the factory repository's root.
    scripts/setup-github.sh board <owner>/<repo-name>
    ```
    Then turn on the dependency graph by hand (no API): **Settings → Advanced Security → Dependency graph → Enable**. The dependency review gate needs it, and `up.sh` checks it.
-   Then the deployment target, the frontend component's `host` in `.factory/config.yaml`: `vercel` or `cloudflare`. Do these steps yourself, so nobody else sees the secrets, and set only the chosen target's secrets: `exit-check.sh` expects exactly those. When switching targets, delete the other target's secrets from both environments.
+   Then the deployment target, the frontend component's `host` in `.factory/config.yaml`: `vercel` or `cloudflare`. Do these steps yourself, so nobody else sees the secrets, and set only the chosen target's secrets: `exit-check.sh` expects exactly those (plus `SUPABASE_ACCESS_TOKEN` in `production` for a Supabase project, below). When switching targets, delete the other target's secrets from both environments.
 
    **`vercel`.** Do not connect Vercel's Git integration, and skip its "Onboard your agent" offer: the pipeline deploys, the agents never touch Vercel.
    ```sh
@@ -89,6 +89,7 @@ Run the commands from the factory repository's root.
      gh secret set CLOUDFLARE_ACCOUNT_ID --env $env --repo $repo
    done
    ```
+   **A project with a Supabase backend** also needs its production Supabase project: [Supabase production](#supabase-production).
 5. **Finish the board in the GitHub UI.** Open the project, then **⋯ → Workflows**. Neither of these steps has an API:
    - **Auto-add to project:** select the repository, set the filter to `is:issue`, and turn it on. The board shows issues only, because a story is an issue and its PR is linked to it. All six saved views also filter on `is:issue`.
    - **Turn off the workflows that change the Status field:** "Item added to project", "Item closed", "Pull request linked to issue", "Pull request merged" and "Auto-close issue". The factory uses labels as status, so a second status that GitHub changes by itself would be misleading.
@@ -106,6 +107,44 @@ Run the commands from the factory repository's root.
      Nothing is deleted: the archive stays until you remove it with `docker volume rm`. An archive is complete only if it contains the file `.factory-archive-complete`, which is written after the copy has been checked. An interrupted or failed copy removes its own incomplete archive.
 
 **The factory repository itself** gets the same `ruleset`, `interaction-limit`, `secret-scanning` and `actions` setup. The exit check verifies both repositories.
+
+## Supabase production
+
+For a project with components on host `supabase`, `production-deploy` deploys them to one Supabase project before the frontend ([gates](gates.md#production)). Do these steps yourself before the first merge that has Supabase components on `main`.
+
+1. In the Supabase dashboard, create the production project. Note its reference (the `<ref>` in `https://<ref>.supabase.co`, under **Project Settings → General**) and its publishable key (**Project Settings → API Keys**).
+2. Create an access token (**Account → Access Tokens**) scoped to that project only, with these permissions (the CLI's names): `projects_read`, `branching_production_read`, `database_write`, `database_pooling_config_read`, `edge_functions_read`, `edge_functions_write`, `edge_functions_secrets_read`. No database password is needed: `db push` logs in through the token and the shared pooler, because GitHub's runners have no IPv6. Store the token in 1Password.
+3. Set the secret and the two variables. The variables are public values that end up in the frontend's bundle; `gh secret set` asks for the token and shows nothing:
+   ```sh
+   cd <factory>                # this repository's root
+   repo=<owner>/<repo-name>
+   ref=<project reference>     # from step 1
+   key=<publishable key>       # from step 1, sb_publishable_...
+   gh secret set SUPABASE_ACCESS_TOKEN --env production --repo "$repo"
+   gh variable set VITE_SUPABASE_URL --repo "$repo" --body "https://$ref.supabase.co"
+   gh variable set VITE_SUPABASE_PUBLISHABLE_KEY --repo "$repo" --body "$key"
+   ```
+4. What the pipeline never sets, before the merge that needs it:
+   - **Function secrets** (API keys, OAuth secrets). A deploy fails, naming them, while a secret a function reads by name is missing; for a name the code reads with a default and does not need, set any value. In the project's clone, with your own Supabase login (`login` opens the browser). A command that changes the project needs `--yes` when it cannot ask, for example run through Claude Code's `!`:
+     ```sh
+     ref=<project reference>     # from step 1
+     sb() { npx -y "supabase@$(sed -nE 's/^ARG SUPABASE_VERSION=//p' .devcontainer/Dockerfile)" "$@"; }
+     sb login
+     sb secrets set --yes --remote="$ref" NAME=value   # one NAME=value per secret the deploy named
+     sb secrets list --remote="$ref"
+     ```
+   - **Vault secrets** that migrations read: in the dashboard's SQL editor, `select vault.create_secret('<value>', '<name>');`.
+   - **Auth settings** (site URL, redirect URLs, providers, sign-ups): in the dashboard. `supabase/config.toml` applies only to the local stack.
+   - A function created by hand in the dashboard is deleted by the next deploy (`--prune`): functions come only from `main`. When `main` has no function left, the CLI deploys and deletes nothing, so the last ones stay until you delete them (`sb functions delete --remote="$ref" <name>`).
+
+**When a Supabase deploy fails**, the job stops before the frontend, and production's frontend stays as it was:
+
+- **A check fails** (the build's address, a missing secret): nothing has changed. Set the secret, then **Re-run all jobs** on the `production-deploy` run. For the build's address, fix the variable and re-run all jobs of `main`'s `tests` run instead: the build is made there, and a `production-deploy` re-run would reuse the old one. The same applies to the warning that the build has no Supabase address, once the app uses Supabase.
+- **A migration fails:** the migrations before it in the same push are applied; the failed one is rolled back (each file runs in one transaction, except statements PostgreSQL refuses in one, such as `create index concurrently`). Functions are not deployed. A later migration does not get past it, because the failed file runs first again on every deploy. Change the failed file in a PR (it was never applied, so this is safe; the guards ask for `migration-approved`), or add a data fix whose timestamp is between the last applied migration and the failed one. Use `supabase migration repair` only by hand, when the history itself is wrong.
+- **Migrations out of order** (a PR merged with an older timestamp than one already applied): `db push` refuses. Rename the file in a PR (`migration-approved`), or push it once by hand with `--include-all`.
+- **A function deploy fails:** migrations are applied and some functions may be updated. Re-run the job.
+- **The project is paused** (a free project pauses after a week without activity): restore it in the dashboard, then re-run.
+- **Data lost to a migration:** there are no down migrations, and the free plan has no backups ([backups](https://supabase.com/docs/guides/platform/backups): daily backups start with Pro). Before a merge with a risky migration, export the data yourself with `sb db dump --remote="$ref" --data-only -f ~/Downloads/$ref-data.sql` (outside the repository); the pipeline does not, because the dump would be personal data in a workflow artifact.
 
 ## Updating a project's factory definitions
 
