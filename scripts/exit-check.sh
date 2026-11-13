@@ -442,7 +442,7 @@ for env in preview production; do
   # production also holds the Supabase token when main has Supabase components.
   want="$target_secrets"
   [ "$env" = production ] && [ -n "$supabase_on_main" ] && want="$(printf '%s\n' $target_secrets SUPABASE_ACCESS_TOKEN | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ -n "$target_secrets" ] && [ "$env_secrets" = "$want" ] && pass "environment $env holds exactly the $target${supabase_on_main:+ and Supabase} secrets" "$env_secrets" || fail "$env secrets" "$env_secrets, expected $want"
+  [ -n "$target_secrets" ] && [ "$env_secrets" = "$want" ] && pass "environment $env holds exactly the expected secrets" "$env_secrets" || fail "$env secrets" "$env_secrets, expected $want"
 done
 # The production build's Supabase address and key: public, so repository variables.
 if [ -n "$supabase_on_main" ]; then
