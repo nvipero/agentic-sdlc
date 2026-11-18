@@ -131,13 +131,23 @@ jobs:
           if bash .github/scripts/components.sh list | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
             npm install --global supabase@3.1.0
           fi
+      - name: Supabase token
+        # A file the CLI reads, never the Supabase step's environment: supabase/config.toml
+        # resolves env(VAR) from there (supabase-deploy.sh's header).
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "$TOKEN" ] || exit 0
+          mkdir -p "$HOME/.supabase"
+          (umask 077 && printf '%s' "$TOKEN" > "$HOME/.supabase/access-token")
       - name: Supabase
         # Components on host supabase, before the frontend that relies on them: checks,
-        # migrations, functions (the script's header). Only this step gets the token.
+        # migrations, functions (the script's header). No secret in this step's env.
         working-directory: main
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_NO_KEYRING: "1"
           SUPABASE_YES: "1"
           SUPABASE_TELEMETRY_DISABLED: "1"
           DO_NOT_TRACK: "1"
@@ -147,7 +157,10 @@ jobs:
           if ! bash .github/scripts/components.sh list | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
             echo "no Supabase components"; exit 0
           fi
-          bash .github/scripts/supabase-deploy.sh "$ART"
+          bash .github/scripts/supabase-deploy.sh production "$ART"
+      - name: Remove the Supabase token
+        if: always()
+        run: rm -f "$HOME/.supabase/access-token"
       - name: Deploy
         id: deploy
         env:

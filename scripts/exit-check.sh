@@ -412,7 +412,7 @@ deno_ci="$(grep -oE 'deno@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workf
 # Supabase: the tests workflow runs the image's CLI, and a project with Supabase components
 # commits the image's lock (its CLI version resolves exactly that one).
 sb_image="$(sed -nE 's/^ARG SUPABASE_VERSION=(.+)$/\1/p' "$FACTORY_DIR/templates/project/.devcontainer/Dockerfile")"
-for wf in tests production-deploy; do
+for wf in tests production-deploy preview-deploy; do
   sb_ci="$(grep -oE 'supabase@[0-9.]+' "$FACTORY_DIR/templates/project/.github/workflows/$wf.yml" | sort -u)"
   [ -n "$sb_image" ] && [ "$sb_ci" = "supabase@$sb_image" ] && pass "$wf runs the image's Supabase CLI" "$sb_image" \
     || fail "Supabase CLI pins" "image ${sb_image:-none}, $wf $(echo ${sb_ci:-none})"
@@ -439,17 +439,20 @@ for env in preview production; do
   env_branches="$(gh api "repos/$NWO/environments/$env/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | join(" ")')"
   [ "$env_branches" = "branch:main" ] && pass "environment $env deploys from main only" || fail "$env environment branches" "$env_branches"
   env_secrets="$(gh api "repos/$NWO/environments/$env/secrets" --jq '[.secrets[].name] | sort | join(" ")')"
-  # production also holds the Supabase token when main has Supabase components.
+  # Both also hold their Supabase project's token when main has Supabase components.
   want="$target_secrets"
-  [ "$env" = production ] && [ -n "$supabase_on_main" ] && want="$(printf '%s\n' $target_secrets SUPABASE_ACCESS_TOKEN | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ -n "$supabase_on_main" ] && want="$(printf '%s\n' $target_secrets SUPABASE_ACCESS_TOKEN | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
   [ -n "$target_secrets" ] && [ "$env_secrets" = "$want" ] && pass "environment $env holds exactly the expected secrets" "$env_secrets" || fail "$env secrets" "$env_secrets, expected $want"
 done
-# The production build's Supabase address and key: public, so repository variables.
+# The production and preview builds' Supabase addresses and keys: public, so repository variables.
 if [ -n "$supabase_on_main" ]; then
   repo_vars="$(gh api --paginate "repos/$NWO/actions/variables" --jq '[.variables[].name] | sort | join(" ")')"
-  [[ " $repo_vars " == *" VITE_SUPABASE_PUBLISHABLE_KEY "* && " $repo_vars " == *" VITE_SUPABASE_URL "* ]] \
-    && pass "repository variables VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set" \
-    || fail "Supabase repository variables" "${repo_vars:-none} (factory docs/setup.md)"
+  missing_vars=
+  for v in VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY STAGING_SUPABASE_URL STAGING_SUPABASE_PUBLISHABLE_KEY; do
+    [[ " $repo_vars " == *" $v "* ]] || missing_vars="$missing_vars $v"
+  done
+  [ -z "$missing_vars" ] && pass "repository variables for the production and staging Supabase projects are set" \
+    || fail "Supabase repository variables" "missing:$missing_vars (factory docs/setup.md)"
 else
   skip "Supabase repository variables are set" "no Supabase components on main"
 fi

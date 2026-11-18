@@ -10,7 +10,9 @@
 # each new deployment takes it, then the PR's older deployments are removed. The
 # address shows in the PR's deployments panel: a GitHub deployment of the PR's
 # head in environment "pr-preview" (holds no secrets; "preview", which holds
-# them, deploys from main only).
+# them, deploys from main only). A project's Supabase components go to the shared
+# staging project first (.github/scripts/supabase-deploy.sh preview): the PR's
+# supabase/ is checked out apart from main's scripts, as data for the CLI.
 name: preview-deploy
 on:
   workflow_run:
@@ -20,6 +22,7 @@ permissions:
   contents: read
   actions: read
   deployments: write
+  pull-requests: read
 jobs:
   check:
     # No environment here: a draft or a PR failing guards never loads the token.
@@ -52,7 +55,12 @@ jobs:
     needs: check
     if: needs.check.outputs.go == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
+    # One staging project: previews deploy one at a time, none dropped (every
+    # project's previews queue, Supabase or not).
+    concurrency:
+      group: staging
+      queue: max
     environment: preview
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -67,7 +75,16 @@ jobs:
           sparse-checkout: |
             .github/scripts
             .factory
+            supabase
           path: main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # The PR's supabase/ only, as data: nothing from this checkout is run.
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
+          sparse-checkout: |
+            supabase
+          path: pr
       - name: Deployment target
         id: target
         run: |
@@ -95,6 +112,58 @@ jobs:
         env:
           SCRIPT: ${{ steps.target.outputs.script }}
         run: bash "$SCRIPT" install
+      - name: Supabase CLI
+        # Installed without the token. The image's version (SUPABASE_VERSION in
+        # .devcontainer/Dockerfile).
+        id: supabase
+        working-directory: main
+        run: |
+          set -euo pipefail
+          if bash .github/scripts/components.sh list | awk '$3 == "supabase" { found = 1 } END { exit !found }'; then
+            npm install --global supabase@3.1.0
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Still the PR's open head
+        # Queued runs may start out of order: a re-run, a late older run or a closed PR
+        # must not take the preview or reset staging. Fails rather than passes, as
+        # production's head check.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::no PR number in the event"; exit 1; }
+          now="$(gh api "repos/$REPO/pulls/$PR" --jq '.state + " " + .head.sha')"
+          [ "$now" = "open $SHA" ] || { echo "::error::PR #$PR is now '$now', not open at ${SHA:0:7}: its newest push deploys"; exit 1; }
+      - name: Supabase token
+        # A file the CLI reads, never the Supabase step's environment: the PR's
+        # supabase/config.toml resolves env(VAR) from there (supabase-deploy.sh's header).
+        if: steps.supabase.outputs.on == 'true'
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "$TOKEN" ] || { echo "::error::no SUPABASE_ACCESS_TOKEN in environment preview (factory docs/setup.md)"; exit 1; }
+          mkdir -p "$HOME/.supabase"
+          (umask 077 && printf '%s' "$TOKEN" > "$HOME/.supabase/access-token")
+      - name: Supabase staging
+        # Staging reset to the PR's migrations and seed, then its functions, before the
+        # frontend (the script's header). No secret in this step's env.
+        if: steps.supabase.outputs.on == 'true'
+        working-directory: pr
+        env:
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          SUPABASE_NO_KEYRING: "1"
+          SUPABASE_YES: "1"
+          SUPABASE_TELEMETRY_DISABLED: "1"
+          DO_NOT_TRACK: "1"
+          ART: ${{ runner.temp }}/artifact
+        run: bash ../main/.github/scripts/supabase-deploy.sh preview "$ART"
+      - name: Remove the Supabase token
+        if: always()
+        run: rm -f "$HOME/.supabase/access-token"
       - name: Deploy
         id: deploy
         env:
