@@ -55,7 +55,10 @@ here="$(pwd)"
 sb() { supabase --agent no "$@"; }
 
 # 0. A paused project fails later with a misleading IPv6 message, before anything changes.
-status="$(sb projects list -o json 2>/dev/null | jq -r --arg ref "$ref" '.[] | select(.ref == $ref) | .status' || true)"
+# One project, not the CLI's projects list: a token scoped to the project may not list.
+# The token goes to curl as a header file, never on the command line.
+status="$(curl -fsS --max-time 30 -H @<(printf 'Authorization: Bearer %s\n' "$(cat "${SUPABASE_HOME:-$HOME/.supabase}/access-token")") \
+  "https://api.supabase.com/v1/projects/$ref" 2>/dev/null | jq -r '.status // empty' || true)"
 case "$status" in
   ACTIVE_HEALTHY) ;;
   INACTIVE|PAUSING) die "project $ref is paused ($status): restore it in the Supabase dashboard, then re-run this job" ;;
