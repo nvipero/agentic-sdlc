@@ -7,6 +7,7 @@
 # the checkout whose supabase/ is deployed: main's commit for production, the PR's
 # head for a preview. Each step runs only for the kinds on host supabase:
 #
+#   0. the project is active, not paused (all)
 #   1. the build points at no other project: any Supabase address in <artifact>
 #      is VITE_SUPABASE_URL (all)
 #   2. every function secret the code reads by literal name is set (api)
@@ -52,6 +53,15 @@ here="$(pwd)"
 # --agent no: plain output whatever the CLI detects about its caller. --workdir (below):
 # exactly that directory's supabase/, with no search in parent directories.
 sb() { supabase --agent no "$@"; }
+
+# 0. A paused project fails later with a misleading IPv6 message, before anything changes.
+status="$(sb projects list -o json 2>/dev/null | jq -r --arg ref "$ref" '.[] | select(.ref == $ref) | .status' || true)"
+case "$status" in
+  ACTIVE_HEALTHY) ;;
+  INACTIVE|PAUSING) die "project $ref is paused ($status): restore it in the Supabase dashboard, then re-run this job" ;;
+  "") echo "::warning::could not read the status of project $ref" ;;
+  *) die "project $ref is $status, not ACTIVE_HEALTHY: wait or check the Supabase dashboard, then re-run this job" ;;
+esac
 
 # 1. What is deployed, not what the variable says: a literal or a build setting
 # could point the bundle elsewhere.
