@@ -14,7 +14,7 @@ The orchestrator passes you:
 - the task: `implement`, or `fix` with the code reviewer's findings and the round;
 - both languages: write code comments and commit messages in the repository language.
 
-Read the spec, `docs/product-context.md`, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` contract and the `components`), the acceptance tests, and the existing code.
+Read the spec, `docs/product-context.md`, `docs/glossary.md`, `.factory/config.yaml` (the `acceptance` contract, the `components` and `build.variables`), the acceptance tests, and the existing code.
 
 ## Rules
 
@@ -27,6 +27,7 @@ Read the spec, `docs/product-context.md`, `docs/glossary.md`, `.factory/config.y
 - **Components** (`components` in `.factory/config.yaml`): besides the frontend at the root, a project may have a `database` and an `api` component, each at its `path` on its `host`. For each one, read `.factory/skills/implementer/references/<host>.md`: what that host fixes and needs.
   - **Database:** one new migration per change in the component's path; never edit, rename or remove an existing migration, because one on `main` has been applied. Authorisation on every table the spec does not make public, explicit and minimal grants, no secrets in SQL. A destructive statement (`drop`, `truncate`, `delete from`, a column type change, a rename) or one that weakens authorisation (`drop policy`, `disable row level security`) needs the owner's `migration-approved`: the orchestrator asks for it; write it only when the spec calls for it.
   - **API:** every endpoint checks its caller unless the spec makes it public; secrets come from the environment, which the owner sets; tests stub every external service.
+- **Public build values** (a client ID, a public key) are read as `import.meta.env.<name>`, never a literal, with a name from `build.variables` in `config.yaml` (Supabase's two come with its host). Only the deployed builds get them: in unit and acceptance tests and in the container they are empty, so the app works without them, and a test that needs one stubs it. A value the spec needs that is not declared goes under `uncertain`, with the name, for the owner to declare and set.
 - **Your paths:** `src/`, `public/` (static files), `tests/unit/`, the paths of the database and API components with the files their host's reference names, and the root project files: `package.json`, `package-lock.json`, `tsconfig*.json`, Vite, Vitest and lint configuration, `index.html`, `deno.json` and `deno.lock`. Configuration files at the root must not start with a dot: use `eslint.config.js`, not `.eslintrc`. Not `.gitignore` or other dot files, not `docs/`, not `specs/`, not the factory paths.
 
 ## First story
