@@ -64,7 +64,8 @@ jobs:
         # variables (vars holds no secrets). VITE_<X> is production's, STAGING_<X>
         # staging's, for Supabase's address and publishable key (empty when not set)
         # and the names in .factory/config.yaml build.variables (components.sh
-        # build-variables). Written to a file that only the Build step reads.
+        # build-variables). Written to a file that only the Build step reads; this
+        # step runs only .github/ code and jq.
         env:
           VARS: ${{ toJSON(vars) }}
         run: |
@@ -76,17 +77,23 @@ jobs:
           done)"
           out="$RUNNER_TEMP/build-variables.json"
           jq -n --argjson vars "$VARS" --arg pairs "$pairs" '
-            ($vars | with_entries(.key |= ascii_upcase)) as $v
-            | [$pairs | split("\n")[] | split(" ") | select($v[.[1]] != null) | {(.[0]): $v[.[1]]}]
+            ($vars // {} | with_entries(.key |= ascii_upcase)) as $v
+            | [$pairs | split("\n")[] | split(" ")
+               | if $v[.[1]] != null then {(.[0]): $v[.[1]]}
+                 elif (.[0] | IN("VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY")) then {(.[0]): ""} else empty end]
             | add // {}' > "$out"
           missing=
           while read -r name source; do
-            if jq -e --arg n "$name" 'has($n)' "$out" > /dev/null; then
+            if jq -e --arg n "$name" 'has($n) and .[$n] != ""' "$out" > /dev/null; then
               echo "$name: $env ($source)"
-            elif [[ "$name" != VITE_SUPABASE_* ]]; then
-              missing="$missing $source"
+            else
+              case "$name" in
+                VITE_SUPABASE_URL|VITE_SUPABASE_PUBLISHABLE_KEY) echo "$name: empty, $source not set" ;;
+                *) missing="$missing $source" ;;
+              esac
             fi
           done <<< "$pairs"
+          [ -n "$declared" ] || echo "no build variables declared"
           if [ -n "$missing" ]; then
             msg="repository variables not set:$missing (factory docs/setup.md, \"Build variables\")"
             if [ "$env" = production ]; then echo "::error::$msg"; exit 1; fi
@@ -100,7 +107,8 @@ jobs:
       - name: Build
         run: |
           set -euo pipefail
-          eval "$(jq -r 'to_entries[] | "export \(.key)=\(.value | @sh)"' "$RUNNER_TEMP/build-variables.json")"
+          exports="$(jq -r 'to_entries[] | "export \(.key)=\(.value | @sh)"' "$RUNNER_TEMP/build-variables.json")"
+          eval "$exports"
           npx --no-install vite build
       - if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

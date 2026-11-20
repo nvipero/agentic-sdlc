@@ -27,24 +27,23 @@ config="${2:-$dir/../../.factory/config.yaml}"
 
 exec ruby -ryaml -e '
   cmd, config, dir = ARGV
-  def die(m); abort("components: #{m} (factory docs/architecture.md, \"Components\")"); end
+  def die(m, section = "Components"); abort("components: #{m} (factory docs/architecture.md, \"#{section}\")"); end
   begin
   c = YAML.safe_load(config == "-" ? STDIN.read : File.read(config))
   die "no configuration" unless c.is_a?(Hash)
   if cmd == "build-variables"
-    def die(m); abort("components: #{m} (factory docs/architecture.md, \"Build variables\")"); end
     b = c["build"] || {}
-    die "build: not a map" unless b.is_a?(Hash)
+    die("build: not a map", "Build variables") unless b.is_a?(Hash)
     bad = b.keys - %w[variables]
-    die "build: unknown key #{bad.first}" unless bad.empty?
+    die("build: unknown key #{bad.first}", "Build variables") unless bad.empty?
     names = b["variables"] || []
-    die "build.variables: not a list" unless names.is_a?(Array)
+    die("build.variables: not a list", "Build variables") unless names.is_a?(Array)
     names.each do |n|
-      die "build.variables: #{n.inspect} is not VITE_ followed by A-Z, 0-9 and _" unless n.is_a?(String) && n.match?(/\AVITE_[A-Z0-9_]+\z/)
-      die "build.variables: #{n} is set by the factory" if %w[VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY].include?(n)
+      die("build.variables: #{n.inspect} is not VITE_ followed by A-Z, 0-9 and _", "Build variables") unless n.is_a?(String) && n.match?(/\AVITE_[A-Z0-9_]+\z/)
+      die("build.variables: #{n} is set by the factory", "Build variables") if %w[VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY].include?(n)
     end
     dup = names.find { |n| names.count(n) > 1 }
-    die "build.variables: #{dup} twice" if dup
+    die("build.variables: #{dup} twice", "Build variables") if dup
     puts names
     exit
   end
