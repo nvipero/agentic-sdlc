@@ -14,7 +14,7 @@ Status: v1 done (2026-10-31); [history](docs/history.md). `/factory:context` wri
 | [Gates and deployment](docs/gates.md) | Required checks, preview, production |
 | [Security](docs/security.md) | GitHub protections, the agents' identity and credentials, preflight |
 | [Risks](docs/risks.md) | Known risks and accepted limitations |
-| [Setup](docs/setup.md) | Starting a project, updating its factory definitions, renewing protections |
+| [Setup](docs/setup.md) | Starting a project or onboarding an existing repository, updating its factory definitions, renewing protections |
 | [History](docs/history.md) | How v1 was built, and the evidence from its verification |
 
 The docs describe the factory as it is now; a change updates them in the same pull request.
@@ -22,7 +22,7 @@ The docs describe the factory as it is now; a change updates them in the same pu
 ## Getting started
 
 1. Install the tools listed in [docs/setup.md](docs/setup.md).
-2. Create an empty public repository and install the factory's GitHub App on it.
+2. Create an empty public repository, or [onboard an existing one](docs/setup.md#onboarding-an-existing-repository), and install the factory's GitHub App on it.
 3. Copy `templates/project/` and the factory definitions into it and push the first commit.
 4. Run `scripts/setup-github.sh` for protections, labels and the board, then set up the deployment target and its token.
 5. Start the agents' container with `scripts/up.sh` in the project, then `/factory:context` and `/factory:run <issue>`.

@@ -43,6 +43,8 @@ docs/
   product-context.md goal, users, constraints, non-goals               (researcher)
   glossary.md        domain terms                                      (researcher)
   research/          answers to research requests, per story          (researcher)
+  onboarding/        an onboarded repository's own earlier docs,       (human)
+                     frozen ([setup](setup.md#onboarding-an-existing-repository))
 specs/               refined spec per story                            (spec writer)
 tests/acceptance/    acceptance tests by feature, tagged per story     (test writer)
                      criterion; their own npm package

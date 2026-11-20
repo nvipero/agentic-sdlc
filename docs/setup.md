@@ -1,6 +1,6 @@
 # Setup
 
-How to start a project with the factory, keep its factory definitions current and renew its protections.
+How to start a project with the factory or onboard an existing repository, keep its factory definitions current and renew its protections.
 
 Run the commands from the factory repository's root.
 
@@ -107,6 +107,35 @@ Run the commands from the factory repository's root.
      Nothing is deleted: the archive stays until you remove it with `docker volume rm`. An archive is complete only if it contains the file `.factory-archive-complete`, which is written after the copy has been checked. An interrupted or failed copy removes its own incomplete archive.
 
 **The factory repository itself** gets the same `ruleset`, `interaction-limit`, `secret-scanning` and `actions` setup. The exit check verifies both repositories.
+
+## Onboarding an existing repository
+
+An existing repository goes through the steps of [a new project](#starting-a-new-project) with these differences. Its onboarding is your pull request, because merging it is the repository's first deploy through the pipeline. In its clone, work on a branch such as `chore/onboard-factory`.
+
+1. **Its own instructions and docs, before the copy.** The template replaces `CLAUDE.md` (`.gitignore` is kept, below), and no role may change a document outside its paths (the template's `CLAUDE.md` lists them). In the repository's clone, move its `CLAUDE.md` and its docs that no role owns into `docs/onboarding/`:
+   ```sh
+   mkdir -p docs/onboarding && git mv CLAUDE.md docs/onboarding/instructions.md   # not CLAUDE.md: Claude Code would load it as instructions
+   git mv docs/<name>.md docs/onboarding/   # each document no role owns
+   ```
+   `docs/onboarding/` is frozen material, never kept current, and it stays: in the first `/factory:context`, point the researcher to it, and the principles and constraints it holds go into `docs/product-context.md` with `(material: docs/onboarding/...)` tags. A backlog document becomes issues on the board. Architecture notes that are not product context stay there as history. `README.md` is not in the template but is yours: remove what the factory replaces (manual deploy steps) and fix its links to the moved docs.
+2. **Copy the template, keeping `.gitignore`,** from this repository's root:
+   ```sh
+   rsync -a --exclude .gitignore --exclude .gitkeep templates/project/ ../<repo-name>/
+   rsync -a --delete templates/project/.github/ ../<repo-name>/.github/
+   rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
+   ```
+   Add the template's `.gitignore` lines that the repository's lacks, and keep its own: an `.env` file with real keys must stay ignored. The repository's `.github/` is replaced whole (the exit check fails on any workflow the template lacks), and its old checks are the `tests` gate's now. The guards reject any change to an existing top-level `scripts/` ([gates](gates.md)). Set `components` in `.factory/config.yaml` as for a new project.
+3. **Meet the gates in the same pull request.** `tests` runs its fixed commands from the PR's head ([gates](gates.md#required-checks)): an npm lockfile, the type check (a root `tsconfig.json` with only `references` checks nothing, [#78](https://github.com/nvipero/agentic-sdlc/issues/78)), Vitest with a unit test, `tests/acceptance/` as its own npm package with a Playwright test, and the build. With an existing `supabase/`, skip `supabase init`, copy `.devcontainer/supabase.lock` to `supabase/supabase.lock`, and make `supabase/config.toml` work with the image's CLI version: the local stack and the deploy both read it. Without a `supabase/.gitignore`, add one that ignores `.temp/`, `.branches/` and `.env*` ([security](security.md)). `supabase/seed.sql` runs in staging on every preview, so it holds no real data.
+4. **GitHub setup before you open the PR**, as step 4 of a new project. Turn on the dependency graph by hand: an existing repository has it off, and `dependency-review` errors without it. Secret scanning and CodeQL scan the existing history and code: read their alerts once.
+5. **An existing deployment target.**
+   - `cloudflare`: if the Worker named like the repository exists, do not create it. Turn off any Workers Builds or Pages Git integration that deploys the repository. If users reach the app at another origin (a Pages domain, a custom domain), move them only after the merge has deployed the app to the Worker and it works there: push subscriptions and OAuth redirect URLs are tied to the origin, so users subscribe again and the provider's redirect URLs change.
+   - `vercel`: use the existing project named like the repository, and disconnect its Git integration. Skip `project create` and the placeholder deploy, which would replace production: run only `link` for the two ids, then the token and secrets as for a new project.
+6. **Existing Supabase projects.** The pipeline becomes the only thing that deploys them. For each existing project, turn off Supabase's own GitHub integration (its "Deploy to production" applies migrations and functions on merge, and its branching makes a branch per PR) and any other CI or script that deploys to it, then set its token, secret and variables as in [Supabase projects](#supabase-projects).
+   - **Production**, before the merge, with the `sb` helper from [Supabase projects](#supabase-projects): `sb migration list --remote="$ref"` matches `supabase/migrations/` (repair the history by hand otherwise, because `db push` applies whatever is missing); `sb functions list --remote="$ref"` matches `supabase/functions/` (the deploy's `--prune` deletes the rest); every function secret the deploy checks is set; and you have a data dump.
+   - **Staging** serves only if it can become the factory's staging: every preview wipes it (user schemas dropped, `auth` truncated, functions pruned), and every PR's code runs there before review. Export what you want to keep, replace its function secrets and Vault values with test values, add the preview addresses to its redirect URLs, and make sure nothing else relies on it. Otherwise create a new staging project and leave the old one paused.
+   - A project that does not exist yet is created as for a new project.
+7. **Merge the onboarding PR with the ruleset bypass.** `guards`, `preview-deploy` and `production-deploy` run `main`'s definitions, which `main` gets only with this merge: `guards` never reports and no preview is made. `dependency-review` may list every dependency as new after a change of package manager. Merge when `tests` has passed, you have read `dependency-review`'s list (a high-severity finding fixed or knowingly accepted), `git status --ignored` shows the `.env` files ignored, and steps 5 and 6 above are done. The merge runs `tests` on `main` and then `production-deploy`: migrations, functions and the frontend reach production without a preview before.
+8. **Before the first `up.sh`**, switch the host clone to `main` and pull (`up.sh` starts only from a clean `main` equal to `origin/main`), and remove ignored files from the folders the container mounts (`.factory/`, `.claude/`, `.github/`, `.devcontainer/`), such as a `.claude/settings.local.json` from your own sessions: they are mounted whole ([#86](https://github.com/nvipero/agentic-sdlc/issues/86)). Then the board and the container as steps 5 and 6 of a new project, and `/factory:context` with `docs/onboarding/` as material.
 
 ## Supabase projects
 
