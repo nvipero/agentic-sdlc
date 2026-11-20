@@ -24,7 +24,27 @@ jobs:
           node-version: 24
       - run: npm ci
       - name: Type check
-        run: npx --no-install tsc --noEmit
+        # Build mode follows project references: a root tsconfig.json with only
+        # references checks nothing with plain --noEmit. Every tracked TypeScript
+        # file under src/ and tests/unit/ must be in a checked project.
+        run: |
+          set -euo pipefail
+          listed="$RUNNER_TEMP/tsc-files"
+          if ! npx --no-install tsc -b --noEmit --listFiles > "$listed"; then
+            grep -v '^/' "$listed" || true
+            exit 1
+          fi
+          root="$(pwd -P)/"
+          grep '^/' "$listed" | sed "s|^$root||" | sort -u > "$listed.checked"
+          git ls-files -- 'src/*.ts' 'src/*.tsx' 'src/*.mts' 'src/*.cts' \
+            'tests/unit/*.ts' 'tests/unit/*.tsx' 'tests/unit/*.mts' 'tests/unit/*.cts' | sort > "$listed.tracked"
+          missing="$(comm -23 "$listed.tracked" "$listed.checked")"
+          if [ -n "$missing" ]; then
+            echo "not in any TypeScript project that the type check covers (add them to a tsconfig include):"
+            echo "$missing"
+            exit 1
+          fi
+          echo "type check covered $(wc -l < "$listed.tracked" | tr -d ' ') tracked file(s)"
       - name: Unit tests
         run: npx --no-install vitest run
       - name: Deno tests
