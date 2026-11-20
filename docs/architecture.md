@@ -50,7 +50,7 @@ tests/acceptance/    acceptance tests by feature, tagged per story     (test wri
                      criterion; their own npm package
 src/, public/,       production code, static files, unit tests, and    (implementer)
 tests/unit/          the root project files (package.json, lockfile,
-                     tsconfig, Vite and lint configuration, index.html,
+                     tsconfig*.json, Vite and lint configuration, index.html,
                      deno.json)
 <component paths>    the database and API components ([components](#components)),   (implementer)
                      with the files their host names; for supabase:
