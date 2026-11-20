@@ -10,6 +10,8 @@ components:          # the parts of the service: what each is, where it is, wher
   # Supabase projects, after supabase init (factory docs/setup.md):
   # db:        { kind: database, path: supabase/migrations, host: supabase }
   # functions: { kind: api,      path: supabase/functions,  host: supabase }
+# build:            # the project's own public values in the bundle, VITE_ names; values are repository variables (factory docs/setup.md, "Build variables")
+#   variables: [VITE_GOOGLE_CLIENT_ID]
 roles:
   researcher:    { model: opus }   # research requests only; the interview uses the session model
   spec-writer:   { model: opus }

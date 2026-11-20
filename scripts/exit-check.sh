@@ -456,6 +456,24 @@ if [ -n "$supabase_on_main" ]; then
 else
   skip "Supabase repository variables are set" "no Supabase components on main"
 fi
+# The project's own public build variables (build.variables): production's and staging's.
+if declared="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" build-variables - 2>&1)"; then
+  if [ -n "$declared" ]; then
+    repo_vars="$(gh api --paginate "repos/$NWO/actions/variables" --jq '[.variables[].name] | sort | join(" ")')"
+    missing_vars=
+    for v in $declared; do
+      for w in "$v" "STAGING_${v#VITE_}"; do
+        [[ " $repo_vars " == *" $w "* ]] || missing_vars="$missing_vars $w"
+      done
+    done
+    [ -z "$missing_vars" ] && pass "repository variables for the declared build variables are set" "$(echo $declared)" \
+      || fail "build variables" "missing:$missing_vars (factory docs/setup.md)"
+  else
+    skip "repository variables for the declared build variables are set" "none declared on main"
+  fi
+else
+  fail "build variables" "$declared"
+fi
 delete_merged="$(gh api "repos/$NWO" --jq .delete_branch_on_merge)"
 [ "$delete_merged" = true ] && pass "merged branches are deleted automatically" || fail "delete branch on merge" "$delete_merged"
 

@@ -98,6 +98,8 @@ components:                         # the parts of the service (below)
 acceptance:                         # how acceptance tests start the app
   start: "npm run dev -- --strictPort"   # run at the repository root
   url: "http://localhost:5173"
+build:                              # the project's own public build values (below)
+  variables: [VITE_GOOGLE_CLIENT_ID]
 disputes:
   max_rounds: 4
   escalate_when_no_progress_for: 2   # consecutive rounds repeating the same findings
@@ -112,7 +114,7 @@ Model choices are initial guesses, to be tuned with more stories. The config is 
 
 ### Components
 
-`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, from `main`'s `config.yaml` in the guards and the deploy workflows (the `tests` workflow reads the PR's checkout, only to find the Deno paths and whether to start the Supabase stack); the orchestrator reads the file itself, because the container has no Ruby.
+`components` names the parts of the service: what each one is (`kind`), where it is in the repository (`path`) and where it runs (`host`). The names (`web`, `db`) are the owner's; the factory reads only the fields. `.github/scripts/components.sh` reads and validates them for the guards, the deploy workflows, the tests workflow and the exit check, from `main`'s `config.yaml` in the guards and the deploy workflows (the `tests` workflow reads the PR's checkout, only to find the Deno paths, whether to start the Supabase stack and the build variables); the orchestrator reads the file itself, because the container has no Ruby.
 
 ```yaml
 components:
@@ -128,6 +130,10 @@ Supported now, and anything else fails with a message:
 - **Role guidance per host:** `skills/implementer/references/<host>.md` and `skills/code-reviewer/references/<host>.md`. The role skills hold only what applies to any database or API.
 
 Components in other repositories, more than one API, a diagram generated from the components and more hosts are backlog issues ([#65](https://github.com/nvipero/agentic-sdlc/issues/65), [#66](https://github.com/nvipero/agentic-sdlc/issues/66), [#67](https://github.com/nvipero/agentic-sdlc/issues/67)).
+
+### Build variables
+
+`build.variables` names the project's own public values that the frontend reads at build time, such as an OAuth client ID or a web push public key; they end up in the bundle. Each name starts with `VITE_` (Vite gives the client nothing else) and is not Supabase's `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY`, which the factory always passes. The values are repository variables, never secrets: production's has the same name (`VITE_GOOGLE_CLIENT_ID`), staging's starts with `STAGING_` instead of `VITE_` (`STAGING_GOOGLE_CLIENT_ID`), as Supabase's. The `tests` workflow builds `main` with production's and a PR with staging's, and only its build step gets them ([gates](gates.md#required-checks)); unit and acceptance tests and the container get none. `components.sh build-variables` reads and validates the list for the `tests` workflow and the exit check. Setting the values: [setup](setup.md#build-variables).
 
 ## Project defaults
 

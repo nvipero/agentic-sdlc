@@ -124,7 +124,7 @@ An existing repository goes through the steps of [a new project](#starting-a-new
    rsync -a --delete templates/project/.github/ ../<repo-name>/.github/
    rsync -a --delete --exclude README.md --exclude config.yaml skills agents commands templates/project/.factory/ ../<repo-name>/.factory/
    ```
-   Add the template's `.gitignore` lines that the repository's lacks, and keep its own: an `.env` file with real keys must stay ignored. The repository's `.github/` is replaced whole (the exit check fails on any workflow the template lacks), and its old checks are the `tests` gate's now. The guards reject any change to an existing top-level `scripts/` ([gates](gates.md)). Set `components` in `.factory/config.yaml` as for a new project.
+   Add the template's `.gitignore` lines that the repository's lacks, and keep its own: an `.env` file with real keys must stay ignored. The repository's `.github/` is replaced whole (the exit check fails on any workflow the template lacks), and its old checks are the `tests` gate's now. The guards reject any change to an existing top-level `scripts/` ([gates](gates.md)). Set `components` in `.factory/config.yaml` as for a new project, and declare the public values the frontend reads at build time other than Supabase's, with their repository variables ([build variables](#build-variables)).
 3. **Meet the gates in the same pull request.** `tests` runs its fixed commands from the PR's head ([gates](gates.md#required-checks)): an npm lockfile, the type check (every TypeScript file under `src/` and `tests/unit/` in a project that `tsc -b` checks), Vitest with a unit test, `tests/acceptance/` as its own npm package with a Playwright test, and the build. With an existing `supabase/`, skip `supabase init`, copy `.devcontainer/supabase.lock` to `supabase/supabase.lock`, and make `supabase/config.toml` work with the image's CLI version: the local stack and the deploy both read it. Without a `supabase/.gitignore`, add one that ignores `.temp/`, `.branches/` and `.env*` ([security](security.md)). `supabase/seed.sql` runs in staging on every preview, so it holds no real data.
 4. **GitHub setup before you open the PR**, as step 4 of a new project. Turn on the dependency graph by hand: an existing repository has it off, and `dependency-review` errors without it. Secret scanning and CodeQL scan the existing history and code: read their alerts once.
 5. **An existing deployment target.**
@@ -178,6 +178,20 @@ Do steps 1 to 3 once for production and once for staging (`env=production` and `
 - **A function deploy fails:** migrations are applied and some functions may be updated. Re-run the job.
 - **The project is paused** (a free project pauses after a week without database activity, staging most likely): the deploy says so before any change. Restore it in the dashboard, then re-run.
 - **Data lost to a migration:** there are no down migrations, and the free plan has no backups ([backups](https://supabase.com/docs/guides/platform/backups): daily backups start with Pro). Before a merge with a risky migration, export the data yourself with `sb db dump --remote="$ref" --data-only -f ~/Downloads/$ref-data.sql` (outside the repository); the pipeline does not, because the dump would be personal data in a workflow artifact.
+
+## Build variables
+
+Public values the frontend reads at build time, other than Supabase's address and key, such as an OAuth client ID or a web push public key ([architecture](architecture.md#build-variables)). They end up in the bundle, so never put a secret in one. Before the merge that needs a value:
+
+1. Declare its name in `.factory/config.yaml` (`build: { variables: [VITE_GOOGLE_CLIENT_ID] }`), in your own PR.
+2. Set production's and staging's values as repository variables. Staging's name starts with `STAGING_` instead of `VITE_`:
+   ```sh
+   repo=<owner>/<repo-name>
+   gh variable set VITE_GOOGLE_CLIENT_ID --repo "$repo" --body "<production's value>"
+   gh variable set STAGING_GOOGLE_CLIENT_ID --repo "$repo" --body "<staging's value>"
+   ```
+
+A declared variable that is not set fails `main`'s `tests` run, so production never ships without it: set it, then **Re-run all jobs** on that run. On a PR it only warns. An implementer who needs a new value names it under its uncertainties, and the code reviewer lists an undeclared name in "Where to look".
 
 ## Updating a project's factory definitions
 
