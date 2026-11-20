@@ -17,7 +17,12 @@ heading() { printf '\n### %s\n\n' "$*" >> "$SUMMARY"; }
 OWNER_LABEL=tests-change-approved
 MIGRATION_LABEL=migration-approved
 PROTECTED='.factory/ .claude/ .github/ .devcontainer/ scripts/ CLAUDE.md'
-TEST_CONFIG='package.json tsconfig.json vite.config.ts vite.config.js vitest.config.ts vitest.config.js deno.json tests/acceptance/package.json tests/acceptance/playwright.config.ts'
+is_test_config() {   # a case pattern, not a word list: a glob must not expand against main's checkout
+  case "$1" in
+    package.json|tsconfig*.json|vite.config.ts|vite.config.js|vitest.config.ts|vitest.config.js|deno.json|tests/acceptance/package.json|tests/acceptance/playwright.config.ts) return 0 ;;
+  esac
+  return 1
+}
 
 # --- Inputs: validated before use ---------------------------------------------
 [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "bad PR number" >&2; exit 1; }
@@ -196,7 +201,7 @@ fi
 heading "Test configuration"
 cfg=
 for f in ${changed[@]+"${changed[@]}"}; do
-  for p in $TEST_CONFIG; do [ "$f" = "$p" ] && { note "changed: \`$f\`"; cfg=1; }; done
+  is_test_config "$f" && { note "changed: \`$f\`"; cfg=1; }
 done
 [ -n "$cfg" ] || note "unchanged"
 

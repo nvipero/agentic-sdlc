@@ -10,7 +10,7 @@ stories are issues, specs are Markdown files in `specs/`, and work happens in pu
 | `docs/product-context.md`, `docs/glossary.md`, `docs/research/` | researcher |
 | `specs/` | spec writer |
 | `tests/acceptance/` (its own npm package) | test writer |
-| `src/`, `public/`, `tests/unit/`, and the project's root files (`package.json`, lockfile, `tsconfig.json`, Vite and lint configuration, `index.html`, `deno.json`) | implementer |
+| `src/`, `public/`, `tests/unit/`, and the project's root files (`package.json`, lockfile, `tsconfig*.json`, Vite and lint configuration, `index.html`, `deno.json`) | implementer |
 | the paths of the database and API components in `.factory/config.yaml` (`components`), and the files their host names in `.github/scripts/hosts/` | implementer |
 | `.gitignore`, dot files outside the component paths, and `supabase/supabase.lock` | owner |
 
