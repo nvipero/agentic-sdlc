@@ -444,9 +444,12 @@ for env in preview production; do
   [ -n "$supabase_on_main" ] && want="$(printf '%s\n' $target_secrets SUPABASE_ACCESS_TOKEN | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
   [ -n "$target_secrets" ] && [ "$env_secrets" = "$want" ] && pass "environment $env holds exactly the expected secrets" "$env_secrets" || fail "$env secrets" "$env_secrets, expected $want"
 done
-# The production and preview builds' Supabase addresses and keys: public, so repository variables.
+# Repository variables are public values: the tests workflow's "Build variables" step
+# prints them all in its log. The Supabase addresses and keys, and the declared build
+# variables (build.variables), production's and staging's; nothing else.
+repo_vars="$(gh api --paginate "repos/$NWO/actions/variables" --jq '.variables[].name' | LC_ALL=C sort | tr '\n' ' ')"
+expected_vars="VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY STAGING_SUPABASE_URL STAGING_SUPABASE_PUBLISHABLE_KEY"
 if [ -n "$supabase_on_main" ]; then
-  repo_vars="$(gh api --paginate "repos/$NWO/actions/variables" --jq '[.variables[].name] | sort | join(" ")')"
   missing_vars=
   for v in VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY STAGING_SUPABASE_URL STAGING_SUPABASE_PUBLISHABLE_KEY; do
     [[ " $repo_vars " == *" $v "* ]] || missing_vars="$missing_vars $v"
@@ -456,13 +459,12 @@ if [ -n "$supabase_on_main" ]; then
 else
   skip "Supabase repository variables are set" "no Supabase components on main"
 fi
-# The project's own public build variables (build.variables): production's and staging's.
 if declared="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null | bash "$FACTORY_DIR/templates/project/.github/scripts/components.sh" build-variables - 2>&1)"; then
   if [ -n "$declared" ]; then
-    repo_vars="$(gh api --paginate "repos/$NWO/actions/variables" --jq '[.variables[].name] | sort | join(" ")')"
     missing_vars=
     for v in $declared; do
       for w in "$v" "STAGING_${v#VITE_}"; do
+        expected_vars="$expected_vars $w"
         [[ " $repo_vars " == *" $w "* ]] || missing_vars="$missing_vars $w"
       done
     done
@@ -474,6 +476,12 @@ if declared="$(git -C "$REPO" show origin/main:.factory/config.yaml 2>/dev/null 
 else
   fail "build variables" "$declared"
 fi
+other_vars=
+for v in $repo_vars; do
+  [[ " $expected_vars " == *" $v "* ]] || other_vars="$other_vars $v"
+done
+[ -z "$other_vars" ] && pass "no repository variables besides the build's" \
+  || fail "repository variables" "not used by the build, but printed in every tests log:$other_vars (factory docs/setup.md, \"Build variables\")"
 delete_merged="$(gh api "repos/$NWO" --jq .delete_branch_on_merge)"
 [ "$delete_merged" = true ] && pass "merged branches are deleted automatically" || fail "delete branch on merge" "$delete_merged"
 
